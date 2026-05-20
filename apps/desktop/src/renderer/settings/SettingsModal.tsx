@@ -1,5 +1,23 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react';
+import {
+  BarChart3,
+  Bot,
+  CalendarDays,
+  Cpu,
+  Database,
+  Globe,
+  Info,
+  Network,
+  Palette,
+  Search,
+  Settings as SettingsIcon,
+  Sparkles,
+  User,
+  UserCircle,
+  Volume2,
+  X,
+  type LucideProps,
+} from 'lucide-react';
 import type {
   AppSettings,
   BotProvider,
@@ -17,25 +35,25 @@ import { ProvidersPanel } from './ProvidersPanel';
 type SettingsNavItem = {
   id: SettingsSection;
   label: string;
-  glyph: string;
+  Icon: ComponentType<LucideProps>;
   enabled: boolean;
 };
 
 const SETTINGS_NAV: SettingsNavItem[] = [
-  { id: 'general', label: '通用', glyph: 'GE', enabled: true },
-  { id: 'personalization', label: '个性化', glyph: 'PE', enabled: true },
-  { id: 'theme', label: '主题', glyph: 'TH', enabled: true },
-  { id: 'daily-review', label: '每日回顾', glyph: 'DR', enabled: true },
-  { id: 'models', label: '模型', glyph: 'MO', enabled: true },
-  { id: 'usage', label: '使用统计', glyph: 'US', enabled: true },
-  { id: 'voice-models', label: '语音模型', glyph: 'VO', enabled: true },
-  { id: 'open-gateway', label: '开放网关', glyph: 'GW', enabled: true },
-  { id: 'bot-chat', label: '机器人对话', glyph: 'BT', enabled: true },
-  { id: 'search', label: '搜索服务', glyph: 'SE', enabled: true },
-  { id: 'network', label: '网络', glyph: 'NW', enabled: true },
-  { id: 'data', label: '数据', glyph: 'DA', enabled: true },
-  { id: 'account', label: '账号', glyph: 'AC', enabled: true },
-  { id: 'about', label: '关于', glyph: 'AB', enabled: true },
+  { id: 'general', label: '通用', Icon: SettingsIcon, enabled: true },
+  { id: 'personalization', label: '个性化', Icon: User, enabled: true },
+  { id: 'theme', label: '主题', Icon: Palette, enabled: true },
+  { id: 'daily-review', label: '每日回顾', Icon: CalendarDays, enabled: true },
+  { id: 'models', label: '模型', Icon: Cpu, enabled: true },
+  { id: 'usage', label: '使用统计', Icon: BarChart3, enabled: true },
+  { id: 'voice-models', label: '语音模型', Icon: Volume2, enabled: true },
+  { id: 'open-gateway', label: '开放网关', Icon: Sparkles, enabled: true },
+  { id: 'bot-chat', label: '机器人对话', Icon: Bot, enabled: true },
+  { id: 'search', label: '搜索服务', Icon: Search, enabled: true },
+  { id: 'network', label: '网络', Icon: Globe, enabled: true },
+  { id: 'data', label: '数据', Icon: Database, enabled: true },
+  { id: 'account', label: '账号', Icon: UserCircle, enabled: true },
+  { id: 'about', label: '关于', Icon: Info, enabled: true },
 ];
 
 const BOT_LABELS: Record<BotProvider, { label: string; help: string }> = {
@@ -121,7 +139,7 @@ function SettingsSurface(props: {
     <main className="settingsSurface" data-modal="true">
       <aside className="settingsSidebar">
         <header>
-          <span>设置 ⌘,</span>
+          <span>设置 <kbd>⌘</kbd><kbd>,</kbd></span>
         </header>
         <nav aria-label="Settings sections">
           {SETTINGS_NAV.map((item) => (
@@ -133,7 +151,9 @@ function SettingsSurface(props: {
               disabled={!item.enabled}
               onClick={() => setSection(item.id)}
             >
-              <span className="settingsNavGlyph" aria-hidden="true">{item.glyph}</span>
+              <span className="settingsNavGlyph" aria-hidden="true">
+                <item.Icon size={16} strokeWidth={1.5} />
+              </span>
               <strong>{item.label}</strong>
             </button>
           ))}

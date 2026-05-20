@@ -869,9 +869,17 @@ button:active {
 }
 
 .settingsSidebar header span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--foreground-50);
   font-size: 13px;
   font-weight: 700;
+}
+
+.settingsSidebar header kbd {
+  font-size: 11px;
+  padding: 1px 6px;
 }
 
 .settingsSidebar nav {
@@ -922,8 +930,15 @@ button:active {
   display: grid;
   place-items: center;
   color: var(--foreground-60);
-  font-size: 9px;
-  font-weight: 700;
+}
+
+.settingsNavGlyph svg {
+  width: 16px;
+  height: 16px;
+}
+
+.settingsNavItem[data-active="true"] .settingsNavGlyph {
+  color: var(--foreground);
 }
 
 .settingsNavItem strong {
