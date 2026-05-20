@@ -27,6 +27,7 @@ import type {
   UsageQuery,
   UsageSummaryV2,
 } from '@maka/core/usage-stats/types';
+import type { TestProxyInput } from '@maka/core/settings/network-settings';
 import type { Result } from '@maka/core/settings/result';
 import type { CreateSessionInput } from '@maka/core';
 
@@ -63,7 +64,7 @@ declare global {
       settings: {
         get(): Promise<AppSettings>;
         update(patch: UpdateAppSettingsInput): Promise<AppSettings>;
-        testNetworkProxy(): Promise<SettingsTestResult>;
+        testNetworkProxy(input?: TestProxyInput): Promise<SettingsTestResult>;
         testBotChannel(provider: BotProvider): Promise<SettingsTestResult>;
         usageStats(range?: UsageRange): Promise<UsageStats>;
       };

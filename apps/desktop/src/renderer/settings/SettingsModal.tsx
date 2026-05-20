@@ -28,6 +28,7 @@ import type {
   UsageRange,
   UsageStats,
 } from '@maka/core';
+import type { TestProxyInput } from '@maka/core/settings/network-settings';
 import { BOT_PROVIDERS, createDefaultSettings } from '@maka/core/settings';
 import { useModalA11y, useToast } from '@maka/ui';
 import { ProvidersPanel } from './ProvidersPanel';
@@ -501,7 +502,7 @@ function NetworkSettingsPage(props: {
   async function testProxy() {
     setTesting(true);
     try {
-      const result = await window.maka.settings.testNetworkProxy();
+      const result = await window.maka.settings.testNetworkProxy(toProxyTestInput(proxy));
       const latency = result.latencyMs !== undefined ? ` · ${result.latencyMs} ms` : '';
       if (result.ok) {
         toast.success('代理可达', `${result.message}${latency}`);
@@ -591,6 +592,20 @@ function NetworkSettingsPage(props: {
       )}
     </div>
   );
+}
+
+function toProxyTestInput(proxy: NetworkProxySettings): TestProxyInput {
+  return {
+    proxy: {
+      enabled: proxy.enabled,
+      type: proxy.protocol,
+      host: proxy.host.trim(),
+      port: proxy.port,
+      username: proxy.authEnabled && proxy.username.trim() ? proxy.username.trim() : undefined,
+      password: proxy.authEnabled && proxy.password ? proxy.password : undefined,
+      bypassList: proxy.bypassList,
+    },
+  };
 }
 
 function BotChatSettingsPage(props: {

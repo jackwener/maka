@@ -315,10 +315,14 @@ function registerIpc(): void {
     await applySettingsRuntimeEffects(next, patch);
     return maskAppSettings(next, patch);
   });
-  ipcMain.handle('settings:testNetworkProxy', async () => {
+  ipcMain.handle('settings:testNetworkProxy', async (_event, input: TestProxyInput = {}) => {
     const started = Date.now();
     const stored = toContractNetworkSettings((await settingsStore.get()).network).proxy;
-    const result = await testProxyConnection({}, stored);
+    const proxy = input.proxy?.password === SENSITIVE_PLACEHOLDER
+      ? { ...input.proxy, password: stored.password }
+      : input.proxy;
+    const testedProxy = proxy ?? stored;
+    const result = await testProxyConnection({ ...input, proxy }, stored);
     const latencyMs = result.latencyMs ?? (Date.now() - started);
     if (!result.ok) {
       return {
@@ -330,15 +334,15 @@ function registerIpc(): void {
     return {
       ok: true,
       message: result.ip
-        ? `代理配置有效：${stored.type}://${stored.host}:${stored.port} · ${result.countryFlag ?? ''} ${result.ip}`.trim()
-        : `代理配置有效：${stored.type}://${stored.host}:${stored.port}`,
+        ? `代理配置有效：${testedProxy.type}://${testedProxy.host}:${testedProxy.port} · ${result.countryFlag ?? ''} ${result.ip}`.trim()
+        : `代理配置有效：${testedProxy.type}://${testedProxy.host}:${testedProxy.port}`,
       latencyMs,
       details: {
         status: result.status,
         ip: result.ip,
         countryCode: result.countryCode,
         countryFlag: result.countryFlag,
-        bypassList: stored.bypassList,
+        bypassList: testedProxy.bypassList,
       },
     } satisfies SettingsTestResult;
   });

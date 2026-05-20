@@ -28,6 +28,7 @@ import type {
   UsageQuery,
   UsageSummaryV2,
 } from '@maka/core/usage-stats/types';
+import type { TestProxyInput } from '@maka/core/settings/network-settings';
 import type { Result } from '@maka/core/settings/result';
 import type { CreateSessionInput } from '@maka/core';
 
@@ -117,8 +118,8 @@ contextBridge.exposeInMainWorld('maka', {
     update(patch: UpdateAppSettingsInput): Promise<AppSettings> {
       return ipcRenderer.invoke('settings:update', patch);
     },
-    testNetworkProxy(): Promise<SettingsTestResult> {
-      return ipcRenderer.invoke('settings:testNetworkProxy');
+    testNetworkProxy(input?: TestProxyInput): Promise<SettingsTestResult> {
+      return ipcRenderer.invoke('settings:testNetworkProxy', input);
     },
     testBotChannel(provider: BotProvider): Promise<SettingsTestResult> {
       return ipcRenderer.invoke('settings:testBotChannel', provider);
