@@ -8,6 +8,7 @@ import type {
   SessionEvent,
   SessionSummary,
   StoredMessage,
+  ThemePreference,
 } from '@maka/core';
 import {
   ChatView,
@@ -18,6 +19,7 @@ import {
   type ToolActivityItem,
 } from '@maka/ui';
 import { SettingsModal } from './settings/SettingsModal';
+import { applyTheme } from './theme';
 import './styles.css';
 
 function App() {
@@ -31,6 +33,7 @@ function App() {
   const [connections, setConnections] = useState<LlmConnection[]>([]);
   const [defaultConnection, setDefaultConnection] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [themePref, setThemePref] = useState<ThemePreference>('auto');
   const activeStreaming = activeId ? streamingBySession[activeId] ?? '' : '';
   const liveTools = useMemo(() => (activeId ? liveToolsBySession[activeId] ?? [] : []), [activeId, liveToolsBySession]);
   const activePermission = activeId ? permissionBySession[activeId] : undefined;
@@ -52,6 +55,14 @@ function App() {
   useEffect(() => {
     void refreshSessions();
     void refreshConnections();
+    // Pull the persisted theme preference (auto/light/dark) and apply it
+    // before any first paint settles. If settings are unreadable we leave the
+    // default `auto` which still produces a correct result.
+    void window.maka.settings.get().then((next) => {
+      const pref = next.appearance?.theme ?? 'auto';
+      setThemePref(pref);
+      applyTheme(pref);
+    });
     const unsubscribeConnections = window.maka.connections.subscribeEvents(handleConnectionEvent);
     const unsubscribeOpenSettings = window.maka.appWindow.subscribeOpenSettings(openSettings);
     function onKeyDown(event: globalThis.KeyboardEvent) {
@@ -67,6 +78,14 @@ function App() {
       window.removeEventListener('keydown', onKeyDown);
     };
   }, []);
+
+  // Keep <html class="dark"> in sync with the active preference. The Settings
+  // modal also calls applyTheme on local change so the effect is immediate,
+  // but this keeps the listener for 'auto' alive at the app level.
+  useEffect(() => {
+    const unsubscribe = applyTheme(themePref);
+    return unsubscribe;
+  }, [themePref]);
 
   useEffect(() => {
     if (!activeId) return;
@@ -351,6 +370,8 @@ function App() {
           defaultSlug={defaultConnection}
           onRefresh={refreshConnections}
           onClose={closeSettings}
+          themePref={themePref}
+          onThemeChange={setThemePref}
         />
       )}
     </div>

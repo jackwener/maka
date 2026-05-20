@@ -109,6 +109,7 @@ export {
 
 // settings.ts
 export type {
+  AppearanceSettings,
   AppSettings,
   BotChannelSettings,
   BotChatSettings,
@@ -118,6 +119,7 @@ export type {
   ProxyProtocol,
   SettingsSection,
   SettingsTestResult,
+  ThemePreference,
   UpdateAppSettingsInput,
   UsageRange,
   UsageRequestLog,

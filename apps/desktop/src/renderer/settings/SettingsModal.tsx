@@ -25,6 +25,7 @@ import type {
   NetworkProxySettings,
   SettingsSection,
   SettingsTestResult,
+  ThemePreference,
   UsageRange,
   UsageStats,
 } from '@maka/core';
@@ -71,6 +72,8 @@ export function SettingsModal(props: {
   defaultSlug: string | null;
   onRefresh(): Promise<void>;
   onClose(): void;
+  themePref: ThemePreference;
+  onThemeChange(pref: ThemePreference): void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
   // Escape closes the modal, Tab/Shift+Tab cycles inside the dialog,
@@ -92,6 +95,8 @@ export function SettingsModal(props: {
           defaultSlug={props.defaultSlug}
           onRefresh={props.onRefresh}
           onClose={props.onClose}
+          themePref={props.themePref}
+          onThemeChange={props.onThemeChange}
         />
       </div>
     </div>
@@ -103,6 +108,8 @@ function SettingsSurface(props: {
   defaultSlug: string | null;
   onRefresh(): Promise<void>;
   onClose(): void;
+  themePref: ThemePreference;
+  onThemeChange(pref: ThemePreference): void;
 }) {
   const [section, setSection] = useState<SettingsSection>('models');
   const [settings, setSettings] = useState<AppSettings>(() => createDefaultSettings());
@@ -178,9 +185,11 @@ function SettingsSurface(props: {
               usageStats={usageStats}
               connections={props.connections}
               defaultSlug={props.defaultSlug}
+              themePref={props.themePref}
               onRefreshConnections={props.onRefresh}
               onUpdateSettings={updateSettings}
               onReloadUsage={reloadUsage}
+              onThemeChange={props.onThemeChange}
             />
           )}
         </div>
@@ -197,9 +206,11 @@ function SettingsPage(props: {
   usageStats: UsageStats | null;
   connections: LlmConnection[];
   defaultSlug: string | null;
+  themePref: ThemePreference;
   onRefreshConnections(): Promise<void>;
   onUpdateSettings(patch: Parameters<typeof window.maka.settings.update>[0]): Promise<AppSettings>;
   onReloadUsage(range?: UsageRange): Promise<void>;
+  onThemeChange(pref: ThemePreference): void;
 }) {
   switch (props.section) {
     case 'models':
@@ -243,10 +254,11 @@ function SettingsPage(props: {
       );
     case 'theme':
       return (
-        <SettingsRows>
-          <SettingRow title="主题" detail="当前使用浅色桌面主题。" value="Light" />
-          <SettingRow title="布局密度" detail="紧凑桌面间距。" value="Compact" />
-        </SettingsRows>
+        <ThemeSettingsPage
+          themePref={props.themePref}
+          onUpdate={props.onUpdateSettings}
+          onThemeChange={props.onThemeChange}
+        />
       );
     case 'account':
       return (
@@ -262,6 +274,53 @@ function SettingsPage(props: {
         </SettingsRows>
       );
   }
+}
+
+const THEME_OPTIONS: Array<{ value: ThemePreference; label: string; help: string }> = [
+  { value: 'light', label: '浅色', help: '始终使用浅色界面。' },
+  { value: 'dark', label: '深色', help: '始终使用深色界面。' },
+  { value: 'auto', label: '跟随系统', help: '匹配 macOS 的当前 Light/Dark 偏好。' },
+];
+
+function ThemeSettingsPage(props: {
+  themePref: ThemePreference;
+  onUpdate(patch: Parameters<typeof window.maka.settings.update>[0]): Promise<AppSettings>;
+  onThemeChange(pref: ThemePreference): void;
+}) {
+  async function setTheme(next: ThemePreference) {
+    // Apply immediately for instant feedback, then persist. If persistence
+    // fails the visual stays — the next app start will re-read whatever
+    // landed on disk.
+    props.onThemeChange(next);
+    await props.onUpdate({ appearance: { theme: next } });
+  }
+
+  return (
+    <div className="settingsStructuredPage">
+      <div className="settingsThemeOptions" role="radiogroup" aria-label="主题">
+        {THEME_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={props.themePref === option.value}
+            data-active={props.themePref === option.value}
+            className="settingsThemeOption"
+            onClick={() => void setTheme(option.value)}
+          >
+            <span className="settingsThemeSwatch" data-variant={option.value} aria-hidden="true" />
+            <span className="settingsThemeLabel">
+              <strong>{option.label}</strong>
+              <small>{option.help}</small>
+            </span>
+          </button>
+        ))}
+      </div>
+      <p className="settingsHelpText">
+        切换主题会立即生效，并保存在 <code className="maka-empty-state-code">settings.json</code> 里下次启动延续。
+      </p>
+    </div>
+  );
 }
 
 function NetworkSettingsPage(props: {

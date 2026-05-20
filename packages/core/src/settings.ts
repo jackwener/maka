@@ -71,11 +71,18 @@ export interface UsageSettings {
   activeTab: UsageTab;
 }
 
+export type ThemePreference = 'light' | 'dark' | 'auto';
+
+export interface AppearanceSettings {
+  theme: ThemePreference;
+}
+
 export interface AppSettings {
   schemaVersion: 1;
   network: NetworkSettings;
   botChat: BotChatSettings;
   usage: UsageSettings;
+  appearance: AppearanceSettings;
 }
 
 export interface UsageRequestLog {
@@ -127,6 +134,7 @@ export type UpdateAppSettingsInput = Partial<{
     channels: Partial<Record<BotProvider, Partial<BotChannelSettings>>>;
   }>;
   usage: Partial<UsageSettings>;
+  appearance: Partial<AppearanceSettings>;
 }>;
 
 export const BOT_PROVIDERS: BotProvider[] = [
@@ -186,6 +194,9 @@ export function createDefaultSettings(): AppSettings {
       showDetails: false,
       activeTab: 'requests',
     },
+    appearance: {
+      theme: 'auto',
+    },
   };
 }
 
@@ -219,6 +230,10 @@ export function mergeSettings(current: AppSettings, patch: UpdateAppSettingsInpu
       ...current.usage,
       ...(patch.usage ?? {}),
     },
+    appearance: {
+      ...current.appearance,
+      ...(patch.appearance ?? {}),
+    },
   };
 }
 
@@ -230,5 +245,6 @@ export function normalizeSettings(input: unknown): AppSettings {
     network: value.network,
     botChat: value.botChat,
     usage: value.usage,
+    appearance: value.appearance,
   });
 }
