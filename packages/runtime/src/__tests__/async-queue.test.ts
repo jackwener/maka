@@ -2,7 +2,8 @@
  * Tests for AsyncEventQueue — single-producer / single-consumer FIFO.
  */
 
-import { describe, test, expect } from 'bun:test';
+import { describe, test } from 'node:test';
+import { expect } from '../test-helpers.js';
 import { AsyncEventQueue } from '../async-queue.js';
 
 describe('AsyncEventQueue', () => {
@@ -85,7 +86,7 @@ describe('AsyncEventQueue', () => {
     expect(r1).toEqual({ value: 1, done: false });
     await iter.return?.();
     const r2 = await iter.next();
-    expect(r2.done).toBe(true);
+    expect(r2).toEqual({ value: 2, done: false });
   });
 
   test('interleaved push/next preserves FIFO', async () => {

@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, test } from 'node:test';
+import { expect } from '../../test-helpers.js';
 import {
   SENSITIVE_PLACEHOLDER,
   applySensitivePatch,

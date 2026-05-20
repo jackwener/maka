@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, test } from 'node:test';
+import { expect } from '../../test-helpers.js';
 import { PROXY_DEFAULTS } from '@maka/core/settings/network-settings';
 import { buildProxyUrl, parseProxyConfig } from '../proxy-parser.js';
 

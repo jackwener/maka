@@ -3,7 +3,8 @@
  * requestId generation, and parked-Promise resumption.
  */
 
-import { describe, test, expect } from 'bun:test';
+import { describe, test } from 'node:test';
+import { expect } from '../test-helpers.js';
 import { PermissionEngine, type PermissionEngineDeps } from '../permission-engine.js';
 import type { PermissionResponse } from '@maka/core/permission';
 
@@ -177,11 +178,11 @@ describe('PermissionEngine — turn lifecycle', () => {
     expect(settled).toContain('aborted');
   });
 
-  test('endTurn clears state', () => {
+  test('endTurn clears state', async () => {
     const { engine } = makeEngine();
     engine.beginTurn('t1');
     expect(engine.pendingCount('t1')).toBe(0);
-    engine.evaluate({
+    const r = engine.evaluate({
       sessionId: 's1',
       turnId: 't1',
       toolUseId: 'tu1',
@@ -189,8 +190,10 @@ describe('PermissionEngine — turn lifecycle', () => {
       args: {},
       mode: 'ask',
     });
+    const parkedPromise = r.kind === 'prompt' ? r.parked.catch((e: Error) => e) : Promise.resolve(null);
     expect(engine.pendingCount('t1')).toBe(1);
     engine.endTurn('t1');
+    await parkedPromise;
     expect(engine.pendingCount('t1')).toBe(0);
   });
 

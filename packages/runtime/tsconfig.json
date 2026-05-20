@@ -6,6 +6,6 @@
     "composite": true
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["src/**/__tests__/**/*.ts", "src/**/*.test.ts"],
+  "exclude": [],
   "references": [{ "path": "../core" }]
 }

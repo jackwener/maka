@@ -4,7 +4,8 @@
  * Run: `bun test packages/runtime/src/__tests__/materializer.test.ts`
  */
 
-import { describe, test, expect } from 'bun:test';
+import { describe, test } from 'node:test';
+import { expect } from '../test-helpers.js';
 import type {
   UserMessage,
   AssistantMessage,
