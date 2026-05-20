@@ -2,6 +2,8 @@ import { memo, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, 
 import {
   Archive,
   ArrowDown,
+  Check,
+  Copy,
   Flag,
   MessageSquare,
   Plus,
@@ -377,6 +379,9 @@ export function ChatView(props: {
  * - `assistant` / `system` (and anything else) flow through the markdown
  *   renderer so code fences, lists, tables, and links display natively.
  *
+ * Assistant messages get a hover Copy button that yanks the raw markdown
+ * source to the clipboard.
+ *
  * Memoized because chat scroll re-renders the whole list on every streaming
  * delta; this keeps already-final bubbles from re-parsing markdown.
  */
@@ -385,11 +390,38 @@ const MessageBody = memo(function MessageBody(props: { role: string; text: strin
     return <div className="maka-bubble-user">{props.text}</div>;
   }
   return (
-    <div className="maka-bubble-assistant">
+    <div className="maka-bubble-assistant maka-bubble-with-actions">
       <Markdown text={props.text} />
+      <MessageCopyButton text={props.text} />
     </div>
   );
 });
+
+function MessageCopyButton(props: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(props.text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      /* clipboard unavailable — silently fail, button stays in default state */
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      className="maka-message-copy"
+      onClick={copy}
+      aria-label={copied ? 'Copied' : 'Copy message'}
+      data-copied={copied}
+    >
+      {copied ? <Check size={14} strokeWidth={2} aria-hidden="true" /> : <Copy size={14} strokeWidth={1.75} aria-hidden="true" />}
+    </button>
+  );
+}
 
 const MARKDOWN_PLUGINS = [remarkGfm, remarkBreaks];
 
