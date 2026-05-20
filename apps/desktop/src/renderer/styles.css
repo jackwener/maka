@@ -528,6 +528,15 @@ button:active {
   cursor: text;
 }
 
+.maka-list-row-main:focus-visible {
+  outline: 0;
+}
+
+.maka-list-row:has(.maka-list-row-main:focus-visible) {
+  border-color: oklch(from var(--accent) l c h / 0.4);
+  box-shadow: 0 0 0 2px oklch(from var(--accent) l c h / 0.18);
+}
+
 .maka-list-row-name {
   overflow: hidden;
   text-overflow: ellipsis;

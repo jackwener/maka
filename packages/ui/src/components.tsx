@@ -161,6 +161,38 @@ export function SessionListPanel(props: {
   const isSessionFilter = (filter: SessionFilter) => props.selection.section === 'sessions' && props.selection.filter === filter;
   const title = props.selection.section === 'sessions' ? FILTER_LABEL[props.selection.filter] : 'Skills';
 
+  function handleListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown' && event.key !== 'Home' && event.key !== 'End') {
+      return;
+    }
+    const list = event.currentTarget;
+    const focusables = Array.from(
+      list.querySelectorAll<HTMLButtonElement>('.maka-list-row-main'),
+    );
+    if (focusables.length === 0) return;
+    const active = document.activeElement as HTMLElement | null;
+    const currentIndex = active ? focusables.indexOf(active as HTMLButtonElement) : -1;
+    let nextIndex = currentIndex;
+    switch (event.key) {
+      case 'ArrowDown':
+        nextIndex = currentIndex < 0 ? 0 : Math.min(focusables.length - 1, currentIndex + 1);
+        break;
+      case 'ArrowUp':
+        nextIndex = currentIndex <= 0 ? 0 : currentIndex - 1;
+        break;
+      case 'Home':
+        nextIndex = 0;
+        break;
+      case 'End':
+        nextIndex = focusables.length - 1;
+        break;
+    }
+    if (nextIndex === currentIndex) return;
+    event.preventDefault();
+    focusables[nextIndex]?.focus({ preventScroll: false });
+    focusables[nextIndex]?.scrollIntoView({ block: 'nearest' });
+  }
+
   return (
     <aside className="maka-session-panel" aria-label="Chats">
       <header className="maka-session-panel-header">
@@ -229,7 +261,7 @@ export function SessionListPanel(props: {
             </button>
           </div>
         ) : (
-          <div className="maka-list-stack">
+          <div className="maka-list-stack" onKeyDown={handleListKeyDown}>
             {props.sessions.map((session) => (
               <SessionRow
                 key={session.id}
