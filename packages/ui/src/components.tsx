@@ -15,6 +15,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
+import rehypeHighlight from 'rehype-highlight';
 import type {
   PermissionRequestEvent,
   PermissionResponse,
@@ -423,12 +424,18 @@ function MessageCopyButton(props: { text: string }) {
   );
 }
 
-const MARKDOWN_PLUGINS = [remarkGfm, remarkBreaks];
+const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkBreaks];
+const MARKDOWN_REHYPE_PLUGINS = [
+  // `detect: true` lets hljs guess the language when the fence didn't tag one;
+  // `ignoreMissing: true` keeps bogus tags like ```mermaid from throwing.
+  [rehypeHighlight, { detect: true, ignoreMissing: true }],
+] as const;
 
 function Markdown(props: { text: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={MARKDOWN_PLUGINS}
+      remarkPlugins={MARKDOWN_REMARK_PLUGINS}
+      rehypePlugins={MARKDOWN_REHYPE_PLUGINS as never}
       components={{
         // Force external links to open in a new window — Electron will route
         // through the OS default browser when the renderer is configured to.
