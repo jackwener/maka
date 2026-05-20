@@ -535,6 +535,37 @@
     background: transparent;
     font-size: inherit;
   }
+
+  /* Syntax highlight palette for highlight.js / lowlight class names.
+     All colors derive from oklch token shifts so light + dark stay
+     in sync without per-theme overrides. */
+  .hljs            { color: var(--foreground); }
+  .hljs-comment,
+  .hljs-quote      { color: var(--foreground-50); font-style: italic; }
+  .hljs-keyword,
+  .hljs-selector-tag,
+  .hljs-literal,
+  .hljs-tag        { color: oklch(from var(--accent) calc(l - 0.05) calc(c + 0.04) h); }
+  .hljs-string,
+  .hljs-doctag,
+  .hljs-regexp     { color: oklch(from var(--success) calc(l + 0.02) c h); }
+  .hljs-number,
+  .hljs-symbol,
+  .hljs-bullet,
+  .hljs-meta       { color: oklch(from var(--info) calc(l - 0.05) c h); }
+  .hljs-built_in,
+  .hljs-type,
+  .hljs-class .hljs-title,
+  .hljs-title.class_,
+  .hljs-title.function_ { color: oklch(from var(--accent) calc(l - 0.1) c calc(h - 30)); }
+  .hljs-variable,
+  .hljs-attr,
+  .hljs-attribute,
+  .hljs-name       { color: oklch(from var(--info) calc(l - 0.1) calc(c + 0.04) h); }
+  .hljs-deletion   { color: var(--destructive-text); background: oklch(from var(--destructive) l c h / 0.08); }
+  .hljs-addition   { color: var(--success-text); background: oklch(from var(--success) l c h / 0.08); }
+  .hljs-emphasis   { font-style: italic; }
+  .hljs-strong     { font-weight: 700; }
   .maka-bubble-assistant blockquote {
     margin: 0 0 12px;
     padding: 4px 14px;
