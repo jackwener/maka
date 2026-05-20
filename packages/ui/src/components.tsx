@@ -466,6 +466,8 @@ export function ChatView(props: {
   streamingText: string;
   tools: ToolActivityItem[];
   activeSession?: SessionSummary;
+  activeConnectionLabel?: string;
+  activeModelLabel?: string;
   mode: NavSelection['section'];
   onNew(): void;
   onPromptSuggestion?(prompt: string): void;
@@ -510,12 +512,12 @@ export function ChatView(props: {
     return (
       <main className="maka-main detailPane">
         <header className="maka-chat-header">
-          <ChatTab title="New Chat" backend="fake" />
+          <ChatTab title="New Chat" />
           <button className="maka-chat-tab-plus" type="button" aria-label="New chat" onClick={props.onNew}>
             <Plus strokeWidth={1.5} />
           </button>
           <span className="maka-chat-header-spacer" />
-          <span className="modePill">Ask mode</span>
+          <span className="modePill" title="Sensitive tool calls require explicit allow/deny before running.">Ask mode</span>
         </header>
         <div className="maka-chat messages">
           <EmptyChatHero onPromptSuggestion={props.onPromptSuggestion} />
@@ -527,12 +529,18 @@ export function ChatView(props: {
   return (
     <main className="maka-main detailPane">
       <header className="maka-chat-header">
-        <ChatTab title={props.activeSession.name} backend={props.activeSession.backend} />
+        <ChatTab
+          title={props.activeSession.name}
+          subtitle={props.activeModelLabel ?? props.activeConnectionLabel}
+          subtitleHint={props.activeConnectionLabel && props.activeModelLabel
+            ? `${props.activeConnectionLabel} · ${props.activeModelLabel}`
+            : undefined}
+        />
         <button className="maka-chat-tab-plus" type="button" aria-label="New chat" onClick={props.onNew}>
           <Plus strokeWidth={1.5} />
         </button>
         <span className="maka-chat-header-spacer" />
-        <span className="modePill">Ask mode</span>
+        <span className="modePill" title="Sensitive tool calls require explicit allow/deny before running.">Ask mode</span>
       </header>
       <div className="maka-chat-shell">
         <div ref={scrollRef} className="maka-chat messages" onScroll={onScroll}>
@@ -682,12 +690,12 @@ function EmptyChatHero(props: { onPromptSuggestion?(prompt: string): void }) {
   );
 }
 
-function ChatTab(props: { title: string; backend: string }) {
+function ChatTab(props: { title: string; subtitle?: string; subtitleHint?: string }) {
   return (
-    <div className="maka-chat-tab" title={props.title}>
+    <div className="maka-chat-tab" title={props.subtitleHint ? `${props.title} · ${props.subtitleHint}` : props.title}>
       <MessageSquare className="maka-chat-tab-icon" strokeWidth={1.5} />
       <span>{props.title}</span>
-      <span className="maka-chat-tab-backend">{props.backend}</span>
+      {props.subtitle && <span className="maka-chat-tab-backend">{props.subtitle}</span>}
     </div>
   );
 }

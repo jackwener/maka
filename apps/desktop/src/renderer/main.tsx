@@ -54,6 +54,16 @@ function AppShell() {
   const liveTools = useMemo(() => (activeId ? liveToolsBySession[activeId] ?? [] : []), [activeId, liveToolsBySession]);
   const activePermission = activeId ? permissionBySession[activeId] : undefined;
   const activeSession = sessions.find((session) => session.id === activeId);
+  const activeConnection = activeSession
+    ? connections.find((connection) => connection.slug === activeSession.llmConnectionSlug)
+    : undefined;
+  const activeConnectionLabel = activeSession?.backend === 'fake'
+    ? 'Fake backend'
+    : activeConnection?.name ?? activeSession?.llmConnectionSlug;
+  // SessionSummary doesn't carry the resolved model (it lives on the header
+  // and isn't surfaced through the IPC `sessions:list`), so fall back to the
+  // connection's default model for display purposes.
+  const activeModelLabel = activeSession?.backend === 'fake' ? undefined : activeConnection?.defaultModel;
   const activeSessionForView: SessionSummary | undefined = activeSession ?? (activeId ? {
     id: activeId,
     name: 'New Chat',
@@ -406,6 +416,8 @@ function AppShell() {
               streamingText={activeStreaming}
               tools={liveTools}
               activeSession={activeSessionForView}
+              activeConnectionLabel={activeConnectionLabel}
+              activeModelLabel={activeModelLabel}
               mode={navSelection.section}
               onNew={createSession}
               onPromptSuggestion={(prompt) => composerRef.current?.setText(prompt)}
