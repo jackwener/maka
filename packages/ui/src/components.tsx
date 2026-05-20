@@ -30,6 +30,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import rehypeHighlight from 'rehype-highlight';
 import type {
+  PermissionMode,
   PermissionRequestEvent,
   PermissionResponse,
   SessionSummary,
@@ -529,6 +530,32 @@ function SessionRow(props: {
   );
 }
 
+interface PermissionModeMeta {
+  label: string;
+  hint: string;
+  tone: 'info' | 'accent' | 'caution';
+}
+
+const PERMISSION_MODE_META: Record<PermissionMode, PermissionModeMeta> = {
+  explore: {
+    label: 'Explore',
+    hint: '只读模式：read/list/grep 直通，写入或网络仍需明确确认。',
+    tone: 'info',
+  },
+  ask: {
+    label: 'Ask',
+    hint: '平衡模式：敏感工具调用前必须 allow / deny。',
+    tone: 'accent',
+  },
+  execute: {
+    label: 'Execute',
+    hint: '执行模式：信任的工具调用直通；破坏性操作仍会拦截。',
+    tone: 'caution',
+  },
+};
+
+const PERMISSION_MODE_ORDER: PermissionMode[] = ['explore', 'ask', 'execute'];
+
 export function ChatView(props: {
   messages: StoredMessage[];
   streamingText: string;
@@ -539,6 +566,7 @@ export function ChatView(props: {
   mode: NavSelection['section'];
   onNew(): void;
   onPromptSuggestion?(prompt: string): void;
+  onPermissionModeChange?(mode: PermissionMode): void;
 }) {
   const chat = materializeChat(props.messages);
   const storedTools = materializeTools(props.messages);
@@ -576,6 +604,9 @@ export function ChatView(props: {
     );
   }
 
+  const streaming = props.streamingText.length > 0;
+  const switcherDisabled = streaming || !props.activeSession || !props.onPermissionModeChange;
+
   if (!props.activeSession) {
     return (
       <main className="maka-main detailPane">
@@ -585,7 +616,7 @@ export function ChatView(props: {
             <Plus strokeWidth={1.5} />
           </button>
           <span className="maka-chat-header-spacer" />
-          <span className="modePill" title="Sensitive tool calls require explicit allow/deny before running.">Ask mode</span>
+          <PermissionModeSwitcher mode="ask" disabled disabledReason="新建对话后再切换模式。" />
         </header>
         <div className="maka-chat messages">
           <EmptyChatHero onPromptSuggestion={props.onPromptSuggestion} />
@@ -608,7 +639,12 @@ export function ChatView(props: {
           <Plus strokeWidth={1.5} />
         </button>
         <span className="maka-chat-header-spacer" />
-        <span className="modePill" title="Sensitive tool calls require explicit allow/deny before running.">Ask mode</span>
+        <PermissionModeSwitcher
+          mode={props.activeSession.permissionMode}
+          disabled={switcherDisabled}
+          disabledReason={streaming ? '当前对话正在流式输出，等结束后再切换权限模式。' : undefined}
+          onChange={props.onPermissionModeChange}
+        />
       </header>
       <div className="maka-chat-shell">
         <div ref={scrollRef} className="maka-chat messages" onScroll={onScroll}>
@@ -754,6 +790,49 @@ function EmptyChatHero(props: { onPromptSuggestion?(prompt: string): void }) {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function PermissionModeSwitcher(props: {
+  mode: PermissionMode;
+  disabled?: boolean;
+  disabledReason?: string;
+  onChange?(mode: PermissionMode): void;
+}) {
+  const active = PERMISSION_MODE_META[props.mode];
+  return (
+    <div
+      className="maka-mode-switcher"
+      role="radiogroup"
+      aria-label="权限模式"
+      data-disabled={props.disabled || undefined}
+      title={props.disabledReason ?? active.hint}
+    >
+      {PERMISSION_MODE_ORDER.map((mode) => {
+        const meta = PERMISSION_MODE_META[mode];
+        const isActive = mode === props.mode;
+        return (
+          <button
+            key={mode}
+            type="button"
+            role="radio"
+            aria-checked={isActive}
+            disabled={props.disabled || !props.onChange}
+            data-active={isActive}
+            data-tone={meta.tone}
+            className="maka-mode-switcher-option"
+            onClick={() => {
+              if (!props.disabled && props.onChange && mode !== props.mode) {
+                props.onChange(mode);
+              }
+            }}
+            title={meta.hint}
+          >
+            {meta.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

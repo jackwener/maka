@@ -799,6 +799,64 @@ button:active {
   -webkit-app-region: no-drag;
 }
 
+.maka-mode-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 7px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--foreground-5);
+  border: 1px solid var(--border);
+  -webkit-app-region: no-drag;
+}
+
+.maka-mode-switcher[data-disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.maka-mode-switcher-option {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--foreground-60);
+  cursor: pointer;
+  padding: 3px 11px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.maka-mode-switcher-option:hover:not(:disabled):not([data-active="true"]) {
+  background: var(--foreground-5);
+  color: var(--foreground);
+}
+
+.maka-mode-switcher-option:disabled {
+  cursor: not-allowed;
+}
+
+.maka-mode-switcher-option[data-active="true"] {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--shadow-minimal-flat);
+}
+
+.maka-mode-switcher-option[data-active="true"][data-tone="info"] {
+  color: var(--info-text);
+}
+
+.maka-mode-switcher-option[data-active="true"][data-tone="accent"] {
+  color: var(--accent);
+}
+
+.maka-mode-switcher-option[data-active="true"][data-tone="caution"] {
+  color: var(--success-text);
+}
+
 .maka-center-state {
   height: 100%;
   display: grid;

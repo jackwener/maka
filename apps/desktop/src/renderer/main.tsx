@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import type {
   ConnectionEvent,
   LlmConnection,
+  PermissionMode,
   PermissionRequestEvent,
   PermissionResponse,
   SessionEvent,
@@ -161,6 +162,27 @@ function AppShell() {
     await window.maka.sessions.rename(sessionId, name);
     await refreshSessions();
   }
+  async function setPermissionMode(mode: PermissionMode) {
+    if (!activeId) return;
+    const current = sessions.find((session) => session.id === activeId);
+    if (!current || current.permissionMode === mode) return;
+    try {
+      const next = await window.maka.sessions.setPermissionMode(activeId, mode);
+      // Patch the session in-place so the chat header reflects the new mode
+      // immediately without waiting for a full list refresh.
+      setSessions((prev) => prev.map((session) => (session.id === next.id ? next : session)));
+      const labels: Record<PermissionMode, string> = {
+        explore: '只读模式',
+        ask: '确认模式',
+        execute: '执行模式',
+      };
+      toastApi.success(`已切到 ${labels[mode]}`, modeDescriptions[mode]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toastApi.error('切换权限模式失败', message);
+    }
+  }
+
   async function deleteSession(sessionId: string) {
     const session = sessions.find((entry) => entry.id === sessionId);
     const name = session?.name ?? 'this chat';
@@ -424,6 +446,7 @@ function AppShell() {
               mode={navSelection.section}
               onNew={createSession}
               onPromptSuggestion={(prompt) => composerRef.current?.setText(prompt)}
+              onPermissionModeChange={(mode) => void setPermissionMode(mode)}
             />
             <Composer
               ref={composerRef}
@@ -474,6 +497,12 @@ function AppShell() {
     </div>
   );
 }
+
+const modeDescriptions: Record<PermissionMode, string> = {
+  explore: '只读工具直通，写入或网络仍需确认。',
+  ask: '所有敏感工具调用前都会停下来征求 allow / deny。',
+  execute: '常见工具直通；只有破坏性操作仍然拦截。',
+};
 
 function readSessionListWidth(): number {
   const stored = Number(localStorage.getItem('maka-chat-list-width-v1'));
