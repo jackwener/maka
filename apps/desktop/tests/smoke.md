@@ -48,8 +48,7 @@ Capture light/dark/narrow/reduced-motion baseline PNGs for every fixture
 scenario using the driver script:
 
 ```bash
-# Single scenario × all 4 variants (light-1280-motion / light-990-motion
-# / light-1280-reduced-motion / light-990-reduced-motion)
+# Single scenario × all 8 variants (light/dark × 1280/990 × motion/reduced)
 npm --workspace @maka/desktop run screenshots:single artifact-pane
 
 # All scenarios × all variants (full regression baseline)

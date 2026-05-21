@@ -244,6 +244,21 @@ function clampBoundsToVisibleDisplay(bounds: SavedBounds): SavedBounds {
   return { width: bounds.width, height: bounds.height, isMaximized: bounds.isMaximized };
 }
 
+function visualSmokeWindowBounds(defaults: SavedBounds): SavedBounds {
+  if (!visualSmokeFixture) return defaults;
+  const width = Number(process.env.MAKA_VISUAL_SMOKE_WIDTH);
+  const height = Number(process.env.MAKA_VISUAL_SMOKE_HEIGHT);
+  if (
+    Number.isFinite(width) &&
+    Number.isFinite(height) &&
+    width >= 480 &&
+    height >= 320
+  ) {
+    return { width: Math.floor(width), height: Math.floor(height) };
+  }
+  return defaults;
+}
+
 async function createWindow(): Promise<void> {
   await mkdir(workspaceRoot, { recursive: true });
   installApplicationMenu();
@@ -252,7 +267,10 @@ async function createWindow(): Promise<void> {
   // load, validate the saved x/y against the current display layout — if
   // the previous external monitor is gone, drop x/y so Electron centers
   // the window on the primary display instead of opening it off-screen.
-  const savedBounds = await readSavedBounds(workspaceRoot, { width: 1240, height: 820 });
+  const defaults = visualSmokeWindowBounds({ width: 1240, height: 820 });
+  const savedBounds = visualSmokeFixture
+    ? defaults
+    : await readSavedBounds(workspaceRoot, defaults);
   const bounds = clampBoundsToVisibleDisplay(savedBounds);
 
   // @kenji PR103 follow-up: complete the FOUC fix at the window-chrome layer.

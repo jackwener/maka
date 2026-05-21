@@ -27,7 +27,7 @@
  *   node scripts/capture-screenshots.mjs --all
  *
  * Variants are derived as the cross product of:
- *   theme:      'light' | 'dark'           (TODO: requires settings preset; for now only one)
+ *   theme:      'light' | 'dark'
  *   motion:     'motion' | 'reduced-motion'
  *   viewport:   '1280' | '990'              (wide vs narrow gate from UI plan §1)
  *
@@ -47,8 +47,8 @@
 
 import { spawn } from 'node:child_process';
 import { mkdir, copyFile, readFile, stat } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 
@@ -86,7 +86,7 @@ const VARIANTS = [
 ];
 
 const CAPTURE_TIMEOUT_MS = 60_000;
-const MARKER_RE = /\[visual-smoke\] captured scenario=(\S+) variant=(\S+) path=(\S+)/;
+const MARKER_RE = /\[visual-smoke\] captured scenario=(\S+) variant=(\S+) path=(.+)$/;
 
 function parseArgs(argv) {
   const args = { scenario: null, variant: null, all: false };
@@ -108,9 +108,7 @@ function parseArgs(argv) {
 
 function readFileSyncOrEmpty(path) {
   try {
-    // synchronous read for --help only
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require('node:fs').readFileSync(path, 'utf8').slice(0, 4096);
+    return readFileSync(path, 'utf8').slice(0, 4096);
   } catch {
     return 'See script source for usage notes.';
   }
