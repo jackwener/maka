@@ -585,7 +585,7 @@ function AppShell() {
         <div
           className="maka-resize-handle"
           role="separator"
-          aria-label="Resize chat list"
+          aria-label="调整对话列表宽度"
           aria-orientation="vertical"
           aria-valuemin={240}
           aria-valuemax={420}

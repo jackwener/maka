@@ -126,7 +126,7 @@ export function KeyboardHelpModal(props: { onClose(): void }) {
           <button
             type="button"
             className="settingsCloseButton"
-            aria-label="Close shortcuts"
+            aria-label="关闭快捷键面板"
             onClick={props.onClose}
           >
             <X strokeWidth={1.75} aria-hidden="true" />

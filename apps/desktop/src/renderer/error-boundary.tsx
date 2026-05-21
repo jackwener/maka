@@ -50,7 +50,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
               已捕获一次未处理的 React 异常。下面是错误摘要；点 <strong>重试</strong>
               清掉这次崩溃，<strong>重新加载</strong> 会刷新整个窗口。
             </p>
-            <pre className="maka-error-stack" aria-label="Error details">
+            <pre className="maka-error-stack" aria-label="错误详情">
               {error.name}: {error.message}
               {error.stack ? `\n\n${error.stack}` : ''}
             </pre>
