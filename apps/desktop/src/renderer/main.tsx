@@ -175,8 +175,32 @@ function AppShell() {
   // duplicate sibling turns by disabling the action button between
   // click and `sessions:changed turn-status-change` arriving.
   const [pendingTurnActions, setPendingTurnActions] = useState<Set<string>>(() => new Set());
-  const pendingKeyOf = (turnId: string, actionId: TurnFooterActionMeta['id']) =>
-    `${turnId}:${actionId}`;
+  const pendingTurnActionsRef = useRef<Set<string>>(new Set());
+  const pendingTurnActionTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pendingKeyOf = (sessionId: string, turnId: string, actionId: TurnFooterActionMeta['id']) =>
+    `${sessionId}:${turnId}:${actionId}`;
+  function addPendingTurnAction(key: string): boolean {
+    if (pendingTurnActionsRef.current.has(key)) return false;
+    pendingTurnActionsRef.current.add(key);
+    setPendingTurnActions(new Set(pendingTurnActionsRef.current));
+    const timeoutHandle = setTimeout(() => clearPendingTurnAction(key), 5000);
+    pendingTurnActionTimersRef.current.set(key, timeoutHandle);
+    return true;
+  }
+  function clearPendingTurnAction(key: string): void {
+    if (!pendingTurnActionsRef.current.has(key)) return;
+    pendingTurnActionsRef.current.delete(key);
+    const timeoutHandle = pendingTurnActionTimersRef.current.get(key);
+    if (timeoutHandle) clearTimeout(timeoutHandle);
+    pendingTurnActionTimersRef.current.delete(key);
+    setPendingTurnActions(new Set(pendingTurnActionsRef.current));
+  }
+  function clearPendingTurnActionsForSession(sessionId: string): void {
+    const prefix = `${sessionId}:`;
+    for (const key of Array.from(pendingTurnActionsRef.current)) {
+      if (key.startsWith(prefix)) clearPendingTurnAction(key);
+    }
+  }
 
   const turnFooterActionsByTurn = useMemo(() => {
     const turnsForLineage = materializeTurns(messages, liveTools);
@@ -188,7 +212,7 @@ function AppShell() {
       // has at most 4 possible action keys).
       const pendingForTurn = new Set<TurnFooterActionMeta['id']>();
       for (const id of ['retry', 'regenerate', 'branch', 'copy'] as const) {
-        if (pendingTurnActions.has(pendingKeyOf(turn.turnId, id))) {
+        if (activeId && pendingTurnActions.has(pendingKeyOf(activeId, turn.turnId, id))) {
           pendingForTurn.add(id);
         }
       }
@@ -202,7 +226,7 @@ function AppShell() {
       byTurn[turn.turnId] = actions;
     }
     return byTurn;
-  }, [messages, liveTools, pendingTurnActions]);
+  }, [activeId, messages, liveTools, pendingTurnActions]);
 
   async function handleTurnFooterAction(
     turnId: string,
@@ -210,48 +234,29 @@ function AppShell() {
   ): Promise<void> {
     if (!activeId) return;
     if (actionId === 'copy') return; // handled in-component
-    const key = pendingKeyOf(turnId, actionId);
-    if (pendingTurnActions.has(key)) return; // hard guard: already pending
-    setPendingTurnActions((current) => {
-      const next = new Set(current);
-      next.add(key);
-      return next;
-    });
-    // Safety net: clear pending after 5s in case `sessions:changed`
-    // never arrives (runtime failed silently, IPC dropped, etc.).
-    // Per @kenji: timeout fallback is necessary because branch action
-    // doesn't always produce a `created` event we can correlate to.
-    const timeoutHandle = setTimeout(() => {
-      setPendingTurnActions((current) => {
-        if (!current.has(key)) return current;
-        const next = new Set(current);
-        next.delete(key);
-        return next;
-      });
-    }, 5000);
+    const sessionId = activeId;
+    const key = pendingKeyOf(sessionId, turnId, actionId);
+    // Ref-backed guard blocks same-frame double clicks before React has
+    // committed the disabled state. State alone is too late here because
+    // retry/regenerate IPC returns after starting the stream asynchronously.
+    if (!addPendingTurnAction(key)) return;
     try {
       if (actionId === 'retry') {
-        await window.maka.sessions.retryTurn(activeId, { sourceTurnId: turnId });
+        await window.maka.sessions.retryTurn(sessionId, { sourceTurnId: turnId });
         toastApi.info('已发起重试', '正在生成新的一轮回答');
       } else if (actionId === 'regenerate') {
-        await window.maka.sessions.regenerateTurn(activeId, { sourceTurnId: turnId });
+        await window.maka.sessions.regenerateTurn(sessionId, { sourceTurnId: turnId });
         toastApi.info('已发起重新生成', '保留旧回答，生成新的并行回答');
       } else if (actionId === 'branch') {
-        const newSession = await window.maka.sessions.branchFromTurn(activeId, { sourceTurnId: turnId });
+        const newSession = await window.maka.sessions.branchFromTurn(sessionId, { sourceTurnId: turnId });
         await refreshSessions();
         setActiveId(newSession.id);
+        clearPendingTurnAction(key);
         toastApi.success('已创建分支', `新会话 ${newSession.name}`);
       }
     } catch (error) {
+      clearPendingTurnAction(key);
       toastApi.error('操作失败', cleanErrorMessage(error));
-    } finally {
-      clearTimeout(timeoutHandle);
-      setPendingTurnActions((current) => {
-        if (!current.has(key)) return current;
-        const next = new Set(current);
-        next.delete(key);
-        return next;
-      });
     }
   }
 
@@ -328,6 +333,12 @@ function AppShell() {
     const unsubscribeConnections = window.maka.connections.subscribeEvents(handleConnectionEvent);
     const unsubscribeSessionChanges = window.maka.sessions.subscribeChanges((event) => {
       void refreshSessions();
+      if (
+        event.sessionId &&
+        (event.reason === 'turn-status-change' || event.reason === 'message-appended' || event.reason === 'deleted')
+      ) {
+        clearPendingTurnActionsForSession(event.sessionId);
+      }
       if (event.reason === 'rebound') {
         const modelSuffix = event.modelId ? ` · ${event.modelId}` : '';
         toastApi.info('已切换到默认模型', `原会话使用的连接已不可用${modelSuffix}`);
@@ -364,6 +375,11 @@ function AppShell() {
       unsubscribeConnections();
       unsubscribeSessionChanges();
       unsubscribeOpenSettings();
+      for (const timeoutHandle of pendingTurnActionTimersRef.current.values()) {
+        clearTimeout(timeoutHandle);
+      }
+      pendingTurnActionTimersRef.current.clear();
+      pendingTurnActionsRef.current.clear();
       window.removeEventListener('keydown', onKeyDown);
     };
   }, []);
