@@ -594,6 +594,7 @@ function AppShell() {
               ref={composerRef}
               hidden={navSelection.section !== 'sessions'}
               disabled={Boolean(activePermission)}
+              streaming={activeStreaming.length > 0}
               onSend={send}
               onStop={stop}
             />
