@@ -1858,6 +1858,42 @@ button:active {
   gap: 6px;
 }
 
+/* Composer streaming hint — replaces the Enter/Shift+Enter help text while
+ * Maka is mid-stream. Pulsing dot signals "live", and the Stop button on
+ * the right swaps in as the only primary action so Send isn't ambiguous. */
+.maka-composer-streaming-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--foreground-70);
+}
+
+.maka-composer-streaming-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px oklch(from var(--accent) l c h / 0.15);
+  animation: maka-composer-stream-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes maka-composer-stream-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px oklch(from var(--accent) l c h / 0.18);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 5px oklch(from var(--accent) l c h / 0.06);
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maka-composer-streaming-dot {
+    animation: none;
+  }
+}
+
 .permissionBackdrop {
   z-index: var(--z-modal);
 }
