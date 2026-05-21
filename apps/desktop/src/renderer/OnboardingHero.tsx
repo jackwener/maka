@@ -27,7 +27,7 @@ export function OnboardingHero(props: {
   onUseAnyway(): void;
 }) {
   return (
-    <section className="maka-onboarding" aria-label="Welcome to Maka">
+    <section className="maka-onboarding" aria-label="欢迎使用 Maka">
       <header>
         <span className="maka-onboarding-eyebrow">
           <Sparkles size={12} strokeWidth={2} aria-hidden="true" />
