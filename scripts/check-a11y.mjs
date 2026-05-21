@@ -185,7 +185,125 @@ const RULES = [
       return offenders;
     },
   },
+  {
+    name: 'english-aria-label',
+    /**
+     * PR-IR-05 / i18n contract: any `aria-label` / `title` /
+     * `placeholder` attribute with a string literal value that is all
+     * English (no CJK) is a likely missing translation. Real Chinese
+     * UI labels naturally contain `[一-鿿]` characters.
+     *
+     * Skips:
+     *   - whitelisted technical/brand terms (URL, API, OAuth, …)
+     *   - very short strings (< 4 chars — typically tokens or `OK` /
+     *     `New` that are too short to risk false positives without a
+     *     proper i18n catalog)
+     *   - `// a11y-allow:` exception comments
+     *   - test files / __tests__ already excluded by walker
+     *
+     * Detects user-visible-text attributes only. Internal `data-*` /
+     * `className` / `id` / `aria-controls` are not checked.
+     */
+    scan(text) {
+      const offenders = [];
+      // Single-line attribute match — value can't contain quote chars or
+      // line breaks. We don't strip comments here because attribute string
+      // literals can't legitimately contain `//`, and stripping would
+      // throw off `match.index` line-number calculation.
+      const ATTR_RE = /\b(aria-label|title|placeholder)\s*=\s*(['"])([^'"\n]+)\2/g;
+      let match;
+      while ((match = ATTR_RE.exec(text))) {
+        const attrName = match[1] ?? '';
+        const value = match[3] ?? '';
+        if (value.length < 4) continue;
+        // Has any CJK char → assume Chinese / already translated
+        if (/[一-鿿]/.test(value)) continue;
+        // No Latin letters at all → not a sentence, skip
+        if (!/[a-zA-Z]/.test(value)) continue;
+        // Placeholders for example URLs / domains / slugs / tokens are
+        // template values, not user instructions. Skip these.
+        if (attrName === 'placeholder' && looksLikeExampleValue(value)) continue;
+        // Allow-list common technical / brand terms commonly left in English
+        // (model IDs, brand names, technical abbreviations). Match when the
+        // entire value is composed of allow-listed tokens.
+        if (isAllowedEnglishTerm(value)) continue;
+        // Same-line exception comment
+        const lineStart = text.lastIndexOf('\n', match.index) + 1;
+        const lineEnd = text.indexOf('\n', match.index);
+        const line = text.slice(lineStart, lineEnd < 0 ? text.length : lineEnd);
+        if (/\/\/\s*a11y-allow:/.test(line) || /\/\/\s*i18n-allow:/.test(line)) continue;
+        const lineIndex = text.slice(0, match.index).split('\n').length;
+        offenders.push({ line: lineIndex, snippet: `${attrName}="${value.slice(0, 60)}${value.length > 60 ? '…' : ''}"` });
+      }
+      return offenders;
+    },
+  },
 ];
+
+/**
+ * Allow-list for common technical / brand / English terms that don't need
+ * translation. Returns true when the entire value (after stripping
+ * punctuation/digits) is composed of allowed tokens.
+ *
+ * Be conservative: false negatives are OK (we err on letting English
+ * through; the gate is meant to catch *forgotten* translations, not
+ * impose Chinese on every brand name).
+ */
+const ALLOWED_ENGLISH_PATTERNS = [
+  // Model providers / brand names
+  /^OpenAI$/i,
+  /^Anthropic$/i,
+  /^Claude\b/i,
+  /^GPT-?\d/i,
+  /^Gemini\b/i,
+  /^Llama\b/i,
+  /^DeepSeek$/i,
+  /^Z\.AI$/i,
+  /^Z\.ai$/i,
+  /^GLM-[\d.]+/i,
+  // Common technical abbreviations
+  /^(API|URL|JSON|YAML|HTTP|HTTPS|HTML|CSS|UTF-?8|UUID|JWT|TLS|SSL|MCP|LLM|UI|UX|CLI|MD|PDF|PNG|SVG|JPG|JPEG|WebP)$/i,
+  /^OAuth(?:\s*\d)?$/i,
+  /^WebSocket$/i,
+  /^localhost(?::\d+)?$/i,
+  // Generic placeholders rarely user-facing in a way that matters
+  /^https?:\/\//i,
+  /^[A-Z][a-z]+ID$/, // sessionID, etc.
+];
+
+/**
+ * Detects placeholder values that are example formats (URL, domain,
+ * slug, token, hostname:port) rather than user-facing instructions.
+ * These don't need translation.
+ */
+function looksLikeExampleValue(value) {
+  // Strip the unicode ellipsis (U+2026) and ASCII "..." used to indicate
+  // truncated example text — they don't change the example nature.
+  const trimmed = value.trim().replace(/…+|\.\.\.+/g, '');
+  // Single bare word like "my-provider" or "model-id"
+  if (/^[a-z][a-z0-9-]*$/.test(trimmed)) return true;
+  // URL / scheme
+  if (/^https?:\/\//i.test(trimmed)) return true;
+  if (/^[a-z]+:\/\//i.test(trimmed)) return true;
+  // Comma-separated domains: "metaso.cn, baidu.com"
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(,\s*[a-z0-9.-]+\.[a-z]{2,})*$/i.test(trimmed)) return true;
+  // Token format: "123456:ABC-DEF" / "123456:ABC-DEF…"
+  if (/^[0-9]+:[A-Z0-9_-]+$/.test(trimmed)) return true;
+  // hostname:port
+  if (/^[a-z0-9.-]+:\d+$/i.test(trimmed)) return true;
+  return false;
+}
+
+function isAllowedEnglishTerm(value) {
+  const trimmed = value.trim();
+  for (const pattern of ALLOWED_ENGLISH_PATTERNS) {
+    if (pattern.test(trimmed)) return true;
+  }
+  // Composite values: split by space/punct, check each token
+  const tokens = trimmed.split(/[\s.,:;\-_/()[\]]+/).filter(Boolean);
+  if (tokens.length === 0) return false;
+  return tokens.every((token) => ALLOWED_ENGLISH_PATTERNS.some((p) => p.test(token)));
+}
 
 async function main() {
   const offenders = [];

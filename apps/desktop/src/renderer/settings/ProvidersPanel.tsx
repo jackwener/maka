@@ -131,7 +131,7 @@ function chipTitle(connection: LlmConnection): string {
 
   if (loading) {
     return (
-      <div className="providersPanel providersLoading" aria-busy="true" aria-label="Loading providers">
+      <div className="providersPanel providersLoading" aria-busy="true" aria-label="正在加载模型供应商">
         <div className="providersLoadingStrip">
           <div className="maka-skeleton maka-skeleton-line" data-size="lg" style={{ width: '34%' }} />
           <div className="maka-skeleton maka-skeleton-line" data-size="sm" style={{ width: '52%' }} />
@@ -148,7 +148,7 @@ function chipTitle(connection: LlmConnection): string {
   return (
     <div className="providersPanel providersMarketPanel">
       <section className="providerMarket">
-        <div className="enabledStrip" aria-label="Enabled providers">
+        <div className="enabledStrip" aria-label="已启用的模型供应商">
           <div className="enabledStripHeader">
             <h3>已启用模型</h3>
             {connections.length > 0 && <span>{connections.length} 个配置</span>}
@@ -193,7 +193,7 @@ function chipTitle(connection: LlmConnection): string {
           </button>
         </div>
 
-        <div className="catalogTabs catalogPillTabs" role="tablist" aria-label="Provider categories">
+        <div className="catalogTabs catalogPillTabs" role="tablist" aria-label="模型供应商分类">
           {CATALOG_TABS.map((tab) => (
             <button
               key={tab.id}
@@ -237,7 +237,7 @@ function chipTitle(connection: LlmConnection): string {
           setAddingType(null);
           setSelectedSlug(null);
         }}>
-          <section className="providerConfigSheet" role="dialog" aria-modal="true" aria-label="Provider configuration" onMouseDown={(event) => event.stopPropagation()}>
+          <section className="providerConfigSheet" role="dialog" aria-modal="true" aria-label="模型供应商配置" onMouseDown={(event) => event.stopPropagation()}>
             {addingType ? (
               <AddProviderForm
                 key={addingType}
