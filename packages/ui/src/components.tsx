@@ -866,7 +866,7 @@ export interface ComposerHandle {
 
 export const Composer = forwardRef<
   ComposerHandle,
-  { disabled?: boolean; hidden?: boolean; onSend(text: string): void; onStop(): void }
+  { disabled?: boolean; hidden?: boolean; onSend(text: string): boolean | void | Promise<boolean | void>; onStop(): void }
 >(function Composer(props, ref) {
   const formRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -902,13 +902,14 @@ export const Composer = forwardRef<
     [],
   );
 
-  function sendCurrent() {
+  async function sendCurrent() {
     if (props.disabled) return;
     const textarea = textareaRef.current;
     const form = formRef.current;
     const text = (textarea?.value ?? '').trim();
     if (!text) return;
-    props.onSend(text);
+    const sent = await props.onSend(text);
+    if (sent === false) return;
     form?.reset();
     // form.reset() empties the textarea but doesn't fire input — collapse
     // manually so the composer snaps back to its single-row footprint.
@@ -920,7 +921,7 @@ export const Composer = forwardRef<
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    sendCurrent();
+    void sendCurrent();
   }
 
   function onTextareaKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
@@ -929,7 +930,7 @@ export const Composer = forwardRef<
     if (event.key !== 'Enter') return;
     if (event.shiftKey || event.altKey) return; // Shift+Enter / Alt+Enter inserts a newline.
     event.preventDefault();
-    sendCurrent();
+    void sendCurrent();
   }
 
   if (props.hidden) return null;

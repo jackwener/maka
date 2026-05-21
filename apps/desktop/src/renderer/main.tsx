@@ -29,6 +29,8 @@ import { CommandPalette, buildCommandList, useCommandPalette } from './command-p
 import { applyTheme } from './theme';
 import './styles.css';
 
+const NO_REAL_CONNECTION_CODE = 'NO_REAL_CONNECTION';
+
 function App() {
   return (
     <ToastProvider>
@@ -218,19 +220,29 @@ function AppShell() {
     setPermissionBySession({});
   }
 
-  async function send(text: string) {
-    if (!activeId) {
-      const session = await window.maka.sessions.create({
-        permissionMode: 'ask',
-        name: text.slice(0, 42) || 'New Chat',
-      });
-      setActiveId(session.id);
-      await refreshSessions();
-      await window.maka.sessions.send(session.id, { type: 'send', turnId: crypto.randomUUID(), text });
-      return;
+  async function send(text: string): Promise<boolean> {
+    try {
+      if (!activeId) {
+        const session = await window.maka.sessions.create({
+          permissionMode: 'ask',
+          name: text.slice(0, 42) || 'New Chat',
+        });
+        setActiveId(session.id);
+        await refreshSessions();
+        await window.maka.sessions.send(session.id, { type: 'send', turnId: crypto.randomUUID(), text });
+        return true;
+      }
+      await window.maka.sessions.send(activeId, { type: 'send', turnId: crypto.randomUUID(), text });
+      await refreshMessages(activeId);
+      return true;
+    } catch (error) {
+      if (isNoRealConnectionError(error)) {
+        showModelSetupToast(cleanErrorMessage(error));
+      } else {
+        toastApi.error('发送失败', cleanErrorMessage(error));
+      }
+      return false;
     }
-    await window.maka.sessions.send(activeId, { type: 'send', turnId: crypto.randomUUID(), text });
-    await refreshMessages(activeId);
   }
 
   async function stop() {
@@ -298,6 +310,14 @@ function AppShell() {
         void refreshMessages(sessionId);
         break;
       case 'error':
+        if (isNoRealConnectionEvent(event)) {
+          showModelSetupToast(cleanEventMessage(event.message));
+        } else {
+          toastApi.error('对话出错', event.message);
+        }
+        void refreshSessions();
+        void refreshMessages(sessionId);
+        break;
       case 'abort':
       case 'complete':
         void refreshSessions();
@@ -322,6 +342,20 @@ function AppShell() {
 
   function closeSettings() {
     setSettingsOpen(false);
+  }
+
+  function showModelSetupToast(description: string) {
+    toastApi.toast({
+      title: '未配置真实模型',
+      description,
+      variant: 'error',
+      duration: 8000,
+      action: {
+        label: '打开设置 · 模型',
+        onClick: openSettings,
+      },
+    });
+    openSettings();
   }
 
   function upsertTool(sessionId: string, toolUseId: string, patch: Partial<ToolActivityItem> & { toolUseId: string }) {
@@ -508,6 +542,26 @@ function readSessionListWidth(): number {
   const stored = Number(localStorage.getItem('maka-chat-list-width-v1'));
   if (Number.isFinite(stored) && stored > 0) return clamp(stored, 240, 420);
   return 320;
+}
+
+function isNoRealConnectionError(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : String(error);
+  return raw.includes(NO_REAL_CONNECTION_CODE);
+}
+
+function isNoRealConnectionEvent(event: Extract<SessionEvent, { type: 'error' }>): boolean {
+  return event.code === NO_REAL_CONNECTION_CODE || event.message.includes(NO_REAL_CONNECTION_CODE);
+}
+
+function cleanErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  return cleanEventMessage(raw);
+}
+
+function cleanEventMessage(message: string): string {
+  return message
+    .replace(/^Error invoking remote method '[^']+': Error: /, '')
+    .replace(`${NO_REAL_CONNECTION_CODE}: `, '');
 }
 
 function clamp(value: number, min: number, max: number): number {

@@ -12,6 +12,7 @@ import type {
   ConnectionEvent,
   CreateConnectionInput,
   CreateSessionInput,
+  LlmConnection,
   SessionCommand,
   SessionEvent,
   SessionListFilter,
@@ -70,6 +71,7 @@ const backends = new BackendRegistry();
 const permissionEngine = new PermissionEngine({ newId: randomUUID, now: Date.now });
 const builtinTools = buildBuiltinTools().filter((tool) => tool.name !== 'Edit');
 let lookupPricing = buildPricingLookup();
+const NO_REAL_CONNECTION_CODE = 'NO_REAL_CONNECTION';
 const botRegistry = new BotRegistry({
   onIncomingMessage: (message) => {
     console.log('[bot] incoming message', message.platform, message.chatId);
@@ -82,15 +84,7 @@ const botRegistry = new BotRegistry({
 app.setName('Maka');
 
 backends.register('ai-sdk', async (ctx) => {
-  const connection = await connectionStore.get(ctx.header.llmConnectionSlug);
-  if (!connection?.enabled) {
-    return new FakeBackend({ sessionId: ctx.sessionId, header: ctx.header, store: ctx.store });
-  }
-
-  const apiKey = await credentialStore.getSecret(connection.slug, 'api_key');
-  if (PROVIDER_DEFAULTS[connection.providerType].authKind !== 'none' && !apiKey) {
-    return new FakeBackend({ sessionId: ctx.sessionId, header: ctx.header, store: ctx.store });
-  }
+  const { connection, apiKey } = await getReadyConnection(ctx.header.llmConnectionSlug);
 
   return new AiSdkBackend({
     sessionId: ctx.sessionId,
@@ -211,15 +205,26 @@ function registerIpc(): void {
   ipcMain.handle('sessions:list', (_event, filter?: SessionListFilter) => runtime.listSessions(filter));
   ipcMain.handle('sessions:create', async (_event, input?: Partial<CreateSessionInput>) => {
     const cwd = input?.cwd ?? process.cwd();
+    if (input?.backend === 'fake') {
+      return runtime.createSession({
+        cwd,
+        backend: 'fake',
+        llmConnectionSlug: input.llmConnectionSlug ?? 'fake',
+        model: input.model ?? 'fake-model',
+        permissionMode: input.permissionMode ?? 'ask',
+        name: input.name ?? 'New Chat',
+        labels: input.labels,
+      });
+    }
+
     const requestedSlug = input?.llmConnectionSlug ?? (await connectionStore.getDefault());
-    const connection = requestedSlug ? await connectionStore.get(requestedSlug) : null;
-    const backend = input?.backend === 'fake' || !connection ? 'fake' : 'ai-sdk';
+    const { connection } = await getReadyConnection(requestedSlug);
 
     return runtime.createSession({
       cwd,
-      backend,
-      llmConnectionSlug: connection?.slug ?? requestedSlug ?? 'fake',
-      model: input?.model ?? connection?.defaultModel ?? 'fake-model',
+      backend: 'ai-sdk',
+      llmConnectionSlug: connection.slug,
+      model: input?.model ?? connection.defaultModel,
       permissionMode: input?.permissionMode ?? 'ask',
       name: input?.name ?? 'New Chat',
       labels: input?.labels,
@@ -232,6 +237,7 @@ function registerIpc(): void {
   );
   ipcMain.handle('sessions:send', async (_event, sessionId: string, command: SessionCommand) => {
     if (command.type !== 'send') return;
+    await assertSessionCanSend(sessionId);
     const iterator = runtime.sendMessage(sessionId, {
       turnId: command.turnId || randomUUID(),
       text: command.text,
@@ -452,9 +458,66 @@ async function applySettingsRuntimeEffects(settings: AppSettings, patch: UpdateA
 }
 
 async function streamEvents(sessionId: string, iterator: AsyncIterable<SessionEvent>): Promise<void> {
-  for await (const event of iterator) {
-    mainWindow?.webContents.send(`sessions:event:${sessionId}`, event);
+  try {
+    for await (const event of iterator) {
+      mainWindow?.webContents.send(`sessions:event:${sessionId}`, event);
+    }
+  } catch (error) {
+    mainWindow?.webContents.send(`sessions:event:${sessionId}`, {
+      type: 'error',
+      id: randomUUID(),
+      turnId: randomUUID(),
+      ts: Date.now(),
+      recoverable: false,
+      code: errorCode(error),
+      message: errorMessage(error),
+    } satisfies SessionEvent);
   }
+}
+
+async function assertSessionCanSend(sessionId: string): Promise<void> {
+  const header = await store.readHeader(sessionId);
+  if (header.backend === 'fake') {
+    throw chatConfigurationError(
+      '当前会话使用的是 FakeBackend，只能做开发演示。请到 设置 · 模型 添加真实模型后新建会话。',
+    );
+  }
+  await getReadyConnection(header.llmConnectionSlug);
+}
+
+async function getReadyConnection(slug: string | null | undefined): Promise<{ connection: LlmConnection; apiKey: string }> {
+  if (!slug || slug === 'fake') {
+    throw chatConfigurationError('还没有配置默认模型。请到 设置 · 模型 添加 Anthropic / OpenAI / GLM 等 API key。');
+  }
+  const connection = await connectionStore.get(slug);
+  if (!connection) {
+    throw chatConfigurationError(`找不到模型连接 "${slug}"。请到 设置 · 模型 重新选择默认模型。`);
+  }
+  if (!connection.enabled) {
+    throw chatConfigurationError(`模型连接 "${connection.name}" 已禁用。请到 设置 · 模型 启用或选择其他默认模型。`);
+  }
+  const apiKey = await credentialStore.getSecret(connection.slug, 'api_key');
+  if (PROVIDER_DEFAULTS[connection.providerType].authKind !== 'none' && !apiKey) {
+    throw chatConfigurationError(`模型连接 "${connection.name}" 缺少 API key。请到 设置 · 模型 补齐密钥后再聊天。`);
+  }
+  return { connection, apiKey: apiKey ?? '' };
+}
+
+function chatConfigurationError(message: string): Error {
+  const error = new Error(`${NO_REAL_CONNECTION_CODE}: ${message}`);
+  (error as Error & { code: string }).code = NO_REAL_CONNECTION_CODE;
+  return error;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function errorCode(error: unknown): string | undefined {
+  if (error instanceof Error && 'code' in error) {
+    return String((error as { code?: unknown }).code);
+  }
+  return undefined;
 }
 
 function emitConnectionListChanged(): void {
