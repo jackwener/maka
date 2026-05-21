@@ -1178,10 +1178,13 @@ async function handleQuickChatStart(rawInput: unknown): Promise<QuickChatResult>
     emitCreated: (sessionId) => emitSessionsChanged('created', sessionId),
     ensureCanSend: (sessionId) => ensureSessionCanSend(sessionId),
     sendFirstMessage: async (sessionId, text) => {
+      // @xuan PR110b: do NOT return the turnId — its lifetime / id
+      // ownership belongs to SessionManager + the eventual
+      // sessions:event stream, not to Quick Chat. The user message
+      // id is generated inside `runtime.sendMessage()`.
       const turnId = randomUUID();
       const iterator = runtime.sendMessage(sessionId, { turnId, text });
       void streamEvents(sessionId, iterator);
-      return turnId;
     },
   });
 }

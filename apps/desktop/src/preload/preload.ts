@@ -53,8 +53,13 @@ import type {
 // PR110b: Quick Chat result discriminated union — mirrors the
 // definition in main.ts. The renderer side type-checks against this
 // shape so a future contract change requires updates on both sides.
+//
+// @xuan PR110b review: the success branch carries ONLY `sessionId`.
+// No `firstMessageId` — that was a misnamed turnId in an earlier
+// draft. PR110c can add `firstTurnId` if the UI ever needs a scroll
+// anchor.
 export type QuickChatResult =
-  | { ok: true; sessionId: string; firstMessageId?: string }
+  | { ok: true; sessionId: string }
   | { ok: false; reason: 'setup_required'; state: OnboardingState }
   | { ok: false; reason: 'send_failed'; message: string };
 

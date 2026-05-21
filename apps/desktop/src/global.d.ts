@@ -51,8 +51,12 @@ import type {
 
 // PR110b: shared union used by `quickChat:start`. Renderer pattern-
 // matches on `ok` + `reason` to route to the correct UI surface.
+//
+// @xuan PR110b review: success branch is `{ ok: true; sessionId }`
+// only. No turn / message anchor — PR110c will add `firstTurnId` if
+// needed.
 export type QuickChatResult =
-  | { ok: true; sessionId: string; firstMessageId?: string }
+  | { ok: true; sessionId: string }
   | { ok: false; reason: 'setup_required'; state: OnboardingState }
   | { ok: false; reason: 'send_failed'; message: string };
 

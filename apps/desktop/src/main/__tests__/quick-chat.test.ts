@@ -64,7 +64,6 @@ function makeDeps(overrides: Partial<QuickChatDeps> = {}): QuickChatDeps & {
     },
     async sendFirstMessage(sessionId, text) {
       spy.sendCalls.push({ sessionId, text });
-      return `turn-${spy.sendCalls.length}`;
     },
     ...overrides,
   };
@@ -116,14 +115,19 @@ describe('handleQuickChatStart — empty prompt (create + open only)', () => {
 });
 
 describe('handleQuickChatStart — non-empty prompt (send path)', () => {
-  it('walks the send path and returns firstMessageId', async () => {
+  it('walks the send path and returns { ok: true; sessionId } only (no turn/message anchor)', async () => {
+    // @xuan PR110b review: success branch is `{ ok: true; sessionId }`
+    // — NOT `{ ok: true; sessionId; firstMessageId }`. PR110c will add
+    // a properly-named `firstTurnId` if UI needs a scroll anchor.
     const deps = makeDeps();
     const result = await handleQuickChatStart({ prompt: 'hello, model' }, deps);
     assert.deepEqual(result, {
       ok: true,
       sessionId: 'session-quickchat-1',
-      firstMessageId: 'turn-1',
     });
+    if (result.ok) {
+      assert.equal((result as { firstMessageId?: unknown }).firstMessageId, undefined);
+    }
     assert.deepEqual(deps.spy.ensureCanSendCalls, ['session-quickchat-1']);
     assert.deepEqual(deps.spy.sendCalls, [{ sessionId: 'session-quickchat-1', text: 'hello, model' }]);
   });

@@ -19,8 +19,19 @@
 import type { OnboardingState, SessionSummary } from '@maka/core';
 import { generalizedErrorMessageChinese } from '@maka/core';
 
+/**
+ * PR110b: Quick Chat IPC result. The renderer pattern-matches on
+ * `ok` + `reason` to route to the right surface.
+ *
+ * @xuan PR110b review: the success branch carries ONLY `sessionId`.
+ * Earlier drafts included `firstMessageId` but the value was actually
+ * a `turnId` produced by the handler (the real user message id is
+ * created inside `SessionManager.sendMessage()` and is not visible
+ * here). PR110c can add a properly-named `firstTurnId` if the UI
+ * needs a scroll anchor — not before.
+ */
 export type QuickChatResult =
-  | { ok: true; sessionId: string; firstMessageId?: string }
+  | { ok: true; sessionId: string }
   | { ok: false; reason: 'setup_required'; state: OnboardingState }
   | { ok: false; reason: 'send_failed'; message: string };
 
@@ -50,10 +61,12 @@ export interface QuickChatDeps {
    */
   ensureCanSend(sessionId: string): Promise<void>;
   /**
-   * Send the first user message. Returns the new turnId so the
-   * handler can include it in the result.
+   * Send the first user message via the existing send path. The
+   * implementation is expected to fire-and-stream — the handler does
+   * not need any return value from this call. Returning `void` makes
+   * it obvious that PR110b does not own a turn/message anchor.
    */
-  sendFirstMessage(sessionId: string, text: string): Promise<string>;
+  sendFirstMessage(sessionId: string, text: string): Promise<void>;
 }
 
 export async function handleQuickChatStart(
@@ -98,8 +111,8 @@ export async function handleQuickChatStart(
 
   try {
     await deps.ensureCanSend(session.id);
-    const firstMessageId = await deps.sendFirstMessage(session.id, trimmed);
-    return { ok: true, sessionId: session.id, firstMessageId };
+    await deps.sendFirstMessage(session.id, trimmed);
+    return { ok: true, sessionId: session.id };
   } catch (error) {
     return {
       ok: false,
