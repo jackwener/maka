@@ -1149,9 +1149,17 @@ function TurnSummary(props: { turn: TurnViewModel }) {
   const { turn } = props;
   const hasModel = Boolean(turn.modelId);
   const hasTools = turn.tools.length > 0;
+  // Show duration only when the assistant has actually landed (durationMs
+  // is computed from assistant.ts). For in-progress turns we render an
+  // "进行中" pill instead of a number that would tick up forever — per
+  // @kenji's PR82 review.
   const hasDuration = turn.durationMs !== undefined && turn.durationMs > 0;
+  const inProgress = turn.user !== undefined && turn.assistant === undefined;
   const hasTokens = Boolean(turn.tokens && (turn.tokens.input > 0 || turn.tokens.output > 0));
-  if (!hasModel && !hasTools && !hasDuration && !hasTokens) return null;
+  // costUsd is only meaningful when present AND > 0 — never fabricate a
+  // "$0.00" hover, that reads as false precision (also @kenji PR82 review).
+  const hasCost = turn.tokens?.costUsd !== undefined && turn.tokens.costUsd > 0;
+  if (!hasModel && !hasTools && !hasDuration && !hasTokens && !inProgress) return null;
   return (
     <div className="maka-turn-summary" aria-label="turn summary">
       {hasModel && (
@@ -1164,16 +1172,20 @@ function TurnSummary(props: { turn: TurnViewModel }) {
           {turn.tools.length} 个工具
         </span>
       )}
-      {hasDuration && (
+      {hasDuration ? (
         <span className="maka-turn-summary-chip" data-kind="duration">
           {formatTurnDuration(turn.durationMs!)}
         </span>
-      )}
+      ) : inProgress ? (
+        <span className="maka-turn-summary-chip" data-kind="duration" data-state="in-progress">
+          进行中
+        </span>
+      ) : null}
       {hasTokens && (
         <span
           className="maka-turn-summary-chip"
           data-kind="tokens"
-          title={turn.tokens?.costUsd !== undefined ? `$${turn.tokens.costUsd.toFixed(4)}` : undefined}
+          title={hasCost ? `$${turn.tokens!.costUsd!.toFixed(4)}` : undefined}
         >
           {turn.tokens!.input.toLocaleString()} → {turn.tokens!.output.toLocaleString()} tok
         </span>
@@ -1232,7 +1244,17 @@ function TurnView(props: { turn: TurnViewModel; userLabel?: string }) {
           title={turn.assistant.ts ? formatAbsoluteTimestamp(turn.assistant.ts) : undefined}
         >
           <MessageMeta role="assistant" userLabel={props.userLabel} ts={turn.assistant.ts} />
-          <MessageBody role="assistant" text={turn.assistant.text} />
+          <div className="maka-bubble-assistant-stack">
+            {turn.assistantThinking && (
+              <details className="maka-turn-thinking">
+                <summary>查看思考过程</summary>
+                <div className="maka-turn-thinking-body">
+                  <Markdown text={turn.assistantThinking} />
+                </div>
+              </details>
+            )}
+            <MessageBody role="assistant" text={turn.assistant.text} />
+          </div>
         </article>
       )}
     </section>

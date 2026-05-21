@@ -83,6 +83,13 @@ export interface TurnViewModel {
   user?: ChatItem;
   tools: ToolActivityItem[];
   assistant?: ChatItem;
+  /**
+   * Anthropic-style reasoning that some providers expose alongside the
+   * assistant's final answer. Rendered in a collapsed `<details>` so the
+   * answer reads cleanly but the thinking is one click away when the
+   * user wants to verify the chain of reasoning.
+   */
+  assistantThinking?: string;
   /** System notes inside this turn that survive the VISIBLE_SYSTEM_NOTES gate. */
   notes: ChatItem[];
   /** Wall-clock ts of the earliest message in this turn — used for sorting. */
@@ -138,10 +145,16 @@ export function materializeTurns(
     } else if (message.type === 'assistant') {
       turn.assistant = { id: message.id, role: 'assistant', text: message.text, ts: message.ts };
       turn.modelId = message.modelId;
+      if (message.thinking?.text) {
+        turn.assistantThinking = message.thinking.text;
+      }
       // Time-to-answer measured from the earliest message in this turn (usually
       // the user's send) to the assistant message ts. Tool runs are inside
       // this window, so the same metric captures both LLM latency and tool
-      // wall-time.
+      // wall-time. We only compute this once the assistant message lands, so
+      // a streaming turn stays at undefined ("进行中" per kenji's PR82
+      // review) instead of ticking up against the current clock and forcing
+      // visible re-renders.
       if (message.ts !== undefined && message.ts >= turn.startedAt) {
         turn.durationMs = message.ts - turn.startedAt;
       }
