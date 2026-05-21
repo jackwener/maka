@@ -2195,9 +2195,25 @@ button:active {
   min-height: 0;
   display: grid;
   align-content: start;
-  gap: 5px;
+  gap: 14px;
   overflow: auto;
   padding-right: 2px;
+}
+
+/* Each Settings nav group: tight cluster of buttons under a small uppercase
+ * heading. Visually breaks the 14-item list into 5 scannable chunks. */
+.settingsNavGroup {
+  display: grid;
+  gap: 4px;
+}
+
+.settingsNavGroupLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--foreground-50);
+  padding: 0 6px 2px;
 }
 
 .settingsNavItem {
