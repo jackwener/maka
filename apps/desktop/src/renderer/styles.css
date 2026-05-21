@@ -2243,6 +2243,107 @@ button:active {
   color: var(--foreground-40);
 }
 
+.settingsComingSoonHeroHeading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 6px;
+}
+
+.settingsComingSoonHeroHeading h3 {
+  margin: 0;
+}
+
+.settingsComingSoonBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: oklch(from var(--accent) l c h / 0.12);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.settingsComingSoonSection {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--background);
+}
+
+.settingsComingSoonSection p {
+  margin: 0;
+  color: var(--foreground-70);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.settingsComingSoonSectionTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--foreground-60);
+}
+
+.settingsComingSoonSection-status {
+  background: oklch(from var(--foreground) l c h / 0.025);
+}
+
+.settingsComingSoonSection-include {
+  border-color: oklch(from var(--success) l c h / 0.24);
+  background: oklch(from var(--success) l c h / 0.04);
+}
+
+.settingsComingSoonSection-include .settingsComingSoonSectionTitle {
+  color: var(--success);
+}
+
+.settingsComingSoonSection-exclude {
+  border-color: oklch(from var(--destructive) l c h / 0.22);
+  background: oklch(from var(--destructive) l c h / 0.04);
+}
+
+.settingsComingSoonSection-exclude .settingsComingSoonSectionTitle {
+  color: var(--destructive);
+}
+
+.settingsComingSoonListExclude {
+  list-style: none;
+  padding-left: 0;
+}
+
+.settingsComingSoonListExclude li {
+  position: relative;
+  padding-left: 22px;
+}
+
+.settingsComingSoonListExclude li::before {
+  content: "✗";
+  position: absolute;
+  left: 4px;
+  top: 0;
+  color: var(--destructive);
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.settingsComingSoonSection-config {
+  border-color: oklch(from var(--info) l c h / 0.26);
+  background: oklch(from var(--info) l c h / 0.04);
+}
+
+.settingsComingSoonSection-config .settingsComingSoonSectionTitle {
+  color: var(--info);
+}
+
 .settingsLoadingSkeleton {
   padding: 8px 0;
   max-width: 540px;
@@ -2434,6 +2535,106 @@ button:active {
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.settingsAboutPage {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.settingsAboutHero {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--foreground-3);
+}
+
+.settingsAboutLogo {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: oklch(from var(--accent) l c h / 0.10);
+  color: var(--accent);
+}
+
+.settingsAboutHeading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 4px;
+}
+
+.settingsAboutHeading h2 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.settingsAboutVersion {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--foreground-70);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: oklch(from var(--foreground) l c h / 0.05);
+}
+
+.settingsAboutChannel {
+  font-size: 11px;
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: oklch(from var(--accent) l c h / 0.10);
+  font-weight: 600;
+}
+
+.settingsAboutTagline {
+  margin: 0;
+  color: var(--foreground-70);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.settingsAboutPrivacy {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid oklch(from var(--success) l c h / 0.24);
+  border-radius: 12px;
+  background: oklch(from var(--success) l c h / 0.04);
+}
+
+.settingsAboutPrivacy h3 {
+  margin: 0;
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.settingsAboutPrivacy ul {
+  margin: 0;
+  padding: 0 0 0 18px;
+  display: grid;
+  gap: 6px;
+  color: var(--foreground-70);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.settingsAboutPrivacy li::marker {
+  color: var(--success);
 }
 
 .settingsInlineResult {

@@ -35,6 +35,7 @@ import type { TestProxyInput } from '@maka/core/settings/network-settings';
 import { BOT_PROVIDERS, createDefaultSettings } from '@maka/core/settings';
 import { useModalA11y, useToast } from '@maka/ui';
 import { ProvidersPanel } from './ProvidersPanel';
+import { openPathFailureCopy, openPathActionLabel } from '../open-path';
 
 type SettingsNavItem = {
   id: SettingsSection;
@@ -61,56 +62,131 @@ const SETTINGS_NAV: SettingsNavItem[] = [
   { id: 'about', label: '关于', Icon: Info, enabled: true },
 ];
 
+/**
+ * V0.2 product-stance copy for Coming Soon Settings pages. The shape is
+ * derived from @kenji's contract notes (`notes/maka-*-contract.md`) and is
+ * surfaced as four explicit sections — `当前状态 / 会包含什么 / 不会做什么 /
+ * 下一步需要配置什么` — so the UI reads as a deliberate disabled-by-default
+ * stance rather than empty placeholder.
+ */
 type ComingSoonCopy = {
   Icon: ComponentType<LucideProps>;
   headline: string;
+  /** Short tag like "V0.2 · disabled-by-default" rendered as a badge on the hero. */
+  badge?: string;
   description: string;
-  bullets: string[];
+  /** 当前状态 — one-sentence honest status now. */
+  status: string;
+  /** 会包含什么 — concrete capabilities V0.2 will ship. */
+  willInclude: string[];
+  /** 不会做什么 — explicit non-goals / hard boundaries (the safety contract). */
+  willNotDo: string[];
+  /** 下一步需要配置什么 — what the user / project must do before it can flip on. */
+  nextConfig: string[];
 };
 
 const COMING_SOON_PAGES: Partial<Record<SettingsSection, ComingSoonCopy>> = {
   'daily-review': {
     Icon: CalendarDays,
-    headline: '即将推出 · 每日回顾',
+    headline: '每日回顾',
+    badge: 'V0.2 · opt-in · 本地汇总',
     description:
-      '自动汇总当天的对话、任务和工具调用，生成一份精炼的 daily brief；也可设置每周 / 每月节奏。',
-    bullets: [
-      '按时段或对话主题聚类，凸显高价值进展',
-      '可导出为 Markdown、PDF 或推送至 Telegram / 飞书',
-      '与「使用统计」共享 token 与费用数据',
+      '把当天的 Maka 会话、任务、工具调用本地聚合成一份精炼简报。整条管线默认关闭，启用后只读取 Maka 自己产生的数据。',
+    status: '当前未启用。V0.2 会作为单独的开关上线，默认仍是关闭状态。',
+    willInclude: [
+      '把当天会话按时段 / 主题聚类，凸显已完成的决策与进展',
+      '汇总「使用统计」当天的 token / 费用，不重复算账',
+      '允许导出 Markdown / PDF，或推送到用户自配的 Telegram / 飞书 bot',
+      '生成简报时复用当前默认 provider 与代理设置，受权限策略约束',
+    ],
+    willNotDo: [
+      '不截屏、不监听键盘、不读取其他 App 的数据',
+      '不读取系统文件系统，只读取 Maka 自己的会话 JSONL',
+      '不向云端上传原始消息，只把生成简报所需的最小上下文交给所选模型',
+      '不在用户关闭功能后偷偷继续聚合或保留临时索引',
+    ],
+    nextConfig: [
+      '在「每日回顾」内显式开启功能并选择执行节奏（每日 / 每周 / 每月）',
+      '选择用于摘要的模型 connection（建议本地 / 自部署模型）',
+      '可选：配置导出目录或推送 bot（Telegram / 飞书 webhook）',
     ],
   },
   'voice-models': {
     Icon: Volume2,
-    headline: '即将推出 · 语音模型',
+    headline: '语音模型',
+    badge: 'V0.2 · per-session opt-in · 麦克风需授权',
     description:
-      '为 Maka 接入本地或云端的 TTS / STT，让对话可以语音输入和回放。',
-    bullets: [
+      '为 Maka 接入本地或云端的 TTS / STT，让对话可以语音输入和回放。语音是单独的能力，必须显式启用，与文本通道分开管理。',
+    status: '当前未启用。麦克风权限尚未申请，应用不会主动调用任何音频设备。',
+    willInclude: [
       '本地 TTS：piper / coqui，零网络延迟',
       '云端 STT：Whisper / GPT-4o Realtime / Gemini Live',
-      '按 connection 单独切换语音模型，免影响文本',
+      '按 connection 单独切换语音模型，文本通道不受影响',
+      '语音转写结果走与文本同等的权限审计与本地 JSONL',
+    ],
+    willNotDo: [
+      '不在未授权时打开麦克风；首次启用必须经过 macOS 系统授权对话框',
+      '不在 UI 未明确披露上传范围前向云端 STT 传输音频',
+      '不在客户端中预打包大体积本地 STT 模型，所有模型文件由用户授权后下载',
+      '不把语音转写结果发送给与文本对话不同的 provider，除非用户明确选择',
+    ],
+    nextConfig: [
+      '在「语音模型」内显式启用语音通道并完成系统级麦克风授权',
+      '选择 TTS / STT 的具体引擎与 connection',
+      '可选：单独为语音通道配置代理、缓存目录或本地模型路径',
     ],
   },
   'open-gateway': {
     Icon: Sparkles,
-    headline: '即将推出 · 开放网关',
+    headline: '开放网关',
+    badge: 'V0.2 · disabled-by-default · token-required · localhost-only',
     description:
-      '把 Maka 当作本机的 OpenAI 兼容 API 暴露给其他工具（IDE / shell / 工作流引擎），统一走 Maka 的权限策略和使用统计。',
-    bullets: [
-      '本机 :3939 暴露 OpenAI / Anthropic 兼容端点',
-      '调用走当前默认 provider，复用凭据与代理设置',
+      '把 Maka 当作本机的 OpenAI 兼容 API 暴露给其他工具（IDE / shell / 工作流引擎）。这是一个被严格收窄的本地网关：只代理模型调用，永远不暴露 Settings、tools、文件或 bot 控制权。',
+    status: '当前未启用。即使在 V0.2 上线后，默认状态仍是关闭，必须显式开启。',
+    willInclude: [
+      '本机 :3939 暴露 OpenAI 兼容端点 (chat / models / health)',
+      '启用时生成一次性 gateway token，每个请求必须 Authorization: Bearer',
+      '默认仅 bind 127.0.0.1；LAN 绑定需要在 Settings 中单独确认',
+      '调用走当前默认 provider，复用 Maka 的凭据、代理与权限策略',
       '所有调用进入「使用统计」聚合，方便对账',
+    ],
+    willNotDo: [
+      '不在未配置 gateway token 时接受任何请求',
+      '不允许 token 读写 Settings、调用 tools、打开文件、安装 skills、启动 bots',
+      '不接受 CORS *：跨源域必须在 allow-list 中显式列出',
+      '不在 provider readiness 失败时静默走 fake fallback，永远返回结构化 needs_configuration',
+      '不在日志中记 prompt / response / Authorization header；只记 status / latency / model alias / token hash / token counts',
+    ],
+    nextConfig: [
+      '在「开放网关」内显式启用并生成 gateway token，保存到接入方的 secret store',
+      '确认 bind 地址（127.0.0.1 或受信任的 LAN 网段）',
+      '为跨源工具配置 CORS allow-list',
+      '在所选默认 provider 的凭据完成 readiness 验证后再开启对外暴露',
     ],
   },
   search: {
     Icon: Search,
-    headline: '即将推出 · 搜索服务',
+    headline: '搜索服务',
+    badge: 'V0.2 · per-query opt-in · 走代理',
     description:
-      '为助手挂接外部搜索能力，自动按提问类型选择源；配合权限策略可控制每条搜索的范围与速率。',
-    bullets: [
-      '主流引擎：Tavily / Brave Search / SerpAPI',
+      '为助手挂接外部搜索能力，自动按提问类型选择源。每条搜索都经过权限策略与代理路由，UI 上可以单独关闭具体搜索源。',
+    status: '当前未启用。Maka 不会主动联网搜索，所有搜索都必须由用户显式开启。',
+    willInclude: [
+      '主流引擎：Tavily / Brave Search / SerpAPI（自带凭据）',
       '自托管选项：SearxNG、MetaSo、本地索引',
       '查询缓存与隐私模式（含网络代理路由）',
+      '按引擎单独关闭 / 启用，凭据测试通过后才放行真实查询',
+    ],
+    willNotDo: [
+      '不在未启用任何引擎时静默回退到默认搜索',
+      '不绕过 Settings 中配置的网络代理与超时',
+      '不保留查询原文与返回 body，只保留 query hash / 引擎 / latency',
+      '隐私模式下不写入会话 JSONL 以外的任何持久化存储',
+    ],
+    nextConfig: [
+      '在「搜索服务」内逐个启用引擎并填入凭据，先通过连通性测试再保存',
+      '选择代理路由策略（默认 / 直连 / 走 Maka 网络代理）',
+      '可选：开启隐私模式，禁用缓存与日志',
     ],
   },
 };
@@ -370,6 +446,7 @@ const PLATFORM_LABEL: Record<string, string> = {
 
 function AboutSettingsPage() {
   const [info, setInfo] = useState<AppInfo | null>(null);
+  const toast = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -396,14 +473,84 @@ function AboutSettingsPage() {
 
   const platformPretty = PLATFORM_LABEL[info.platform] ?? info.platform;
   const platformLine = `${platformPretty} ${info.osRelease} · ${info.arch}`;
+
+  async function copyEnvSummary() {
+    if (!info) return;
+    // Markdown block ready to paste into a bug report. Deliberately excludes
+    // workspacePath since that can leak the OS username; user can still copy
+    // it from the Data page if needed.
+    const summary = [
+      `**Maka** v${info.appVersion}`,
+      ``,
+      `- Electron: ${info.electronVersion}`,
+      `- Node: ${info.nodeVersion}`,
+      `- Chrome: ${info.chromeVersion}`,
+      `- Platform: ${platformPretty} ${info.osRelease}`,
+      `- Arch: ${info.arch}`,
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(summary);
+      toast.success('已复制环境信息', '可直接粘贴到 bug report');
+    } catch {
+      toast.error('复制失败', '剪贴板不可用');
+    }
+  }
+
   return (
-    <SettingsRows>
-      <SettingRow title="Maka 版本" detail="Local development build." value={`v${info.appVersion}`} />
-      <SettingRow title="运行时" detail="Renderer + Electron + Node 三层版本号一并显示。" value={`Electron ${info.electronVersion} · Node ${info.nodeVersion} · Chrome ${info.chromeVersion}`} />
-      <SettingRow title="平台" detail="操作系统、版本和 CPU 架构。" value={platformLine} />
-      <SettingRow title="工作区" detail="会话、设置、credential 全部留在本地这条路径下。" value={info.workspacePath} />
-      <SettingRow title="存储" detail="JSONL sessions、settings.json、encrypted provider credentials。" value="Local" />
-    </SettingsRows>
+    <div className="settingsAboutPage">
+      <header className="settingsAboutHero">
+        <span className="settingsAboutLogo" aria-hidden="true">
+          <Sparkles size={26} strokeWidth={1.5} />
+        </span>
+        <div>
+          <div className="settingsAboutHeading">
+            <h2>Maka</h2>
+            <span className="settingsAboutVersion">v{info.appVersion}</span>
+            <span className="settingsAboutChannel">本地开发版</span>
+          </div>
+          <p className="settingsAboutTagline">本地优先的 AI 助手 · Electron + React + Vercel AI SDK</p>
+        </div>
+      </header>
+
+      <section className="settingsAboutPrivacy" aria-label="隐私与安全">
+        <h3>本地优先 · 隐私默认</h3>
+        <ul>
+          <li>所有会话、settings、credentials、skills 都保留在本机工作区，不上传到 Maka 服务器</li>
+          <li>provider API key 通过 Electron safeStorage 加密保存（macOS Keychain / Windows DPAPI / Linux libsecret）</li>
+          <li>Maka 不发送任何使用遥测；只在你显式启用时与所选 provider 通信</li>
+          <li>权限策略对工具调用做 risk 分类；高危操作需要在 chat 内明示授权</li>
+          <li>每个会话的 JSONL 留存所有消息、tool 调用、权限决策与 mode_change，永不离开本机</li>
+        </ul>
+      </section>
+
+      <SettingsRows>
+        <SettingRow
+          title="运行时"
+          detail="Renderer + Electron + Node 三层版本号一并显示。"
+          value={`Electron ${info.electronVersion} · Node ${info.nodeVersion} · Chrome ${info.chromeVersion}`}
+        />
+        <SettingRow title="平台" detail="操作系统、版本和 CPU 架构。" value={platformLine} />
+        <SettingRow
+          title="工作区"
+          detail="会话、设置、credential 全部留在本地这条路径下。"
+          value={info.workspacePath}
+        />
+        <SettingRow
+          title="存储"
+          detail="JSONL sessions、settings.json、SQLite usage stats、safeStorage 加密的 provider credentials。"
+          value="Local"
+        />
+      </SettingsRows>
+
+      <div className="settingsActionRow">
+        <button type="button" className="maka-button" onClick={() => void copyEnvSummary()}>
+          复制环境信息
+        </button>
+      </div>
+      <p className="settingsHelpText">
+        如果遇到问题，复制以上信息会同时带上版本号与平台细节，方便定位。复制内容不包含工作区路径（避免泄露用户名）。
+      </p>
+    </div>
   );
 }
 
@@ -423,7 +570,7 @@ function SettingsSkeleton() {
 }
 
 function ComingSoonPage(props: { copy: ComingSoonCopy }) {
-  const { Icon, headline, description, bullets } = props.copy;
+  const { Icon, headline, badge, description, status, willInclude, willNotDo, nextConfig } = props.copy;
   return (
     <section className="settingsComingSoonPage" aria-label={headline}>
       <div className="settingsComingSoonHero">
@@ -431,19 +578,59 @@ function ComingSoonPage(props: { copy: ComingSoonCopy }) {
           <Icon size={28} strokeWidth={1.5} />
         </span>
         <div>
-          <h3>{headline}</h3>
+          <div className="settingsComingSoonHeroHeading">
+            <h3>{headline}</h3>
+            {badge ? <span className="settingsComingSoonBadge">{badge}</span> : null}
+          </div>
           <p>{description}</p>
         </div>
       </div>
-      <ul className="settingsComingSoonList">
-        {bullets.map((bullet) => (
-          <li key={bullet}>{bullet}</li>
-        ))}
-      </ul>
+
+      <ComingSoonSection tone="status" title="当前状态">
+        <p>{status}</p>
+      </ComingSoonSection>
+
+      <ComingSoonSection tone="include" title="会包含什么">
+        <ul className="settingsComingSoonList">
+          {willInclude.map((bullet) => (
+            <li key={bullet}>{bullet}</li>
+          ))}
+        </ul>
+      </ComingSoonSection>
+
+      <ComingSoonSection tone="exclude" title="不会做什么">
+        <ul className="settingsComingSoonList settingsComingSoonListExclude">
+          {willNotDo.map((bullet) => (
+            <li key={bullet}>{bullet}</li>
+          ))}
+        </ul>
+      </ComingSoonSection>
+
+      <ComingSoonSection tone="config" title="下一步需要配置什么">
+        <ul className="settingsComingSoonList">
+          {nextConfig.map((bullet) => (
+            <li key={bullet}>{bullet}</li>
+          ))}
+        </ul>
+      </ComingSoonSection>
+
       <p className="settingsHelpText">
-        这些能力会随 Maka V0.2 路线推进逐步开放；想优先看到哪条，请在 issue tracker 提一下偏好。
+        这些边界来自 V0.2 contract（see <code>notes/maka-*-contract.md</code>）。每条「不会做什么」都是要在实现里加上 test gate 的硬规则，不是宣传语。
       </p>
     </section>
+  );
+}
+
+function ComingSoonSection(props: {
+  tone: 'status' | 'include' | 'exclude' | 'config';
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`settingsComingSoonSection settingsComingSoonSection-${props.tone}`}>
+      <h4 className="settingsComingSoonSectionTitle">{props.title}</h4>
+      {props.children}
+    </div>
   );
 }
 
@@ -527,7 +714,9 @@ function DataSettingsPage() {
   async function openWorkspace() {
     if (!info) return;
     const result = await window.maka.app.openPath('workspace');
-    if (!result.ok) toast.error('打开失败', openPathFailureCopy(result.reason));
+    if (!result.ok) {
+      toast.error(`无法打开${openPathActionLabel('workspace')}`, openPathFailureCopy(result.reason));
+    }
   }
 
   async function copyPath() {
@@ -579,23 +768,6 @@ function DataSettingsPage() {
       </div>
     </div>
   );
-}
-
-function openPathFailureCopy(reason: string): string {
-  switch (reason) {
-    case 'unknown-key':
-      return '未知的工作区目录。';
-    case 'not-allowed':
-      return '路径不在允许打开的工作区范围内。';
-    case 'missing':
-      return '目录不存在。';
-    case 'not-a-directory':
-      return '目标不是目录。';
-    case 'open-failed':
-      return '系统没有打开该目录。';
-    default:
-      return '无法打开目录。';
-  }
 }
 
 function PersonalizationSettingsPage(props: {
