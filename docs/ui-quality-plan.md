@@ -199,6 +199,8 @@ Rows are **all UI surfaces** in Maka. Columns are §1 gates 1–12.
 | Keyboard help modal | ✅ | n/a | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Error boundary | ✅ | n/a | ✅ | ❌ | ⚙️ | ❌ | ❌ | ✅ | ⚙️ | ✅ | ✅ | ✅ |
 | Artifact pane | ✅ | ⚙️ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Session status grouping | ✅ | ✅ | ✅ | ✅ | ✅ | ⚙️ | ⚙️ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Session status icon + chat header badge | ✅ | ✅ | ✅ | ✅ | ✅ | ⚙️ | ⚙️ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Pending (month-1)** |   |   |   |   |   |   |   |   |   |   |   |   |
 | Quick Chat (§9.7) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Workstation shell (§9.8) | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -262,13 +264,17 @@ dimensions. Size drift is a soft warning.
 
 **Out of scope.**
 - Pixel-level UI regressions. Electron/font rasterization drift makes
-  byte-level SHA/SHA256 equality unsuitable as a blocker.
+  byte-level SHA/SHA256 equality unsuitable as a blocker (~70/88 PNGs
+  change between runs even with @xuan's PR108k fixture clock + Date.now
+  freeze).
 - Layout shifts that keep the same viewport dimensions.
 - Color, contrast, opacity, typography, and spacing regressions.
 
 **PR-IR-02 v3 plan.** Add `pixelmatch` + `pngjs` with calibrated
 tolerance and ignored dynamic regions. Pilot only on the stable subset
-before expanding to all scenarios.
+(`artifact-pane` / `first-run` / `artifact-errors`) before expanding to
+all 18 scenarios. Configure per-scenario tolerance based on observed
+drift.
 
 **Owner.** @yuejing. Baseline rollout coordinated with @xuan.
 
