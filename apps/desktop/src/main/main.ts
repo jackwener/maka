@@ -509,8 +509,12 @@ function registerIpc(): void {
         if (resolved.reason === 'not_allowed') return { ok: false, reason: 'not-allowed' };
         return { ok: false, reason: 'missing' };
       }
-      const error = await shell.openPath(resolved.path);
-      if (error) return { ok: false, reason: 'open-failed' };
+      // "在 Finder 中打开" means reveal-in-OS, not open-with-default-app.
+      // `shell.showItemInFinder` highlights the file in its containing
+      // folder so the user can manually open it themselves — keeps the
+      // "preview in pane is view-only, escape valve = OS" boundary
+      // explicit (per §9.1.5 contract).
+      shell.showItemInFolder(resolved.path);
       return { ok: true, opened: record.name };
     },
   );
