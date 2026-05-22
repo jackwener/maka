@@ -4880,17 +4880,45 @@ button:active {
   grid-template-columns: 1fr;
   gap: 10px;
   border: 1px solid var(--border);
-  border-radius: 18px;
-  background: var(--foreground-2);
+  /* PR-UI-LAYOUT-15: provider catalog card chrome refresh
+   * (Settings → Models → 推荐服务/国内服务/... grid).
+   * - Radius 18 → 14 (oversized rounded corner was a leftover from
+   *   the pre-warm-canvas era; 14 sits between the chip 10 and the
+   *   settings modal 18, matching 牛马 screenshot 3 provider tiles).
+   * - Background `--foreground-2` → transparent (sits lightly on
+   *   the panel, like the chip lightening).
+   * - Hover state adds a lift transform to make selection feel
+   *   tangible, matching `.maka-onboarding-card`. */
+  border-radius: 14px;
+  background: transparent;
   color: var(--foreground);
-  padding: 12px;
+  padding: 14px;
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 160ms ease,
+    transform 140ms var(--ease-out-strong);
 }
 
 .providerCatalogCard:hover {
-  border-color: oklch(from var(--accent) l c h / 0.18);
-  background: var(--background);
+  border-color: oklch(from var(--accent) l c h / 0.28);
+  background: oklch(from var(--accent) l c h / 0.04);
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 2px oklch(from var(--foreground) l c h / 0.04),
+    0 4px 12px oklch(from var(--accent) l c h / 0.06);
+}
+
+.providerCatalogCard:active:not([data-disabled="true"]) {
+  transform: translateY(0) scale(0.99);
+}
+
+.providerCatalogCard:focus-visible {
+  outline: none;
+  border-color: oklch(from var(--accent) l c h / 0.42);
+  box-shadow: 0 0 0 3px oklch(from var(--accent) l c h / 0.14);
 }
 
 .providerCatalogCard[data-disabled="true"] {
