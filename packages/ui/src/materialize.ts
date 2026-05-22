@@ -9,6 +9,21 @@ export interface ChatItem {
   ts?: number;
 }
 
+/**
+ * One chunk from PR-REAL-4 `tool_output_delta`. The renderer keeps these
+ * per-tool, sorted by `seq` (per-toolCallId monotonic), so out-of-order
+ * arrivals are repaired and duplicates dropped. `redacted: true` signals
+ * the runtime suppressed a secret in this chunk; the UI renders a small
+ * "[已脱敏]" hint instead of pretending the chunk arrived clean.
+ */
+export interface ToolOutputChunk {
+  seq: number;
+  stream: 'stdout' | 'stderr';
+  text: string;
+  redacted: boolean;
+  createdAt: number;
+}
+
 export interface ToolActivityItem {
   toolUseId: string;
   toolName: string;
@@ -18,6 +33,17 @@ export interface ToolActivityItem {
   args: unknown;
   result?: ToolResultContent;
   durationMs?: number;
+  /**
+   * Live streamed output buffer (PR-UI-12). Append-only from the
+   * renderer's perspective — runtime side already enforces the
+   * 256-char redaction tail and per-toolCallId seq monotonicity, so
+   * the UI only needs to:
+   *  - dedupe by `seq` (drop chunks whose seq already exists)
+   *  - keep the list sorted by `seq` (insert-sort on out-of-order)
+   *  - render in two visual streams (stdout / stderr) but preserve
+   *    the global seq order so interleaving reads correctly.
+   */
+  outputChunks?: ToolOutputChunk[];
 }
 
 // system_note kinds that we surface inline to the user. Everything else

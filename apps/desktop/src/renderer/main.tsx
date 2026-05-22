@@ -30,6 +30,7 @@ import {
   type TurnLineageBadge,
   useToast,
   type ToolActivityItem,
+  type ToolOutputChunk,
 } from '@maka/ui';
 import { SettingsModal } from './settings/SettingsModal';
 import { ErrorBoundary } from './error-boundary';
@@ -800,6 +801,21 @@ function AppShell() {
           args: event.args,
         });
         break;
+      case 'tool_output_delta':
+        // PR-UI-12 (@yuejing 2026-05-22): consume PR-REAL-4 typed
+        // streaming. We dedupe by `seq` (per-toolCallId monotonic from
+        // runtime) and insert in sorted order, so out-of-order delivery
+        // or `tool_result`-vs-delta races repair without flicker.
+        // Runtime already redacts secrets at chunk granularity; UI only
+        // surfaces the `redacted` flag as an inline hint.
+        appendToolOutputChunk(sessionId, event.toolUseId, {
+          seq: event.seq,
+          stream: event.stream,
+          text: event.chunk,
+          redacted: event.redacted,
+          createdAt: event.createdAt,
+        });
+        break;
       case 'permission_request':
         setPermissionBySession((current) => ({ ...current, [sessionId]: event }));
         upsertTool(sessionId, event.toolUseId, {
@@ -973,6 +989,53 @@ function AppShell() {
             };
       const nextItem = { ...base, ...patch };
       const nextList = index >= 0 ? list.map((item, itemIndex) => (itemIndex === index ? nextItem : item)) : [...list, nextItem];
+      return { ...current, [sessionId]: nextList };
+    });
+  }
+
+  /**
+   * PR-UI-12 — append a streamed chunk to a tool's output buffer.
+   *
+   * Invariants enforced here, not relied on from the event source:
+   *  - Dedup by `seq` (per-toolCallId monotonic from runtime). If a
+   *    seq already exists, we drop the incoming chunk — important on
+   *    sessionEvents replays or main-process reconnects.
+   *  - Sorted insert by `seq`. The runtime emits in-order, but
+   *    `tool_result` racing against the last delta could land here
+   *    after a flush, and renderer reconnect could deliver fragments
+   *    out of order. Always keep the array sorted so React renders
+   *    stable visual order.
+   *  - If the tool doesn't exist yet in `liveToolsBySession`, we
+   *    create a minimal `pending` entry. This covers the rare race
+   *    where `tool_output_delta` arrives before `tool_start` is
+   *    flushed to the renderer; we'd rather show output than drop it.
+   */
+  function appendToolOutputChunk(sessionId: string, toolUseId: string, chunk: ToolOutputChunk) {
+    setLiveToolsBySession((current) => {
+      const list = current[sessionId] ?? [];
+      const index = list.findIndex((item) => item.toolUseId === toolUseId);
+      const base: ToolActivityItem =
+        index >= 0
+          ? list[index]!
+          : { toolUseId, toolName: 'Tool', status: 'running', args: undefined };
+      const prevChunks = base.outputChunks ?? [];
+      // Dedup: drop if seq already present.
+      if (prevChunks.some((existing) => existing.seq === chunk.seq)) {
+        return current;
+      }
+      // Sorted insert by seq.
+      const nextChunks = [...prevChunks, chunk].sort((a, b) => a.seq - b.seq);
+      const nextItem: ToolActivityItem = {
+        ...base,
+        outputChunks: nextChunks,
+        // Promote `pending` → `running` once we see live output, so the
+        // status dot doesn't lie about activity.
+        status: base.status === 'pending' ? 'running' : base.status,
+      };
+      const nextList =
+        index >= 0
+          ? list.map((item, itemIndex) => (itemIndex === index ? nextItem : item))
+          : [...list, nextItem];
       return { ...current, [sessionId]: nextList };
     });
   }
