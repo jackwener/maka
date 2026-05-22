@@ -1439,28 +1439,79 @@ function collectCodeText(children: ReactNode): string {
  * locale split applied to `PROMPT_SUGGESTIONS_BY_LOCALE` (PR-UI-14)
  * so the eyebrow, headline, and intro paragraph don't fall back to
  * Chinese while the chips switch to English.
+ *
+ * PR-UI-LAYOUT-4 (@yuejing 2026-05-22): time-of-day greeting in the
+ * headline, matching 牛马AI screenshot 1 ("晚上好，安静的夜晚适合
+ * 深度思考"). The greeting hook is a tiny calm touch but it makes
+ * the empty-chat surface read as a welcoming space rather than a
+ * generic "start typing" prompt. We bucket the local hour into four
+ * windows (morning / noon / afternoon / evening) and render
+ * `${greeting}{label}` if the user set a display name, otherwise
+ * just the greeting + a softer fallback line.
  */
+type DayPeriod = 'morning' | 'noon' | 'afternoon' | 'evening';
+
+function detectDayPeriod(date: Date = new Date()): DayPeriod {
+  const hour = date.getHours();
+  if (hour < 5) return 'evening';
+  if (hour < 11) return 'morning';
+  if (hour < 14) return 'noon';
+  if (hour < 18) return 'afternoon';
+  return 'evening';
+}
+
 const EMPTY_HERO_COPY_BY_LOCALE: Record<PromptSuggestionLocale, {
   ariaLabel: string;
   eyebrow: string;
-  headlineWithLabel: (label: string) => string;
-  headlineFallback: string;
+  /** Time-of-day prefix: "早上好" / "Good morning" etc. */
+  greeting: Record<DayPeriod, string>;
+  /** Soft contextual phrase appended when no userLabel is set
+   *  (e.g. "安静的夜晚适合深度思考"). */
+  greetingTail: Record<DayPeriod, string>;
+  /** Compose the headline when the user has a display name. */
+  headlineWithLabel: (greeting: string, label: string) => string;
+  /** Compose the headline when no name (greeting + tail). */
+  headlineFallback: (greeting: string, tail: string) => string;
   intro: string;
   promptListLabel: string;
 }> = {
   zh: {
     ariaLabel: '开始对话',
     eyebrow: 'READY · 想一起做点什么？',
-    headlineWithLabel: (label) => `${label}，今天想做点什么？`,
-    headlineFallback: '直接说说你想做什么。',
+    greeting: {
+      morning: '早上好',
+      noon: '中午好',
+      afternoon: '下午好',
+      evening: '晚上好',
+    },
+    greetingTail: {
+      morning: '清醒的早晨适合理清思路',
+      noon: '专注的午间适合一鼓作气',
+      afternoon: '舒缓的下午适合慢慢推进',
+      evening: '安静的夜晚适合深度思考',
+    },
+    headlineWithLabel: (greeting, label) => `${greeting} ${label}，今天想做点什么？`,
+    headlineFallback: (greeting, tail) => `${greeting}，${tail}。`,
     intro: '说一下你要改的、想问的、想查的；下面是几个常用起点，也可以直接在下方输入框里描述需求。',
     promptListLabel: '提示建议',
   },
   en: {
     ariaLabel: 'Start a conversation',
     eyebrow: 'READY · What shall we work on?',
-    headlineWithLabel: (label) => `Hey ${label}, what shall we tackle today?`,
-    headlineFallback: 'Just tell me what you’re trying to do.',
+    greeting: {
+      morning: 'Good morning',
+      noon: 'Good afternoon',
+      afternoon: 'Good afternoon',
+      evening: 'Good evening',
+    },
+    greetingTail: {
+      morning: 'A clear morning is good for untangling ideas',
+      noon: 'A focused midday is good for a single big push',
+      afternoon: 'A calm afternoon is good for steady progress',
+      evening: 'A quiet evening is good for deep thinking',
+    },
+    headlineWithLabel: (greeting, label) => `${greeting} ${label} — what shall we tackle today?`,
+    headlineFallback: (greeting, tail) => `${greeting} — ${tail}.`,
     intro: 'Describe what you want to change, ask, or look up. Here are a few common starting points — or just type in the composer below.',
     promptListLabel: 'Prompt suggestions',
   },
@@ -1483,6 +1534,13 @@ function EmptyChatHero(props: { onPromptSuggestion?(prompt: string): void; userL
   const locale = detectPromptSuggestionLocale();
   const copy = EMPTY_HERO_COPY_BY_LOCALE[locale];
   const suggestions = getPromptSuggestions(locale);
+  // PR-UI-LAYOUT-4: time-of-day greeting prefix. `detectDayPeriod`
+  // reads the user's local clock at render time; we don't memo
+  // because the hero is short-lived and React will re-render when
+  // the user navigates back into it.
+  const period = detectDayPeriod();
+  const greeting = copy.greeting[period];
+  const greetingTail = copy.greetingTail[period];
   return (
     <section className="maka-hero maka-hero-empty-chat" aria-label={copy.ariaLabel}>
       <header>
@@ -1491,7 +1549,7 @@ function EmptyChatHero(props: { onPromptSuggestion?(prompt: string): void; userL
           <span>{copy.eyebrow}</span>
         </span>
         <h1>
-          {label ? copy.headlineWithLabel(label) : copy.headlineFallback}
+          {label ? copy.headlineWithLabel(greeting, label) : copy.headlineFallback(greeting, greetingTail)}
         </h1>
         <p>{copy.intro}</p>
       </header>
