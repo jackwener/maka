@@ -6688,6 +6688,18 @@ button:active {
   50% { opacity: 1; transform: scale(1.18); }
 }
 
+/* PR-UI-12 fixup (@xuan review): the visual-smoke fixture attr collapsed
+ * this pulse via the global `[data-maka-reduced-motion]` wildcard, but
+ * real OS `prefers-reduced-motion: reduce` only had the button:active
+ * rule. Add an explicit suppression so users who set system-level
+ * reduced motion don't see the pulse breathe. */
+@media (prefers-reduced-motion: reduce) {
+  .maka-tool-output-stream-dot {
+    animation: none;
+    opacity: 0.8;
+  }
+}
+
 .maka-tool-output-stream-counts {
   display: inline-flex;
   align-items: center;

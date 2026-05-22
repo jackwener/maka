@@ -96,6 +96,43 @@ export function materializeTools(messages: StoredMessage[]): ToolActivityItem[] 
 }
 
 /**
+ * PR-UI-12 fixup (@xuan review): merge live tool state on top of the
+ * persisted tool. The general rule (preserved from before PR-UI-12) is
+ * "live wins" — live events arrive faster than persisted JSONL refresh
+ * and represent the most current status.
+ *
+ * One scoped exception: if persisted reached `interrupted` while live
+ * is still an in-flight status (`pending` / `running` /
+ * `waiting_permission`), persisted wins. This catches the post-abort
+ * race where the live handler missed a clean status update (e.g.
+ * `error` events without a per-tool terminal patch) and live would
+ * otherwise mask the persisted `interrupted` signal forever.
+ *
+ * `completed` / `errored` always defer to live by design — the
+ * existing test "merges live tool over persisted tool keeping the
+ * latest status" locks the "stale-persisted-completed" case so a tool
+ * that's actually still streaming doesn't snap back to "completed"
+ * just because JSONL got there first.
+ *
+ * Live `outputChunks` always come from live — persisted JSONL doesn't
+ * store them (PR-REAL-4 contract: chunks are transient UI).
+ */
+function mergeLiveOverPersisted(persisted: ToolActivityItem, live: ToolActivityItem): ToolActivityItem {
+  const liveIsInFlight =
+    live.status === 'pending'
+    || live.status === 'running'
+    || live.status === 'waiting_permission';
+  const merged: ToolActivityItem = { ...persisted, ...live };
+  if (persisted.status === 'interrupted' && liveIsInFlight) {
+    merged.status = 'interrupted';
+  }
+  if (live.outputChunks && live.outputChunks.length > 0) {
+    merged.outputChunks = live.outputChunks;
+  }
+  return merged;
+}
+
+/**
  * A single conversational turn — typically one user message, the assistant's
  * tool calls (if any), and the assistant's final answer. Derived as a
  * read-only projection from `messages` + live tools (no storage changes
@@ -239,7 +276,7 @@ export function materializeTurns(
   const liveById = new Map(liveTools.map((tool) => [tool.toolUseId, tool]));
   for (const tool of persistedTools) {
     const live = liveById.get(tool.toolUseId);
-    const merged = live ? { ...tool, ...live } : tool;
+    const merged = live ? mergeLiveOverPersisted(tool, live) : tool;
     const turnId = turnsByMsg.get(tool.toolUseId) ?? order[order.length - 1] ?? looseTurnId;
     const turn = ensureTurn(turnId, Date.now());
     turn.tools.push(merged);

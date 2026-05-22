@@ -853,12 +853,53 @@ function AppShell() {
         } else {
           toastApi.error('对话出错', event.message);
         }
+        // PR-UI-12 fixup (@xuan review): turn-level error has the same
+        // "leaves live tools in-flight forever" failure mode as abort.
+        // Mark any in-flight live tools as `interrupted` so the stream
+        // panel + status dot stops claiming activity.
+        setLiveToolsBySession((current) => {
+          const list = current[sessionId];
+          if (!list || list.length === 0) return current;
+          let changed = false;
+          const nextList = list.map((tool) => {
+            const isInFlight =
+              tool.status === 'pending'
+              || tool.status === 'running'
+              || tool.status === 'waiting_permission';
+            if (!isInFlight) return tool;
+            changed = true;
+            return { ...tool, status: 'interrupted' as const };
+          });
+          return changed ? { ...current, [sessionId]: nextList } : current;
+        });
         void refreshSessions();
         void refreshMessages(sessionId);
         break;
       case 'abort':
         clearStreaming(sessionId);
         setPermissionBySession((current) => ({ ...current, [sessionId]: undefined }));
+        // PR-UI-12 fixup (@xuan review): mark any live in-flight tools
+        // as `interrupted` so the stream panel header flips to
+        // "已中断 · 已收到的输出" and the live pulse stops. Without
+        // this, a tool that had `tool_output_delta` but no terminal
+        // `tool_result` keeps showing `running` even after the turn
+        // aborted; `materializeTools` merge `{...persisted, ...live}`
+        // would then mask the persisted `interrupted` status.
+        setLiveToolsBySession((current) => {
+          const list = current[sessionId];
+          if (!list || list.length === 0) return current;
+          let changed = false;
+          const nextList = list.map((tool) => {
+            const isInFlight =
+              tool.status === 'pending'
+              || tool.status === 'running'
+              || tool.status === 'waiting_permission';
+            if (!isInFlight) return tool;
+            changed = true;
+            return { ...tool, status: 'interrupted' as const };
+          });
+          return changed ? { ...current, [sessionId]: nextList } : current;
+        });
         void refreshSessions();
         void refreshMessages(sessionId);
         break;
@@ -987,7 +1028,24 @@ function AppShell() {
               status: 'pending',
               args: patch.args,
             };
-      const nextItem = { ...base, ...patch };
+      // PR-UI-12 fixup (@xuan review): never let `tool_start` arriving
+      // AFTER an in-flight `tool_output_delta` regress a `running` item
+      // back to `pending`. The delta itself already proved the tool is
+      // live; the status dot must not lie. Keep `base.status` whenever
+      // the incoming patch wants `pending` but we have output or are
+      // already in a later state.
+      const wantsPending = patch.status === 'pending';
+      const hasOutput = (base.outputChunks?.length ?? 0) > 0;
+      const isLaterStatus =
+        base.status === 'running'
+        || base.status === 'waiting_permission'
+        || base.status === 'completed'
+        || base.status === 'errored'
+        || base.status === 'interrupted';
+      const nextStatus = wantsPending && (hasOutput || isLaterStatus)
+        ? base.status
+        : patch.status ?? base.status;
+      const nextItem: ToolActivityItem = { ...base, ...patch, status: nextStatus };
       const nextList = index >= 0 ? list.map((item, itemIndex) => (itemIndex === index ? nextItem : item)) : [...list, nextItem];
       return { ...current, [sessionId]: nextList };
     });
