@@ -5844,6 +5844,50 @@ button:active {
   cursor: not-allowed;
 }
 
+/* PR-UI-17 (audit §3.4): footer action density.
+ *
+ * Secondary actions (branch / copy) render icon-only by default to
+ * reduce noise when the turn already shows lineage badges + status
+ * pills. Hovering or focusing into the toolbar expands all actions
+ * to full icon+label so the affordance is still discoverable. The
+ * label stays in the DOM as visually-hidden text so screen readers
+ * read it identically regardless of presentation state. Pending
+ * actions explicitly opt back to full layout via data-pending so
+ * the user sees "正在重试…" not just a spinner icon.
+ *
+ * `prefers-reduced-motion` users still get the same final state, just
+ * with the width transition collapsed.
+ */
+.maka-turn-footer-action[data-priority="secondary"] {
+  padding-right: 6px;
+  /* Smooth width transition between collapsed (icon-only) and expanded
+   * (icon + label). The label is the natural child; we just hide its
+   * occupied space via max-width + overflow. */
+}
+.maka-turn-footer-action[data-priority="secondary"] > span {
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  margin-left: 0;
+  transition: max-width 160ms ease, opacity 120ms ease, margin-left 160ms ease;
+}
+.maka-turn-footer:hover .maka-turn-footer-action[data-priority="secondary"] > span,
+.maka-turn-footer:focus-within .maka-turn-footer-action[data-priority="secondary"] > span,
+.maka-turn-footer-action[data-priority="secondary"]:focus-visible > span,
+.maka-turn-footer-action[data-priority="secondary"][data-pending] > span {
+  max-width: 120px;
+  opacity: 1;
+  margin-left: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maka-turn-footer-action[data-priority="secondary"] > span {
+    transition: none;
+  }
+}
+
 
 /* PR109e-d: Failed turn banner. Lives above the assistant message body
  * when turn.status === failed. Uses destructive tone — failed IS a

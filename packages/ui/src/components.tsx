@@ -1950,12 +1950,19 @@ function TurnFooterActions(props: {
         // label visible (not a spinner-only) so screen readers can hear
         // which action is processing. `aria-busy="true"` is the AT signal.
         const isPending = action.tooltip === '正在处理…';
+        // PR-UI-17 (@yuejing 2026-05-22): action priority is presentation
+        // only — has NO bearing on the lifecycle/status semantics encoded
+        // by `deriveTurnFooterActions`. Pending state always forces
+        // priority back to "primary" so the user sees full label + icon
+        // while the action processes.
+        const priority = isPending ? 'primary' : STATUS_FOOTER_PRIORITY[action.id];
         return (
           <button
             key={action.id}
             type="button"
             className="maka-turn-footer-action"
             data-action={action.id}
+            data-priority={priority}
             data-pending={isPending || undefined}
             disabled={!action.enabled}
             aria-disabled={!action.enabled}
@@ -1977,6 +1984,25 @@ const STATUS_FOOTER_ICON: Record<TurnFooterActionMeta['id'], ReactNode> = {
   regenerate: <RefreshCcw size={12} strokeWidth={2} aria-hidden="true" />,
   branch: <GitBranch size={12} strokeWidth={2} aria-hidden="true" />,
   copy: <Copy size={12} strokeWidth={2} aria-hidden="true" />,
+};
+
+/**
+ * PR-UI-17 (audit §3.4): action priority controls visual density —
+ * `primary` actions render with full icon+label always; `secondary`
+ * actions render icon-only by default with a hover/focus-within
+ * expansion that reveals the label. This addresses the noise complaint
+ * "重试 + 重新生成 + 分支 + 复制 buttons accumulate visually when
+ * combined with lineage badges + status pills" without dropping any
+ * functionality or changing the lifecycle semantics encoded by
+ * `deriveTurnFooterActions`. The action label is always present in
+ * the DOM (aria + visually-hidden when collapsed) so screen readers
+ * read it identically regardless of presentation state.
+ */
+const STATUS_FOOTER_PRIORITY: Record<TurnFooterActionMeta['id'], 'primary' | 'secondary'> = {
+  retry: 'primary',
+  regenerate: 'primary',
+  branch: 'secondary',
+  copy: 'secondary',
 };
 
 function MessageMeta(props: { role: string; userLabel?: string; ts?: number }) {
