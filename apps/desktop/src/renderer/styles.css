@@ -2898,17 +2898,23 @@ button:active {
   /* PR-UI-11 (@yuejing 2026-05-22): group label polish — bump
    * letter-spacing for SECTION feel, slightly bolder, faint divider
    * line on the bottom so the 4 groups read as clearly separated
-   * chunks rather than just "uppercase text". */
+   * chunks rather than just "uppercase text".
+   *
+   * PR-UI-LAYOUT-3 (@yuejing 2026-05-22 night, per @WAWQAQ 牛马AI
+   * comparison): softened the label so it doesn't dominate the
+   * sidebar visual. 牛马 has no group labels at all; we keep them
+   * for @kenji's review-gate ("nav doubles as map") but pull
+   * weight/letter-spacing down so they read as labels, not headings. */
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  gap: 6px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.10em;
   text-transform: uppercase;
-  color: var(--foreground-50);
-  padding: 4px 6px 4px;
-  margin-bottom: 2px;
+  color: var(--foreground-40);
+  padding: 6px 6px 2px;
+  margin-bottom: 0;
 }
 
 .settingsNavGroupLabel::after {
@@ -2921,19 +2927,44 @@ button:active {
   background: linear-gradient(
     to right,
     var(--border) 0%,
-    transparent 80%
+    transparent 60%
   );
 }
 
 /* Per @kenji's PR75 review: group labels should also act as navigation
  * summaries (live state, not just visual dividers). Single short line in
  * the foreground-60 default, tinted info/warning/destructive when the
- * group has actionable state. */
+ * group has actionable state.
+ *
+ * PR-UI-LAYOUT-3: summary is now collapsed by default (kept in DOM for
+ * screen readers) and reveals on hover/focus-within the group so the
+ * sidebar stays calm at rest. @kenji's "nav as map" intent is preserved
+ * for keyboard users (focus reveals it) and for any group with a
+ * destructive tone (always visible — see below). */
 .settingsNavGroupSummary {
   font-size: 11px;
   line-height: 1.4;
   color: var(--foreground-60);
   padding: 0 6px 2px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 160ms ease, opacity 120ms ease, padding 160ms ease;
+}
+
+.settingsNavGroup:hover .settingsNavGroupSummary,
+.settingsNavGroup:focus-within .settingsNavGroupSummary,
+.settingsNavGroupSummary[data-tone="destructive"],
+.settingsNavGroupSummary[data-tone="warning"] {
+  max-height: 32px;
+  opacity: 1;
+  padding-bottom: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settingsNavGroupSummary {
+    transition: none;
+  }
 }
 
 .settingsNavGroupSummary[data-tone="info"] {
