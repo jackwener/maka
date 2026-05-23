@@ -57,6 +57,13 @@ const VISUAL_SMOKE_SCENARIOS = new Set<VisualSmokeScenario>([
   'turn-control-history',
   'turn-control-branch-visible',
   'turn-control-branch-orphan',
+  // PR-UI-RENDER-3a-smoke: registry-driven artifact preview fixtures.
+  // Each shares the standard chat seed + same ARTIFACT_SESSION_ID but
+  // writes a different single artifact so the ArtifactPane default
+  // selection deterministically shows the artifact we want.
+  'artifact-preview-image',
+  'artifact-preview-unsupported',
+  'artifact-preview-oversize',
 ]);
 
 // Fixed clock for screenshot fixtures. All seeded timestamps and
@@ -196,6 +203,13 @@ export function getVisualSmokeState(fixture: VisualSmokeFixture | null): VisualS
       return { ...state, activeSessionId: ERROR_SESSION_ID, openSettingsSection: 'account' };
     case 'artifact-pane':
     case 'artifact-errors':
+    // PR-UI-RENDER-3a-smoke: each preview scenario shares the same
+    // chat session as `artifact-pane`; only the on-disk artifact
+    // varies. The ArtifactPane selects records[0] by default so the
+    // single seeded artifact is what gets screenshotted.
+    case 'artifact-preview-image':
+    case 'artifact-preview-unsupported':
+    case 'artifact-preview-oversize':
       return { ...state, activeSessionId: ARTIFACT_SESSION_ID };
     case 'turn-narrative':
       return { ...state, activeSessionId: TURN_SESSION_ID };
@@ -1324,7 +1338,13 @@ async function writeSession(workspaceRoot: string, session: SessionHeader, messa
 
 async function writeArtifacts(workspaceRoot: string, now: number, scenario: VisualSmokeScenario): Promise<void> {
   const root = join(workspaceRoot, 'artifacts');
-  const specs: Array<{
+  // PR-UI-RENDER-3a-smoke: dedicated preview scenarios get their
+  // own short artifact list (single artifact each) so the
+  // ArtifactPane default selection deterministically picks the one
+  // the screenshot is meant to capture. The `sizeBytesOverride`
+  // field bypasses the post-write `stat().size` overwrite so we
+  // can claim 3MB in metadata without writing 3MB to disk.
+  type ArtifactSpec = {
     id: string;
     name: string;
     kind: ArtifactRecord['kind'];
@@ -1332,7 +1352,83 @@ async function writeArtifacts(workspaceRoot: string, now: number, scenario: Visu
     content: string | Uint8Array;
     status?: ArtifactRecord['status'];
     skipFile?: boolean;
-  }> = [
+    /**
+     * @kenji review @msg fc9753b9 oversize fixture: when this is
+     * set, the post-write `stat().size` is NOT used to overwrite
+     * the recorded `sizeBytes`. Lets us seed a 3MB-claim artifact
+     * without consuming 3MB of disk in the test workspace.
+     * Only valid alongside `skipFile: true` to avoid metadata/file
+     * drift.
+     */
+    sizeBytesOverride?: number;
+  };
+  // 1x1 transparent PNG (67 bytes). Smallest valid PNG that
+  // `readBinary` will sniff back as `image/png`. Used by
+  // `artifact-preview-image` to exercise the registry's happy path.
+  const tinyPngBytes = Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+    0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41,
+    0x54, 0x78, 0x9c, 0x62, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00,
+    0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+    0x42, 0x60, 0x82,
+  ]);
+
+  // PR-UI-RENDER-3a-smoke: dedicated single-artifact specs per
+  // scenario. Returning early keeps these scenarios from inheriting
+  // the standard html/diff/notes list (which would shuffle the
+  // default selection).
+  if (scenario === 'artifact-preview-image') {
+    await writeArtifactSpecs(root, now, [
+      {
+        id: 'artifact-preview-image',
+        name: 'screenshot.png',
+        kind: 'image',
+        mimeType: 'image/png',
+        content: tinyPngBytes,
+      },
+    ]);
+    return;
+  }
+  if (scenario === 'artifact-preview-unsupported') {
+    await writeArtifactSpecs(root, now, [
+      {
+        id: 'artifact-preview-unsupported',
+        name: 'portrait.heic',
+        // kind: 'image' makes the resolver enter the image branch;
+        // image/heic is NOT in the allowlist so L1 returns
+        // `unsupported(mime_disallowed)`. readBinary is NEVER called
+        // for this scenario.
+        kind: 'image',
+        mimeType: 'image/heic',
+        content: Uint8Array.from([0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70]),
+      },
+    ]);
+    return;
+  }
+  if (scenario === 'artifact-preview-oversize') {
+    await writeArtifactSpecs(root, now, [
+      {
+        id: 'artifact-preview-oversize',
+        name: 'huge.png',
+        kind: 'image',
+        mimeType: 'image/png',
+        // 3MB claim — past the 2MB cap. L1 resolver rejects via
+        // sizeBytes before readBinary is even attempted; the
+        // <UnsupportedArtifactPreview reason="oversize"> is what
+        // renders. We skip the file so the test workspace stays
+        // small (and so a stat overwrite doesn't undo our claim).
+        content: Uint8Array.from([]),
+        skipFile: true,
+        sizeBytesOverride: 3 * 1024 * 1024,
+      },
+    ]);
+    return;
+  }
+  const specs: Array<ArtifactSpec> = [
     {
       id: 'artifact-report',
       name: 'report.html',
@@ -1409,6 +1505,31 @@ async function writeArtifacts(workspaceRoot: string, now: number, scenario: Visu
     );
   }
 
+  await writeArtifactSpecs(root, now, specs);
+}
+
+/**
+ * Shared writer for an arbitrary artifact spec list. Writes each
+ * spec to disk (unless `skipFile`), captures the real `sizeBytes`
+ * via `stat` (unless `sizeBytesOverride`), and emits the
+ * `metadata.jsonl` index. Used by both the canonical
+ * `artifact-pane` / `artifact-errors` scenarios and the
+ * PR-UI-RENDER-3a-smoke preview scenarios.
+ */
+async function writeArtifactSpecs(
+  root: string,
+  now: number,
+  specs: Array<{
+    id: string;
+    name: string;
+    kind: ArtifactRecord['kind'];
+    mimeType?: string;
+    content: string | Uint8Array;
+    status?: ArtifactRecord['status'];
+    skipFile?: boolean;
+    sizeBytesOverride?: number;
+  }>,
+): Promise<void> {
   const records: ArtifactRecord[] = [];
   for (const spec of specs) {
     const relativePath = `${ARTIFACT_SESSION_ID}/${spec.id}-${spec.name}`;
@@ -1418,6 +1539,13 @@ async function writeArtifacts(workspaceRoot: string, now: number, scenario: Visu
       await mkdir(dirname(path), { recursive: true });
       await writeFile(path, spec.content);
       sizeBytes = (await stat(path)).size;
+    }
+    // PR-UI-RENDER-3a-smoke: oversize fixture passes
+    // `sizeBytesOverride` so the metadata can claim 3MB without
+    // writing 3MB. The override must come AFTER the stat overwrite
+    // above so it isn't undone.
+    if (spec.sizeBytesOverride !== undefined) {
+      sizeBytes = spec.sizeBytesOverride;
     }
     records.push({
       id: spec.id,

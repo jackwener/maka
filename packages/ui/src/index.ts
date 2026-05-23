@@ -1,3 +1,4 @@
+export * from './artifact-preview-registry.js';
 export * from './components.js';
 export * from './maka-uri.js';
 export * from './materialize.js';

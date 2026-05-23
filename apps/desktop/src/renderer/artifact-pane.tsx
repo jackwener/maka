@@ -324,7 +324,14 @@ export function ArtifactPane(props: { sessionId: string | undefined }) {
             tabIndex={-1}
           >
             {selected ? (
-              <ArtifactPreview key={selected.id} record={selected} />
+              // PR-UI-RENDER-3a: pass the existing openInFinder
+              // handler so the Unsupported card (when shown) can
+              // render a real "在 Finder 中打开" button. No new IPC.
+              <ArtifactPreview
+                key={selected.id}
+                record={selected}
+                onShowInFolder={() => void openInFinder(selected.id)}
+              />
             ) : (
               <div className="maka-artifact-preview-empty">选择左侧 artifact 查看预览。</div>
             )}

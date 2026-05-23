@@ -36,9 +36,10 @@ import type {
   ArtifactRecord,
   ArtifactTextReadResult,
 } from '@maka/core';
+import { RegistryArtifactPreview } from './artifact-preview-registry-shell';
 
-export function ArtifactPreview(props: { record: ArtifactRecord }) {
-  const { record } = props;
+export function ArtifactPreview(props: { record: ArtifactRecord; onShowInFolder?: () => void }) {
+  const { record, onShowInFolder } = props;
   switch (record.kind) {
     case 'file':
       return <FilePreview record={record} />;
@@ -47,7 +48,13 @@ export function ArtifactPreview(props: { record: ArtifactRecord }) {
     case 'html':
       return <HtmlPreview record={record} />;
     case 'image':
-      return <ImagePreview record={record} />;
+      // PR-UI-RENDER-3a: route image previews through the typed
+      // registry shell so the resolution path (mime match / ext
+      // fallback / oversize / mime_disallowed) is testable + the
+      // Unsupported fallback is consistent. file/diff/html/pdf stay
+      // on the legacy path until their PR-RENDER-3b/c/d/e gates
+      // land.
+      return <RegistryArtifactPreview record={record} onShowInFolder={onShowInFolder} />;
     case 'pdf':
       return <PdfPreview record={record} />;
   }
@@ -131,19 +138,12 @@ function HtmlPreview(props: { record: ArtifactRecord }) {
 
 // ---- binary-backed previews ------------------------------------------------
 
-function ImagePreview(props: { record: ArtifactRecord }) {
-  const result = useBinaryRead(props.record.id);
-  if (result.state === 'loading') return <PreviewLoading label="加载图片预览…" />;
-  if (!result.value.ok) return <BinaryFailureCard record={props.record} reason={result.value.reason} />;
-  return (
-    <div className="maka-artifact-preview-image">
-      <img
-        alt={props.record.name}
-        src={`data:${result.value.mimeType};base64,${result.value.base64}`}
-      />
-    </div>
-  );
-}
+// PR-UI-RENDER-3a — the previous `ImagePreview` component was
+// replaced by `RegistryArtifactPreview` from
+// `./artifact-preview-registry-shell`. The replacement adds the
+// typed registry resolution (mime_match / ext_fallback / oversize /
+// mime_disallowed / no_mime_no_ext), the L2 base64 cap, and the
+// Unsupported card with conditional "在 Finder 中打开" CTA.
 
 function PdfPreview(props: { record: ArtifactRecord }) {
   const result = useBinaryRead(props.record.id);
