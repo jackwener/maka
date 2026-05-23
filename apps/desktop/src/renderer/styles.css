@@ -5658,7 +5658,11 @@ button:active {
 }
 
 .providerCatalogCard[data-status="coming-soon"] {
-  cursor: help;
+  /* PR-UI-LAYOUT-41 follow-up (@kenji gate 2): cursor `help` was
+   * acceptable but `not-allowed` is the honest signal — this
+   * surface is non-actionable, not "more info on hover". The
+   * Roadmap pseudo-badge + aria-label already carry the info. */
+  cursor: not-allowed;
   filter: grayscale(0.28);
   opacity: 0.66;
 }
@@ -5667,6 +5671,18 @@ button:active {
   transform: none;
   border-color: var(--border);
   box-shadow: none;
+}
+
+/* PR-UI-LAYOUT-41 follow-up (@kenji gate 2): defensive — the
+ * disabled card is rendered as `<div>` so `:focus-visible` never
+ * matches it (divs aren't focusable without tabindex). This rule
+ * is here as a belt-and-suspenders override in case some future
+ * change accidentally adds tabindex / contenteditable / button
+ * fallback. */
+.providerCatalogCard[data-status="coming-soon"]:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: var(--border);
 }
 
 .providerCatalogCard[data-status="coming-soon"]::after {

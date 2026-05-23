@@ -306,8 +306,14 @@ function ProviderCatalogCard(props: { type: ProviderType; count: number; onSelec
   const defaults = PROVIDER_DEFAULTS[props.type];
   const display = providerDisplay(props.type);
   const disabled = defaults.status !== 'ready';
+  // PR-UI-LAYOUT-41 follow-up (@kenji msg 618ee9a7 gate 3):
+  // Roadmap title MUST avoid operational verbs (登录 / 连接 / 授权
+  // / 测试 / 接入). The previous title said "...同一家厂商的
+  // API key 在下方分类中接入" — "接入" reads as operational call
+  // even though it's about the alternative API key path.
+  // Rephrased to a stative observation: "API key 形式仍可用".
   const title = disabled
-    ? '路线图项：尚未实现。当前可使用同一家厂商的 API key 在下方分类中接入。'
+    ? '路线图项：尚未实现。同一家厂商的 API key 形式仍可用。'
     : `添加 ${display.name}`;
 
   // PR-UI-LAYOUT-41 (@kenji review #my-ai:2f91befb gate):
@@ -316,16 +322,20 @@ function ProviderCatalogCard(props: { type: ProviderType; count: number; onSelec
   // undefined : ...}` — that left it tabbable and screen-reader
   // interactive even though click did nothing. For the
   // not-yet-implemented OAuth subscription providers, render a
-  // non-interactive `<div role="status">` so keyboard tab skips
-  // it and assistive tech reads it as informational, not
-  // actionable. The ready providers stay as real buttons.
+  // non-interactive `<div>` so keyboard tab skips it and AT reads
+  // it as informational, not actionable.
+  //
+  // PR-UI-LAYOUT-41 follow-up (@kenji #my-ai:2f91befb msg 618ee9a7):
+  // dropped `role="status"` — it has implicit `aria-live="polite"`
+  // and would cause unnecessary AT live announcement on a static
+  // catalog tile. Plain `<div>` + `aria-label` is the right shape:
+  // AT reads the name once on focus traversal, no live region.
   if (disabled) {
     return (
       <div
         className="providerCatalogCard"
         data-provider={props.type}
         data-status="coming-soon"
-        role="status"
         aria-label={`${display.name}（路线图，尚未实现）`}
         title={title}
       >
@@ -954,12 +964,19 @@ export function providerDisplay(type: ProviderType): { name: string; description
     // they'll get an "OAuth" or "Account" badge then — until then,
     // no badge prevents the unused field from rendering in some
     // future code path.
+    //
+    // PR-UI-LAYOUT-41 follow-up (@kenji msg 618ee9a7 gate 3):
+    // description uses noun phrase only, no operational verbs.
+    // Earlier draft had "账号登录" which reads as call-to-action
+    // ("log in with account"); switched to "订阅账号路径" (noun
+    // phrase describing the future capability) so the user
+    // can't read it as "click here to log in".
     case 'claude-subscription':
-      return { name: 'Claude Subscription', description: 'Claude Pro / Max 账号登录（路线图，尚未实现）。' };
+      return { name: 'Claude Subscription', description: 'Claude Pro / Max 订阅账号路径（路线图，尚未实现）。' };
     case 'codex-subscription':
-      return { name: 'Codex Subscription', description: 'ChatGPT / Codex 账号登录（路线图，尚未实现）。' };
+      return { name: 'Codex Subscription', description: 'ChatGPT / Codex 订阅账号路径（路线图，尚未实现）。' };
     case 'gemini-cli':
-      return { name: 'Gemini CLI', description: 'Google 账号 OAuth 登录（路线图，尚未实现）。' };
+      return { name: 'Gemini CLI', description: 'Google 账号 OAuth 路径（路线图，尚未实现）。' };
   }
 }
 
