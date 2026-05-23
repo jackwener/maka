@@ -33,7 +33,29 @@ export type VisualSmokeScenario =
   // these fixtures.
   | 'turn-control-history'
   | 'turn-control-branch-visible'
-  | 'turn-control-branch-orphan';
+  | 'turn-control-branch-orphan'
+  // PR-UI-RENDER-3a-smoke: three artifact preview fixtures lock the
+  // visual contract for the new registry-driven image path. Each
+  // scenario writes a SINGLE artifact to ARTIFACT_SESSION_ID so the
+  // ArtifactPane's default selection (records[0]) deterministically
+  // shows the one we want to screenshot. @kenji review @msg
+  // fc9753b9 holds visual-regression sign-off pending these three.
+  //   - artifact-preview-image: real tiny PNG → registry resolves
+  //     `image(mime_match)`, <img object-fit:contain> inside bounded
+  //     container.
+  //   - artifact-preview-unsupported: kind=image + mimeType=image/
+  //     heic (disallowed by allowlist). Registry resolves L1
+  //     `unsupported(mime_disallowed)`. Visual contract: no `<img>`,
+  //     UnsupportedCard shows name + mime + size, NO relativePath
+  //     leak.
+  //   - artifact-preview-oversize: kind=image + mimeType=image/png
+  //     + sizeBytes claim > 2MB (via skipFile + sizeBytesOverride).
+  //     Registry resolves L1 `unsupported(oversize)` BEFORE
+  //     readBinary. Finder button visible (ArtifactPane provides
+  //     onShowInFolder).
+  | 'artifact-preview-image'
+  | 'artifact-preview-unsupported'
+  | 'artifact-preview-oversize';
 
 export interface VisualSmokeLiveTool {
   toolUseId: string;

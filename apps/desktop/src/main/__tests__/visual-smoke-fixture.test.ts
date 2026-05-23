@@ -392,6 +392,181 @@ describe('visual smoke fixture mode', () => {
     }
   });
 
+  describe('PR-UI-RENDER-3a-smoke — registry-driven artifact preview fixtures (@kenji msg fc9753b9)', () => {
+    /**
+     * Helper: assert NO renderer-visible field of any artifact
+     * record contains an absolute-path leak. The `relativePath`
+     * field intentionally contains a workspace-relative path (the
+     * registry uses it to read the file), but the UI must NEVER
+     * surface it. We check the *fixture* metadata here, which is
+     * the source of truth the renderer consumes. The smoke
+     * pipeline's PNG diff covers the rendered DOM separately;
+     * here we lock the input.
+     */
+    function assertNoAbsolutePathInMetadata(line: string) {
+      assert.equal(line.includes('/Users/'), false, `metadata leak: /Users/ in ${line}`);
+      assert.equal(line.includes('/private/'), false, `metadata leak: /private/ in ${line}`);
+      // Workspace relativePath fragment in the metadata is fine —
+      // it's the registry input — but it must always be
+      // session-prefixed and never start with `/`.
+      const record = JSON.parse(line) as { relativePath: string };
+      assert.equal(record.relativePath.startsWith('/'), false);
+      assert.equal(record.relativePath.startsWith(`visual-smoke-artifact/`), true);
+    }
+
+    it('artifact-preview-image: single PNG seeded → registry will resolve image(mime_match)', async () => {
+      const workspaceRoot = await mkdtemp(join(tmpdir(), 'maka-visual-smoke-preview-image-'));
+      try {
+        const fixture = resolveVisualSmokeFixture('artifact-preview-image', false);
+        assert.ok(fixture);
+        await seedVisualSmokeFixture({
+          workspaceRoot,
+          fixture,
+          credentialStore: fakeCredentialStore(),
+          now: 1_700_000_000_000,
+        });
+        const state = getVisualSmokeState(fixture);
+        assert.equal(state?.activeSessionId, 'visual-smoke-artifact');
+
+        const lines = (await readFile(join(workspaceRoot, 'artifacts', 'metadata.jsonl'), 'utf8'))
+          .split('\n')
+          .filter(Boolean);
+        assert.equal(lines.length, 1, 'preview-image fixture must seed exactly one artifact');
+        for (const line of lines) assertNoAbsolutePathInMetadata(line);
+
+        const record = JSON.parse(lines[0]!) as {
+          name: string;
+          kind: string;
+          mimeType?: string;
+          sizeBytes: number;
+        };
+        assert.equal(record.name, 'screenshot.png');
+        assert.equal(record.kind, 'image');
+        assert.equal(record.mimeType, 'image/png');
+        // Real PNG bytes were written; stat returns the real size
+        // (67 bytes for our 1x1 transparent fixture PNG).
+        assert.equal(record.sizeBytes > 0 && record.sizeBytes < 200, true);
+
+        // File must actually exist (sniff-able by readBinary at
+        // runtime). The fixture path is reproducible.
+        const filePath = join(
+          workspaceRoot,
+          'artifacts',
+          'visual-smoke-artifact',
+          'artifact-preview-image-screenshot.png',
+        );
+        const bytes = await readFile(filePath);
+        // PNG magic number
+        assert.equal(bytes[0], 0x89);
+        assert.equal(bytes[1], 0x50); // 'P'
+        assert.equal(bytes[2], 0x4e); // 'N'
+        assert.equal(bytes[3], 0x47); // 'G'
+      } finally {
+        await rm(workspaceRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('artifact-preview-unsupported: image/heic disallowed mime → L1 unsupported(mime_disallowed), readBinary never called', async () => {
+      const workspaceRoot = await mkdtemp(join(tmpdir(), 'maka-visual-smoke-preview-unsupported-'));
+      try {
+        const fixture = resolveVisualSmokeFixture('artifact-preview-unsupported', false);
+        assert.ok(fixture);
+        await seedVisualSmokeFixture({
+          workspaceRoot,
+          fixture,
+          credentialStore: fakeCredentialStore(),
+          now: 1_700_000_000_000,
+        });
+
+        const lines = (await readFile(join(workspaceRoot, 'artifacts', 'metadata.jsonl'), 'utf8'))
+          .split('\n')
+          .filter(Boolean);
+        assert.equal(lines.length, 1);
+        for (const line of lines) assertNoAbsolutePathInMetadata(line);
+
+        const record = JSON.parse(lines[0]!) as {
+          name: string;
+          kind: string;
+          mimeType: string;
+        };
+        assert.equal(record.name, 'portrait.heic');
+        assert.equal(record.kind, 'image');
+        // mimeType MUST be the disallowed one — otherwise the
+        // resolver wouldn't take the unsupported(mime_disallowed)
+        // branch we want to capture.
+        assert.equal(record.mimeType, 'image/heic');
+      } finally {
+        await rm(workspaceRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('artifact-preview-oversize: 3MB sizeBytes claim with skipFile → L1 unsupported(oversize)', async () => {
+      const workspaceRoot = await mkdtemp(join(tmpdir(), 'maka-visual-smoke-preview-oversize-'));
+      try {
+        const fixture = resolveVisualSmokeFixture('artifact-preview-oversize', false);
+        assert.ok(fixture);
+        await seedVisualSmokeFixture({
+          workspaceRoot,
+          fixture,
+          credentialStore: fakeCredentialStore(),
+          now: 1_700_000_000_000,
+        });
+
+        const lines = (await readFile(join(workspaceRoot, 'artifacts', 'metadata.jsonl'), 'utf8'))
+          .split('\n')
+          .filter(Boolean);
+        assert.equal(lines.length, 1);
+        for (const line of lines) assertNoAbsolutePathInMetadata(line);
+
+        const record = JSON.parse(lines[0]!) as {
+          name: string;
+          kind: string;
+          mimeType: string;
+          sizeBytes: number;
+        };
+        assert.equal(record.name, 'huge.png');
+        assert.equal(record.kind, 'image');
+        assert.equal(record.mimeType, 'image/png');
+        // sizeBytesOverride wins. The fixture claims 3MB so the
+        // L1 resolver rejects via the oversize gate before any
+        // readBinary attempt. Asserts the override actually
+        // survived through writeArtifactSpecs.
+        assert.equal(record.sizeBytes, 3 * 1024 * 1024);
+
+        // File must NOT exist (skipFile: true). If it does, the
+        // override would have been overwritten by stat() — which
+        // would defeat the entire scenario.
+        await assert.rejects(
+          readFile(
+            join(
+              workspaceRoot,
+              'artifacts',
+              'visual-smoke-artifact',
+              'artifact-preview-oversize-huge.png',
+            ),
+            'utf8',
+          ),
+          /ENOENT/,
+        );
+      } finally {
+        await rm(workspaceRoot, { recursive: true, force: true });
+      }
+    });
+
+    it('all three preview scenarios point activeSessionId at the standard ARTIFACT_SESSION_ID', () => {
+      for (const scenario of [
+        'artifact-preview-image',
+        'artifact-preview-unsupported',
+        'artifact-preview-oversize',
+      ] as const) {
+        const fixture = resolveVisualSmokeFixture(scenario, false);
+        assert.ok(fixture, `scenario=${scenario}`);
+        const state = getVisualSmokeState(fixture);
+        assert.equal(state?.activeSessionId, 'visual-smoke-artifact', `scenario=${scenario}`);
+      }
+    });
+  });
+
   it('artifact-pane seed creates file-backed artifact metadata without absolute paths', async () => {
     const workspaceRoot = await mkdtemp(join(tmpdir(), 'maka-visual-smoke-artifact-'));
     try {

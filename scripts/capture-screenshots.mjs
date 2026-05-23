@@ -84,6 +84,13 @@ const ALL_SCENARIOS = [
   'turn-control-history',
   'turn-control-branch-visible',
   'turn-control-branch-orphan',
+  // PR-UI-RENDER-3a-smoke: registry-driven artifact preview fixtures.
+  // Each writes a SINGLE artifact to ARTIFACT_SESSION_ID so the
+  // ArtifactPane default selection deterministically shows the one we
+  // want to baseline. See smoke.md Path 17 PR-RENDER-3a-smoke gate.
+  'artifact-preview-image',
+  'artifact-preview-unsupported',
+  'artifact-preview-oversize',
 ];
 
 const VARIANTS = [
@@ -188,7 +195,18 @@ async function captureSingle(scenario, variant) {
   env.MAKA_VISUAL_SMOKE_HEIGHT = String(variant.viewport.height);
 
   const electronBin = await resolveElectronBin();
-  const child = spawn(electronBin, ['.'], {
+  // Isolate Electron's singleton lock + persisted state per spawn so
+  // a developer Maka window (or a previous capture's stuck Electron)
+  // doesn't block us from starting. Each `(scenario, variant)` gets
+  // its own user-data dir under tmpdir. Without this, Electron's
+  // singleton path collides on `~/Library/Application Support/Maka`
+  // and the spawned Electron exits before printing the auto-capture
+  // marker, producing a `capture_marker_not_seen` timeout.
+  const userDataDir = join(
+    os.tmpdir(),
+    `maka-visual-smoke-${scenario}-${variant.name}-${process.pid}`,
+  );
+  const child = spawn(electronBin, ['.', `--user-data-dir=${userDataDir}`], {
     cwd: DESKTOP_DIR,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
