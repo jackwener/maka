@@ -14,6 +14,7 @@ import type {
   UiDensity,
 } from '@maka/core';
 import {
+  applyAssistantDelta,
   applyThinkingComplete,
   applyThinkingDelta,
   applyToolOutputChunk,
@@ -98,6 +99,13 @@ function AppShell() {
   // as `thinkingBySession[sessionId]`. The `<ReasoningPanel>` reads
   // it via the `truncated` prop to render the "已截断" pill.
   const [thinkingTruncatedBySession, setThinkingTruncatedBySession] = useState<Record<string, boolean>>({});
+  // PR-UI-Cx (@kenji msg 94b0063d): per-session monotonic truncated
+  // flag for the assistant `streamingBySession` buffer. Flipped to
+  // `true` when `applyAssistantDelta` either tail-keeps an oversize
+  // single delta or head-keeps the total at the per-session cap.
+  // Stays true until `clearStreaming(sessionId)` (abort / error /
+  // text_complete). The bubble's "已截断" pill reads this flag.
+  const [streamingTruncatedBySession, setStreamingTruncatedBySession] = useState<Record<string, boolean>>({});
   const [liveToolsBySession, setLiveToolsBySession] = useState<Record<string, ToolActivityItem[]>>({});
   const [permissionBySession, setPermissionBySession] = useState<Record<string, PermissionRequestEvent | undefined>>({});
   const [connections, setConnections] = useState<LlmConnection[]>([]);
@@ -113,6 +121,7 @@ function AppShell() {
   const composerRef = useRef<ComposerHandle>(null);
   const activeIdRef = useRef<string | undefined>(undefined);
   const activeStreaming = activeId ? streamingBySession[activeId] ?? '' : '';
+  const activeStreamingTruncated = activeId ? streamingTruncatedBySession[activeId] === true : false;
   const activeThinking = activeId ? thinkingBySession[activeId] ?? '' : '';
   const activeThinkingTruncated = activeId ? thinkingTruncatedBySession[activeId] === true : false;
   // Set of session ids with a live streaming delta — drives the sidebar
@@ -824,16 +833,57 @@ function AppShell() {
       delete next[sessionId];
       return next;
     });
+    // PR-UI-Cx (@kenji msg cd09bcac): clear assistant truncated flag
+    // on the same lifecycle. abort / error / text_complete all mean
+    // the streaming turn is done; next turn starts fresh and
+    // `applyAssistantDelta` will re-flip the flag if caps fire again.
+    setStreamingTruncatedBySession((current) => {
+      if (!current[sessionId]) return current;
+      const next = { ...current };
+      delete next[sessionId];
+      return next;
+    });
   }
 
   function handleEvent(sessionId: string, event: SessionEvent) {
     switch (event.type) {
-      case 'text_delta':
-        setStreamingBySession((current) => ({
-          ...current,
-          [sessionId]: (current[sessionId] ?? '') + event.text,
-        }));
+      case 'text_delta': {
+        // PR-UI-Cx (@kenji msg 94b0063d / cd09bcac): assistant
+        // `text_delta` chokepoint. The pure `applyAssistantDelta`
+        // helper from `@maka/ui/assistant-stream` is the single
+        // trust-boundary point for:
+        //   1. secondary `redactSecrets` BEFORE state (assistant
+        //      output can echo prompts / pasted credentials / model
+        //      hallucinated secrets; raw text must not enter React
+        //      state unredacted),
+        //   2. per-delta cap (tail-keep a single misbehaving multi-MB
+        //      delta with a truncation marker — a misbehaving
+        //      runtime/model shouldn't be able to push raw multi-MB
+        //      payloads into renderer state),
+        //   3. per-session total cap (head-keep the prefix the user
+        //      has been reading + trailing marker — assistant text
+        //      is read top-down, so the start of the answer is what
+        //      we preserve).
+        // raw `event.text` only flows through the helper input; it
+        // never enters state un-redacted.
+        let appliedTruncated = false;
+        setStreamingBySession((current) => {
+          const prev = current[sessionId] ?? '';
+          const applied = applyAssistantDelta(prev, event.text);
+          appliedTruncated = applied.truncated;
+          return { ...current, [sessionId]: applied.text };
+        });
+        // Per-session monotonic truncated flag — once flipped to
+        // true within this streaming turn, stays true until
+        // `clearStreaming` (matches the C0 thinking pattern).
+        if (appliedTruncated) {
+          setStreamingTruncatedBySession((current) => {
+            if (current[sessionId] === true) return current;
+            return { ...current, [sessionId]: true };
+          });
+        }
         break;
+      }
       case 'text_complete':
         clearStreaming(sessionId);
         void refreshMessages(sessionId);
@@ -1370,6 +1420,7 @@ function AppShell() {
               <ChatView
                 messages={messages}
                 streamingText={activeStreaming}
+                streamingTruncated={activeStreamingTruncated}
                 thinkingText={activeThinking}
                 thinkingTruncated={activeThinkingTruncated}
                 tools={liveTools}
