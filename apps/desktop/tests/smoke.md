@@ -821,6 +821,411 @@ Repeat with `turn-control-branch-visible` and `turn-control-branch-orphan`.
 
 ---
 
+## Path 17 — UI trust-boundary + Settings persistence contracts
+
+Single landing page for the gate contracts behind nine UI / Settings
+PRs that landed between **2026-05-23 → 2026-05-24** (final main HEAD
+at consolidation time: `7a2b6eb`). Each gate is intentionally short:
+the **contract invariants** are what merge gate must enforce going
+forward; implementation history lives in commit messages.
+
+Doc convention used in every gate below:
+- **Contract invariant** — 1–3 final-state bullets the gate enforces.
+- **Targeted tests** — node:test files / case names that fail closed
+  if the invariant breaks.
+- **Source-gate grep** — patterns the merge reviewer actually runs.
+- **Deferred** — only items still open for a future PR. Already-
+  completed work isn't repeated here.
+
+### S1 — A3: tool output stream chokepoint
+
+**Contract invariant.**
+- Tool output chunks must run through `applyToolOutputChunk` BEFORE
+  reaching React state. Raw `event.text` from `tool_output_delta`
+  is never appended directly to `outputChunks`.
+- Secondary `redactSecrets` always fires at the renderer chokepoint;
+  the `redacted` flag the upstream claimed never escalates downward.
+- Per-chunk + per-tool count + per-tool total-chars caps drop oldest
+  chunks; truncation is signalled via the `已截断` pill on the tool
+  item, never silent.
+
+**Targeted tests** (`apps/desktop/src/main/__tests__/tool-output-stream.test.ts`):
+- `Authorization: Bearer …` / `sk-…` text → masked in stored chunk;
+  `redacted: true` regardless of upstream claim.
+- Single oversize chunk → tail-kept to `maxChunkChars` with marker.
+- 1000 small chunks → list capped at `maxChunks`; oldest drops first.
+- Total-chars cap drops oldest until under budget.
+- Dedup-by-seq + sort-by-seq still hold for out-of-order arrival.
+
+**Source-gate grep.**
+- Renderer `tool_output_delta` handler must call `applyToolOutputChunk(prev, rawChunk, ...)`;
+  no `outputChunks: [...current, rawChunk]` shortcut.
+
+### S2 — C0: extended-thinking stream chokepoint
+
+**Contract invariant.**
+- Anthropic `ThinkingDeltaEvent` / `ThinkingCompleteEvent` text only
+  enters `thinkingBySession` via `applyThinkingDelta` /
+  `applyThinkingComplete`; both helpers run `redactSecrets` BEFORE
+  state and enforce per-delta + per-session caps.
+- `thinkingTruncatedBySession[sessionId]` is monotonic-OR for deltas
+  (sticks once true) and replace-on-complete (matches the
+  source-of-truth semantics of `thinking_complete`).
+- `clearStreaming(sessionId)` clears the truncated flag alongside
+  the buffer; abort / error / `thinking_complete` all use this path.
+
+**Targeted tests** (`apps/desktop/src/main/__tests__/thinking-stream.test.ts`):
+- Multi-MB single delta → tail-kept with head marker; `truncated: true`.
+- Per-session accumulated over total cap → tail-kept (latest reasoning
+  preserved, oldest dropped); `truncated: true`.
+- Secret embedded mid-delta → redacted before state; `redacted: true`.
+- `thinking_complete` replaces (does not append) the buffer.
+
+**Source-gate grep.**
+- Renderer `thinking_delta` / `thinking_complete` handlers must call
+  the pure helpers; no direct `thinkingBySession[id] + event.text`
+  append shortcut.
+
+### S3 — C1: smoother prefix-leak gate
+
+**Contract invariant.**
+- The smoother (`useSmoothStreamContent`) typewriters PREFIXES of its
+  input; every prefix it sees must already be secret-free.
+- `prepareSmoothStreamText(raw)` (which runs `redactSecrets` on the
+  FULL raw text) is called at every smoother callsite — both the
+  streaming assistant bubble and the reasoning panel — BEFORE
+  passing text to the smoother hook.
+
+**Targeted tests** (`apps/desktop/src/main/__tests__/smooth-stream.test.ts`):
+- Raw text containing `Authorization: Bearer sk-…` is masked by
+  `prepareSmoothStreamText` before reaching the smoother; the
+  intermediate prefix `Authorization: Bearer s` cannot reach the DOM
+  unmasked.
+- Existing smoother grapheme / EMA / snap behavior unchanged on
+  already-safe text.
+
+**Source-gate grep.**
+- Every `useSmoothStreamContent(...)` call must be wrapped in
+  `prepareSmoothStreamText(...)` (or call something that does).
+
+### S4 — C2: `maka://` internal markdown URI router
+
+**Contract invariant.**
+- `parseMakaUri(href)` is **strict** (lowercase `maka:` only) and
+  closed-world: only `maka://settings/<SettingsSection>` and
+  `maka://compose?text=...` resolve to typed `MakaUriDest`. Any
+  other shape returns `null` and surfaces as an inline broken-link
+  span with a typed `data-reason`.
+- `isMakaUriCandidate(href)` is case-insensitive (`/^maka:/i`) — it
+  exists so case-variants (`Maka://settings/account`) route to the
+  broken-link inline error and **never** fall through to
+  `<a target=_blank>` / `openExternal`.
+- External links go through `isSafeExternalScheme(href)`, which
+  parses via `new URL(...)` and allows ONLY `http:` / `https:` /
+  `mailto:`. `javascript:` / `data:` / `file:` / `vbscript:` /
+  unknown schemes all fail closed to the broken-link span.
+
+**Targeted tests** (`apps/desktop/src/main/__tests__/maka-uri.test.ts`,
+41 cases total — 29 from PR-UI-RENDER-2 + 12 from C2 fixup):
+- Lowercase `maka://settings/account` → typed destination.
+- `Maka://settings/account` (case-variant) → `parseMakaUri` returns
+  `null` but `isMakaUriCandidate` returns `true`.
+- `MAKA://settings/account` → same as above.
+- `javascript:alert(1)`, `data:text/html,…`, `file:///etc/passwd`,
+  `vbscript:msgbox` → `isSafeExternalScheme` returns `false`.
+- `mailto:user@example.com` → `isSafeExternalScheme` returns `true`
+  via `URL().protocol`, not naive prefix match.
+- `maka-info://...` (similar prefix) → not a candidate.
+
+**Source-gate grep.**
+- `MarkdownLink` renderer dispatches via `isMakaUriCandidate(href)` →
+  `parseMakaUri(href)` → internal button OR broken span; external
+  branch only renders `<a target=_blank>` when
+  `isSafeExternalScheme(href)` is true.
+
+### S5 — C3: artifact preview registry (PR-RENDER-3a)
+
+**Contract invariant.**
+- Pure `resolvePreviewKind(input: ArtifactPreviewInput)` is the L1
+  classifier (kind gate + MIME allowlist + ext fallback + size cap
+  pre-load). Input is narrow — never the full `ArtifactRecord` — so
+  the registry cannot see `relativePath` or any path-like data.
+- L2 post-load decision goes through `decideImageReadOutcome` →
+  `decideImagePostLoad`. Cap is enforced via
+  `IMAGE_PAYLOAD_MAX_BASE64_LENGTH` string-length compare. **No
+  `atob` decode** to check the cap.
+- `<img src="data:<mime>;base64,...">` is built from `safeMime` (the
+  main-process sniffed MIME re-validated through
+  `normalizeAllowedImageMime`), never from the metadata MIME the
+  resolver consulted.
+- The renderer hook state is `ImagePreviewLoadState` —
+  `{loading} | {image, safeMime, base64} | {unsupported, reason}` —
+  closed union, `unsupported` branch carries NO base64. The L2
+  decision runs INSIDE the async, BEFORE `setState`; raw
+  `ArtifactBinaryReadResult` never lives in React state.
+- IPC failure routes to `reason: 'read_failed'` with a distinct
+  "加载预览失败" copy, never collapsed into `'kind_disallowed'`.
+
+**Targeted tests** (`apps/desktop/src/main/__tests__/artifact-preview-registry.test.ts`):
+- L1 kind gate: `file` / `diff` / `html` / `pdf` → `unsupported(kind_disallowed)`.
+- L1 MIME match: `image/png` / `image/jpeg` / `image/gif` / `image/webp` /
+  `image/avif` accepted; SVG / HEIC rejected.
+- L1 ext fallback when MIME missing.
+- L2 cross-layer: metadata `image/png` + sniffed `image/svg+xml` →
+  `unsupported(mime_disallowed)`.
+- L2 oversize takes precedence over MIME.
+- IPC failure (all 6 `ArtifactBinaryReadFailureReason` variants) →
+  `unsupported(read_failed)`.
+- Oversize / mime_disallowed outcome → NO `base64` property in the
+  outcome (kenji-gate runtime assert: `outcome.base64 === undefined`).
+
+**Visual-smoke fixtures** (path-leak guard, `visual-smoke-fixture.test.ts`):
+- `artifact-preview-image` — real 1×1 transparent PNG (67 B) →
+  `image(mime_match)`.
+- `artifact-preview-unsupported` — `kind=image` + `mimeType=image/heic` →
+  L1 `unsupported(mime_disallowed)`; `readBinary` is never called.
+- `artifact-preview-oversize` — `sizeBytesOverride=3MB` + `skipFile` →
+  L1 `unsupported(oversize)`; file is never written to disk.
+- All three: `relativePath` MUST start with `visual-smoke-artifact/`,
+  MUST NOT start with `/`; metadata.jsonl MUST NOT contain `/Users/`
+  or `/private/`.
+
+**Source-gate grep.**
+- `RegistryArtifactPreview` dispatch must use `resolvePreviewKind`;
+  `ImageArtifactPreview` hook state must be `ImagePreviewLoadState`,
+  not `ArtifactBinaryReadResult`.
+
+**Deferred.**
+- SVG (PR-RENDER-3b): needs sandboxed `<iframe srcDoc>` + CSP +
+  threat-model doc.
+- HTML (PR-RENDER-3c): same.
+- Mermaid (PR-RENDER-3d): runtime evaluator threat surface.
+- Screenshot baselines: capture is environment-sensitive; lock
+  baselines from a clean CI run before declaring 3a-smoke done.
+
+### S6 — Cx: assistant streaming chokepoint
+
+**Contract invariant.**
+- `text_delta` raw `event.text` flows through `applyAssistantDelta`
+  as input only; the helper is the SINGLE sink. `setState` never
+  receives raw text.
+- The helper pipeline runs **per-delta redact → per-delta cap →
+  append → cross-delta redact → total cap**. The cross-delta
+  redaction on the freshly-appended candidate is load-bearing —
+  it catches tokens that span delta seams (e.g. `"Bearer sk-"` in
+  delta N + `"abcdef…"` in delta N+1) that per-delta redaction
+  cannot see.
+- Per-session total cap is **head-keep** with a trailing marker
+  (assistant text is read top-down). Once buffer ends with the
+  trailing marker AND is at the total cap, subsequent deltas are
+  dropped entirely.
+- Renderer state is a combined slot `Record<sessionId, { text, truncated }>`
+  updated from ONE functional updater per `text_delta`. No outer-
+  closure mutation between two `setState` calls. Strict-mode
+  double-invoke safe.
+- `clearStreaming(sessionId)` resets the slot to
+  `{ text: '', truncated: false }` and clears the thinking
+  truncated flag in the same lifecycle.
+
+**Targeted tests** (`apps/desktop/src/main/__tests__/assistant-stream.test.ts`,
+25 cases):
+- Cross-delta long-opaque token split at the seam (24 hex + 22 hex =
+  46 hex) → L4 post-append catches it; per-delta L1 does not
+  (verifies the gate is genuinely cross-delta, not per-delta).
+- Char-by-char streaming of a 35-char `sk-…` token across 50+ deltas
+  → final accumulated state contains no raw token.
+- Prev `"Token: sk-"` + delta `"abcdef…"` → caught by L4.
+- Oversize delta + embedded secret near start or tail-keep area →
+  no raw secret survives.
+- Once buffer at total cap with trailing marker, subsequent deltas
+  short-circuit (drop entirely; `truncated: true` still propagates).
+- Non-string raw delta → prev unchanged, no claimed redaction.
+
+**Source-gate grep.**
+- `case 'text_delta':` must call `applyAssistantDelta(prevText, event.text)`;
+  no `streamingBySession[id] + event.text` direct append.
+- `streamingBySession` state must be typed as
+  `Record<string, { text: string; truncated: boolean }>`; no separate
+  `streamingTruncatedBySession` map.
+- `<img src>` of `data:…` payloads must use `safeMime` only (this
+  belongs to S5 but the grep gates assistant bubble too).
+
+### S7 — B2: disabled OAuth subscription card non-interactive
+
+**Contract invariant.**
+- `<ProvidersPanel>` subscription provider tile rendering:
+  - `data-status="ready"` → real `<button onClick={onSelect}>`.
+  - `data-status="coming-soon"` / `data-disabled="true"` → plain
+    `<div>`. No `onClick`, no `tabIndex`, no `role="button"`, no
+    `role="status"` (live-region semantics would mis-describe a
+    static catalog tile).
+- No auth / network / IPC surface is wired behind a disabled tile;
+  the gate is renderer-only affordance, not a route to a backend
+  the contract isn't ready to expose.
+- Disabled provider description copy uses Roadmap-stative phrasing
+  (`路线图，尚未实现`, `Roadmap`), not operational verbs (no
+  `启用 / 启动 / 登录 / 授权 / 即将推出 / Soon`).
+
+**Targeted gate.**
+- Source diff inspection: the disabled branch must be
+  `<div ...>` with no onClick / tabIndex / role attributes.
+- Copy grep on the subscription tile render path only — broader file
+  grep will hit existing ready-provider / Account / API-key shipped
+  flows, not B2.
+
+**Source-gate grep.**
+- `ProvidersPanel.tsx` disabled branch: `if (disabled) return <div ...`
+  — must not be a `<button>`.
+- Subscription provider copy: `Soon` → `Roadmap` migration; no
+  operational-verb leakage in the three subscription tiles
+  (`claude-subscription` / `codex-subscription` / `gemini-cli`).
+
+**Deferred.**
+- Real OAuth flow lands in PR-AUTH-1; this gate flips when the
+  ready-state contract for those three providers ships.
+
+### S8 — Provider polish: file-wide disabled-actionable guard
+
+**Contract invariant.**
+- Every interactive selector on `.providerCatalogCard` in
+  `apps/desktop/src/renderer/styles.css` must be scoped to
+  `:not([data-disabled="true"])`. Disabled provider tiles never
+  receive actionable affordance (lift, accent halo, shadow,
+  translate, accent border).
+- The disabled focus-visible affordance is muted (dashed
+  `--foreground-40` outline, no accent), keyboard-discoverable but
+  reads as "currently not actionable".
+- `[data-disabled="true"]` always has `cursor: not-allowed`.
+
+**Source-gate grep** (file-wide on `styles.css`, not just changed
+lines):
+- `.providerCatalogCard:hover`, `.providerCatalogCard:focus-visible`,
+  `.providerCatalogCard:active` — every actionable variant must
+  carry the `:not([data-disabled="true"])` guard.
+- `.providerCatalogCard[data-disabled="true"]:focus-visible` must
+  emit only muted outline; no `transform`, no accent halo, no
+  box-shadow.
+- `.providerCatalogCard[data-status="coming-soon"]:hover` reset is
+  orthogonal and may remain (covers a different attribute).
+
+### S9 — Tool/Artifact polish: design-token radius alignment + collapse-toggle a11y
+
+**Contract invariant.**
+- Tool card / diff / terminal radius family unified at 10 px
+  (chip 10 / card 12 / panel 14 / modal 18 design-system rhythm).
+- ArtifactPane collapse toggle has a discoverable `:focus-visible`
+  affordance (3 px accent halo); icon button size lands at 24×24
+  for comfortable hit target.
+- No new collapse-affordance semantics; toggle behavior unchanged.
+
+**Source-gate grep.**
+- `.maka-tool`, `.maka-tool-diff`, `.maka-tool-terminal` — radius
+  10 px (was 8 px).
+- `.maka-artifact-pane-collapse` `:focus-visible` selector present
+  with accent ring tokens.
+
+### S10 — D1: theme palette settings contract
+
+**Contract invariant.**
+- `THEME_PALETTES` is a closed `as const` allowlist of 5 string
+  literals (`default` / `onedark` / `catppuccin-mocha` /
+  `tokyo-night` / `nord`); `ThemePalette = typeof THEME_PALETTES[number]`.
+- `isThemePalette(value)` is the type guard. Case-sensitive,
+  rejects everything else (undefined / non-string / unknown string /
+  case-variant).
+- `normalizeSettings()` falls `appearance.palette` closed to
+  `'default'` on any miss (missing / unknown / non-string). The
+  same normalize pass must NOT silently reset unrelated fields
+  (theme / density / palette ↔ toastPosition / personalization /
+  network).
+- `createDefaultSettings()` seeds `appearance.palette: 'default'`.
+- Renderer path: `applyThemePalette(palette)` writes
+  `<html data-maka-theme="<palette>">`; `'default'` removes the
+  attribute. CSS variable overrides live in `maka-tokens.css` under
+  static `[data-maka-theme="..."]` selectors.
+
+**Targeted tests** (`packages/core/src/__tests__/settings.test.ts`,
+10 cases under `theme palette settings contract`):
+- Allowlist shape, type guard accept/reject (incl. case-variants),
+  default seed, missing-field migration, unknown-string fail-closed,
+  non-string fail-closed, valid value survives, no-silent-reset,
+  patch surface round-trip, malformed-patch + normalize round-trip.
+
+**Source-gate grep.**
+- `THEME_PALETTES` / `isThemePalette` / single `appearance:` block
+  in `normalizeSettings` validating BOTH palette and toastPosition.
+- Renderer: `applyThemePalette` consumed only from normalized
+  settings; no raw `localStorage.getItem('maka-theme-palette-v1')`
+  read path today.
+
+**Deferred / future-contract lock.**
+- If a pre-React palette read is added later (FOUC prevention),
+  it MUST reuse the `THEME_PALETTES` allowlist via
+  `isThemePalette()`; unknown values fall through to default /
+  remove the attribute. Raw localStorage string MUST NOT be
+  written directly to `data-maka-theme`.
+
+### S11 — D2: toast position settings contract
+
+**Contract invariant.**
+- `TOAST_POSITIONS` is a closed `as const` allowlist of 6 grid
+  corners (`top-left` / `top-center` / `top-right` / `bottom-left` /
+  `bottom-center` / `bottom-right`); `ToastPosition = typeof
+  TOAST_POSITIONS[number]`.
+- `isToastPosition(value)` is the type guard. Case-sensitive,
+  closed-enum rejection.
+- `normalizeSettings()` falls `appearance.toastPosition` closed to
+  `'bottom-right'` on any miss. The single `appearance:` block in
+  the normalize return validates both `palette` (D1) and
+  `toastPosition` (D2) without resetting unrelated fields.
+- `createDefaultSettings()` seeds `appearance.toastPosition:
+  'bottom-right'` (matches the v1 hardcoded behavior).
+- Source-of-truth for live UI is `App.toastPosition` (React state),
+  threaded through `AppShell → SettingsModal → SettingsSurface →
+  SettingsPage → ThemeSettingsPage`. `ToastProvider position={...}`
+  reads it; `ToastViewport data-position={position}` is React-
+  driven. **No `querySelector` / DOM mutation** from anywhere.
+- `localStorage('maka-toast-position-v1')` is a pre-React boot
+  mirror. It is ONLY written from:
+  - `AppShell` settings-load: the normalized value just read from
+    disk;
+  - `ThemeSettingsPage` picker click: the normalized server return
+    from a SUCCESSFUL `onUpdate(...)`. On `onUpdate` failure, the
+    mirror is NOT touched.
+- Pre-React `readPersistedToastPosition()` reads the mirror through
+  `isToastPosition()`; out-of-band raw strings can never reach
+  `data-position`.
+
+**Targeted tests** (`packages/core/src/__tests__/settings.test.ts`,
+11 cases under `toast position settings contract` + 1 cross-
+contract case):
+- Allowlist shape (6 corners), type guard accept/reject incl. case-
+  variants and synonyms, default seed `bottom-right`, missing-field
+  migration, unknown-string fail-closed, non-string fail-closed,
+  valid value survives, no-silent-reset, patch surface round-trip,
+  malformed-patch + normalize round-trip, **D1 + D2 cross-contract
+  independence** (both malformed → each falls back to its own
+  default, no interference).
+
+**Source-gate grep.**
+- `TOAST_POSITIONS` / `isToastPosition` / merged `appearance:`
+  normalize block (single block for both D1 + D2).
+- `localStorage.getItem('maka-toast-position-v1')` → only flows
+  through `isToastPosition()`.
+- `localStorage.setItem('maka-toast-position-v1', …)` writes only
+  settings-load normalized value or post-onUpdate-success
+  normalized return.
+- Active code must contain NO `querySelector('.maka-toast-viewport')`
+  / `dataset.position` mutation paths.
+
+**Residual / non-blocking.**
+- `setToastPosition` keeps optimistic React state if `onUpdate(...)`
+  throws; matches existing theme/density semantics. A stricter
+  catch-revert path can land in a follow-up if needed; not gated
+  by D2.
+
+---
+
 ## When to run
 
 - Before merging any large UI / runtime / credential / permission
