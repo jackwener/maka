@@ -782,6 +782,22 @@ const PROMPT_SUGGESTIONS_BY_LOCALE: Record<PromptSuggestionLocale, PromptSuggest
 export type UiLocale = PromptSuggestionLocale;
 
 export function detectUiLocale(): UiLocale {
+  // PR-UI-VISUAL-SMOKE-LOCALE: visual-smoke deterministic override.
+  // The main process resolves `MAKA_VISUAL_SMOKE_LOCALE` env into
+  // `VisualSmokeState.locale`, and the renderer applies
+  // `data-maka-visual-smoke-locale="zh|en"` to `<html>` BEFORE any
+  // locale-dependent content (EmptyChatHero / Composer /
+  // OnboardingHero quickChat / hero copy) renders — the attribute
+  // lands inside the AppShell visual-smoke effect that runs ahead
+  // of `refreshSessions()`, which gates every locale-aware surface.
+  // Reading the attribute first lets the screenshot pipeline
+  // capture deterministic per-locale baselines regardless of host
+  // OS / browser `navigator.language`. Real users never reach this
+  // branch (the attribute is only set in visual-smoke fixture mode).
+  if (typeof document !== 'undefined') {
+    const override = document.documentElement.dataset.makaVisualSmokeLocale;
+    if (override === 'zh' || override === 'en') return override;
+  }
   if (typeof navigator === 'undefined') return 'zh';
   const lang = navigator.language?.toLowerCase() ?? '';
   return lang.startsWith('zh') ? 'zh' : 'en';

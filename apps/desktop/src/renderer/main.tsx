@@ -591,6 +591,21 @@ function AppShell() {
     if (state.reducedMotion) {
       document.documentElement.setAttribute('data-maka-reduced-motion', 'true');
     }
+    // PR-UI-VISUAL-SMOKE-LOCALE: lock the UI locale BEFORE
+    // `refreshSessions()` resolves and BEFORE any locale-dependent
+    // content (EmptyChatHero / Composer / OnboardingHero quickChat)
+    // enters the React tree — all of those gate on sessions /
+    // connection state which load inside this same effect. The
+    // attribute is attached to `<html>` so `detectUiLocale()` reads
+    // the deterministic value on every subsequent render. The
+    // AppShell initial mount already ran when this effect fires,
+    // but that initial mount renders no locale-aware copy yet
+    // (it's a loading shell), so there's no observable host-locale
+    // leak in the captured baseline. See @kenji review
+    // @msg 7b96e182.
+    if (state.locale) {
+      document.documentElement.setAttribute('data-maka-visual-smoke-locale', state.locale);
+    }
     await refreshSessions();
     if (state.activeSessionId) {
       setActiveId(state.activeSessionId);

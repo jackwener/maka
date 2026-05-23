@@ -46,10 +46,10 @@
  */
 
 import { spawn } from 'node:child_process';
-import { mkdir, copyFile, readFile, stat } from 'node:fs/promises';
+import { mkdir, copyFile, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import os from 'node:os';
 
 const REPO_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -104,6 +104,30 @@ const VARIANTS = [
 const CAPTURE_TIMEOUT_MS = 60_000;
 const MARKER_RE = /\[visual-smoke\] captured scenario=(\S+) variant=(\S+) path=(.+)$/;
 
+/**
+ * PR-UI-VISUAL-SMOKE-LOCALE: capture entrypoint default. Every
+ * spawned Electron gets a deterministic UI locale unless the caller
+ * explicitly overrides `MAKA_VISUAL_SMOKE_LOCALE`. Without this
+ * default the parser is fail-closed but the capture path is fail-
+ * open to `navigator.language`, which makes baselines drift between
+ * hosts. Default `zh` because the canonical baseline locale today
+ * is zh; set the env to `en` to override. Manifest records the
+ * resolved value per capture so reviewers can verify (see
+ * `diff-screenshots.mjs` manifest builder).
+ */
+const DEFAULT_CAPTURE_LOCALE = 'zh';
+
+export function resolveCaptureLocale(processEnv = process.env) {
+  const raw = processEnv.MAKA_VISUAL_SMOKE_LOCALE;
+  if (typeof raw !== 'string') return DEFAULT_CAPTURE_LOCALE;
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === 'zh' || normalized === 'en') return normalized;
+  // Caller passed something the main-process parser would also
+  // reject (regional variant, garbage). We force the deterministic
+  // default rather than silently falling through to navigator.
+  return DEFAULT_CAPTURE_LOCALE;
+}
+
 function parseArgs(argv) {
   const args = { scenario: null, variant: null, all: false };
   for (let i = 2; i < argv.length; i += 1) {
@@ -144,10 +168,17 @@ async function ensureRepoRoot() {
 }
 
 async function captureSingle(scenario, variant) {
+  // PR-UI-VISUAL-SMOKE-LOCALE: resolve the locale BEFORE spawning so
+  // we control what gets injected into the child. `resolveCaptureLocale`
+  // reads `MAKA_VISUAL_SMOKE_LOCALE` from the current process env and
+  // falls back to the canonical default (`zh`); the child then sees a
+  // deterministic value even if the host shell didn't set one.
+  const locale = resolveCaptureLocale(process.env);
   const env = {
     ...process.env,
     MAKA_VISUAL_SMOKE_FIXTURE: scenario,
     MAKA_VISUAL_SMOKE_AUTO_CAPTURE: variant.name,
+    MAKA_VISUAL_SMOKE_LOCALE: locale,
   };
   if (variant.reducedMotion) env.MAKA_VISUAL_SMOKE_REDUCED_MOTION = '1';
   if (variant.theme) env.MAKA_VISUAL_SMOKE_THEME = variant.theme;
@@ -197,17 +228,20 @@ async function captureSingle(scenario, variant) {
   });
 
   if (!capturedPath) {
-    return { ok: false, reason: 'capture_marker_not_seen' };
+    return { ok: false, reason: 'capture_marker_not_seen', locale };
   }
   if (!existsSync(capturedPath)) {
-    return { ok: false, reason: 'capture_file_missing' };
+    return { ok: false, reason: 'capture_file_missing', locale };
   }
   const destDir = join(SCREENSHOTS_DIR, scenario);
   await mkdir(destDir, { recursive: true });
   const destPath = join(destDir, `${variant.name}.png`);
   await copyFile(capturedPath, destPath);
   const sz = (await stat(destPath)).size;
-  return { ok: true, destPath, sourcePath: capturedPath, bytes: sz };
+  // PR-UI-VISUAL-SMOKE-LOCALE: locale included in the result so the
+  // calling loop can stamp it into the per-capture sidecar that
+  // `diff-screenshots.mjs` reads when building the baseline manifest.
+  return { ok: true, destPath, sourcePath: capturedPath, bytes: sz, locale };
 }
 
 async function resolveElectronBin() {
@@ -268,7 +302,14 @@ async function main() {
         const result = await captureSingle(scenario, variant);
         const dt = ((Date.now() - t0) / 1000).toFixed(1);
         if (result.ok) {
-          console.log(`OK (${dt}s, ${(result.bytes / 1024).toFixed(1)} KB) → ${relPath(result.destPath)}`);
+          // PR-UI-VISUAL-SMOKE-LOCALE: write a tiny sidecar JSON next
+          // to the PNG recording the locale used for this capture.
+          // `diff-screenshots.mjs` reads these when building the
+          // manifest so reviewers can verify each baseline came from
+          // a deterministic locale (and not from `navigator.language`
+          // leaking the host OS preference).
+          await writeCaptureSidecar(result.destPath, { locale: result.locale });
+          console.log(`OK (${dt}s, ${(result.bytes / 1024).toFixed(1)} KB, locale=${result.locale}) → ${relPath(result.destPath)}`);
           succeeded += 1;
         } else {
           console.log(`FAILED (${dt}s, ${result.reason})`);
@@ -291,7 +332,36 @@ function relPath(p) {
   return p.startsWith(REPO_ROOT) ? p.slice(REPO_ROOT.length + 1) : p;
 }
 
-main().catch((err) => {
-  console.error('[capture-screenshots] fatal:', err);
-  process.exit(2);
-});
+/**
+ * Write a `.meta.json` sidecar next to the captured PNG so the
+ * baseline manifest can record what locale (and any future
+ * deterministic dimensions) produced the screenshot. Reviewers can
+ * eyeball the sidecar to confirm a baseline wasn't captured with
+ * stale env. Sidecar is a flat JSON object so future fields can
+ * extend it without schema migration.
+ */
+async function writeCaptureSidecar(pngPath, meta) {
+  const sidecarPath = pngPath.replace(/\.png$/, '.meta.json');
+  await writeFile(sidecarPath, JSON.stringify(meta, null, 2) + '\n', 'utf8');
+}
+
+/**
+ * PR-UI-VISUAL-SMOKE-LOCALE follow-up (@xuan merge gate
+ * msg af4d60e3): standard Node.js entrypoint guard so importing
+ * exported helpers (e.g. `resolveCaptureLocale`) from this module
+ * doesn't unconditionally trigger the CLI `main()`. Without this
+ * guard, any test or sibling script that imports the helper hits
+ * the script's "specify either --all or --scenario <name>" arg
+ * check and exits with code 2. `main()` now only runs when the
+ * module is invoked directly via `node scripts/capture-screenshots.mjs`.
+ */
+const isDirectInvocation =
+  typeof process.argv[1] === 'string' &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isDirectInvocation) {
+  main().catch((err) => {
+    console.error('[capture-screenshots] fatal:', err);
+    process.exit(2);
+  });
+}

@@ -220,6 +220,13 @@ async function buildManifest(root, subset) {
   for (const scenario of scenarios) {
     for (const variant of VARIANTS) {
       const result = await checkOne(root, scenario, variant);
+      // PR-UI-VISUAL-SMOKE-LOCALE: read the sidecar `<variant>.meta.json`
+      // (written by `capture-screenshots.mjs`) so the manifest records
+      // which UI locale produced this baseline. Missing sidecar leaves
+      // `locale: null` — historical baselines captured before the gate
+      // landed won't have one, and that's the signal to re-capture
+      // before relying on them cross-host.
+      const captureMeta = await readCaptureSidecar(root, scenario, variant.name);
       entries.push({
         scenario,
         variant: variant.name,
@@ -227,6 +234,7 @@ async function buildManifest(root, subset) {
         viewport: variant.viewport,
         reducedMotion: variant.reducedMotion,
         ok: result.ok,
+        locale: captureMeta?.locale ?? null,
         ...(result.info ? { dimensions: { width: result.info.width, height: result.info.height }, bytes: result.info.bytes } : {}),
         ...(result.reason ? { reason: result.reason } : {}),
       });
@@ -239,6 +247,25 @@ async function buildManifest(root, subset) {
     variants: VARIANTS.map((v) => v.name),
     entries,
   };
+}
+
+/**
+ * Read the `.meta.json` sidecar written by `capture-screenshots.mjs`.
+ * Returns `null` when missing or malformed — manifest entries fall
+ * back to `locale: null` so historical / cross-system baselines
+ * remain identifiable.
+ */
+async function readCaptureSidecar(root, scenario, variantName) {
+  const sidecarPath = join(root, scenario, `${variantName}.meta.json`);
+  if (!existsSync(sidecarPath)) return null;
+  try {
+    const raw = await readFile(sidecarPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 function summarize(manifest) {
