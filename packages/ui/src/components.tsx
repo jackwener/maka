@@ -35,6 +35,7 @@ import {
   Wifi,
 } from 'lucide-react';
 import { redactSecrets } from './redact.js';
+import { useSmoothStreamContent } from './smooth-stream.js';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -1296,9 +1297,7 @@ export function ChatView(props: {
                 />
               )}
               {props.streamingText && (
-                <div className="maka-bubble-assistant maka-bubble-streaming">
-                  <Markdown text={props.streamingText} />
-                </div>
+                <StreamingAssistantBubble text={props.streamingText} />
               )}
             </article>
           )}
@@ -2169,9 +2168,70 @@ const STATUS_FOOTER_PRIORITY: Record<TurnFooterActionMeta['id'], 'primary' | 'se
  * don't pipe through Markdown — thinking is usually plain prose +
  * occasional code, and full markdown would slow the streaming.
  */
-function ReasoningPanel(props: { text: string; live: boolean; truncated: boolean }) {
+/**
+ * PR-UI-RENDER-1 — streaming assistant bubble.
+ *
+ * Wraps the live `streamingText` in `useSmoothStreamContent` so the
+ * visible text grows at the EMA-tracked arrival CPS instead of
+ * lurching with each network chunk. The bubble itself unmounts on
+ * `text_complete` / abort / error (parent clears `streamingText`), so
+ * the smoother only has to handle the live phase — settled history
+ * messages render via the regular Markdown path with no smoothing.
+ *
+ * `streaming=true` while this component is mounted: by construction
+ * the parent only renders it when the stream is in progress.
+ */
+function StreamingAssistantBubble(props: { text: string }) {
+  const snap = useStreamSnap();
+  const { displayed } = useSmoothStreamContent(props.text, {
+    streaming: true,
+    snap,
+  });
   return (
-    <details className="maka-reasoning-panel" data-live={props.live ? 'true' : undefined} open>
+    <div className="maka-bubble-assistant maka-bubble-streaming">
+      <Markdown text={displayed} />
+    </div>
+  );
+}
+
+function ReasoningPanel(props: { text: string; live: boolean; truncated: boolean }) {
+  // PR-UI-RENDER-1 + PR-UI-C0: smooth-stream the thinking text on top
+  // of the C0 redaction/cap chokepoint. `props.text` is the already-
+  // redacted-and-capped buffer (renderer ran it through
+  // `applyThinkingDelta` / `applyThinkingComplete` before passing
+  // here), so the smoother is purely a visual frame-pacing layer; it
+  // does NOT see raw event text and cannot widen the trust boundary.
+  //
+  // `live=true` means thinking is still flowing (no answer yet) →
+  // streaming=true so the smoother typewriters. `live=false` means
+  // `thinking_complete` already fired (caller passes a settled blob)
+  // → streaming=false, hook snaps. Reduced-motion / visual-smoke
+  // also forces snap so deterministic capture sees the final text
+  // immediately.
+  const snap = useStreamSnap();
+  const { displayed } = useSmoothStreamContent(props.text, {
+    streaming: props.live,
+    snap,
+  });
+  // PR-UI-RENDER-1 @kenji review concern #4 — explicitly controlled
+  // open state. With a raw `open` JSX attribute, React's reconciler
+  // could re-assert the open state and undo the user's manual collapse
+  // on the next stream-driven re-render (the smoother re-renders at
+  // ~60Hz while the stream is live, so any reconciliation drift is
+  // immediately visible to the user). Owning the open state via
+  // useState + onToggle makes the panel uncontrolled-from-React's-view:
+  // the user's collapse sticks because we only write `open` from our
+  // own state, which we only mutate from the onToggle callback.
+  // Default-open at mount so users see the reasoning by default; first
+  // click toggles to closed and that sticks.
+  const [open, setOpen] = useState(true);
+  return (
+    <details
+      className="maka-reasoning-panel"
+      data-live={props.live ? 'true' : undefined}
+      open={open}
+      onToggle={(e) => setOpen((e.currentTarget as HTMLDetailsElement).open)}
+    >
       <summary className="maka-reasoning-panel-header">
         {props.live && <span className="maka-reasoning-panel-dot" aria-hidden="true" />}
         <span className="maka-reasoning-panel-label">
@@ -2192,9 +2252,55 @@ function ReasoningPanel(props: { text: string; live: boolean; truncated: boolean
         )}
         <span className="maka-reasoning-panel-chevron" aria-hidden="true">›</span>
       </summary>
-      <pre className="maka-reasoning-panel-body">{props.text}</pre>
+      <pre className="maka-reasoning-panel-body">{displayed}</pre>
     </details>
   );
+}
+
+/**
+ * PR-UI-RENDER-1 — reduced-motion / visual-smoke probe for the
+ * streaming smoother.
+ *
+ * Three triggers force the smoother to snap (mirroring the rule in
+ * `apps/desktop/src/renderer/scroll-motion-policy.ts`):
+ *
+ *   1. `data-maka-reduced-motion="true"` — set by the PR-IR-04
+ *      reduced variant of the visual-smoke fixture.
+ *   2. `data-maka-visual-smoke="true"` — set by ANY visual-smoke
+ *      capture so screenshots see the final text on the first paint.
+ *   3. OS-level `prefers-reduced-motion: reduce`.
+ *
+ * The hook reads the dataset attributes once on mount (they're set
+ * pre-React in main.tsx and don't toggle during a session) but
+ * subscribes to `matchMedia` for the OS preference so a mid-session
+ * toggle reaches the running stream.
+ */
+function useStreamSnap(): boolean {
+  const [snap, setSnap] = useState(() => readStreamSnap());
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onChange = () => setSnap(readStreamSnap());
+    // Initial read (in case dataset attrs landed after first paint).
+    setSnap(readStreamSnap());
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    }
+    return undefined;
+  }, []);
+  return snap;
+}
+
+function readStreamSnap(): boolean {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return true;
+  const root = document.documentElement;
+  if (root.dataset.makaReducedMotion === 'true') return true;
+  if (root.dataset.makaVisualSmoke === 'true') return true;
+  if (typeof window.matchMedia === 'function') {
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+  return false;
 }
 
 function MessageMeta(props: { role: string; userLabel?: string; ts?: number }) {
