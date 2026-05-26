@@ -677,17 +677,26 @@ button:active {
   overflow: auto;
   display: grid;
   align-content: start;
-  gap: 4px;
-  padding: 10px;
+  /* PR-SIDEBAR-IA-0 Phase 3: with card chrome removed from rows, the
+   * inter-row gap shrinks 4 → 2 so the list reads as a continuous
+   * list (Slack/Linear) rather than gappy chunks. Padding also drops
+   * 10 → 6 to give content more horizontal room when window is
+   * narrow. */
+  gap: 2px;
+  padding: 6px;
 }
 
 .maka-list-group {
   display: grid;
-  gap: 6px;
+  /* Phase 3: tighter inter-row gap inside a group (was 6 to give
+   * cards breathing room; flat rows want a tighter rhythm). */
+  gap: 1px;
 }
 
 .maka-list-group + .maka-list-group {
-  margin-top: 14px;
+  /* Phase 3: between-group gap also tightens 14 → 10 — groups still
+   * have a visible break via the label, no need for extra air. */
+  margin-top: 10px;
 }
 
 .maka-list-group-label {
@@ -698,53 +707,59 @@ button:active {
   letter-spacing: 0.04em;
 }
 
+/* PR-SIDEBAR-IA-0 Phase 3 (WAWQAQ msgs `14ed98b5`, `761141c5` —
+ * "list 很丑、很肥很臃肿"; xuan `6b28984e` sign-off + "32-40px 薄行";
+ * kenji `2b20c73c`): slim row.
+ *
+ * Before Phase 3: each row was a 56-72px card (border + radius +
+ * shadow) showing title + snippet + meta stacked over three lines.
+ * That made 9-10 rows visible in a 990px viewport — far too few for
+ * a sidebar of 60 sessions.
+ *
+ * After Phase 3:
+ *   - 32px min-height, single line: status indicator + name + time.
+ *   - Flat list (no border, no radius, no shadow); the surrounding
+ *     `.maka-list-stack` provides the scroll body, so rows just need
+ *     to read as a list, not a stack of cards.
+ *   - Snippet drops out of the default DOM (lives only in a native
+ *     `title=` tooltip on hover) — see SessionRow render path.
+ *   - Row actions still slide in on hover (current behavior preserved).
+ *   - Active row gets a 3px left rail + light accent tint (no heavy
+ *     full-bg pill).
+ */
 .maka-list-row {
   position: relative;
   width: 100%;
-  min-height: 56px;
+  min-height: 32px;
   display: flex;
   align-items: stretch;
-  border: 1px solid var(--border);
-  /* PR-UI-LAYOUT-9: card radius family alignment 8 → 10 to match
-   * chips / search / tool cards / settings nav. */
-  border-radius: 10px;
-  background: var(--foreground-2);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
   color: var(--foreground);
-  box-shadow: var(--shadow-minimal-flat);
   overflow: hidden;
-  /* PR-UI-3 (@yuejing 2026-05-22): smooth multi-property transition so
-   * hover feels coordinated rather than independently animating each
-   * property. */
   transition:
-    background-color 140ms ease,
-    border-color 140ms ease,
-    box-shadow 140ms ease;
+    background-color 120ms ease;
 }
 
 .maka-list-row:hover {
   background: var(--foreground-3);
-  border-color: var(--border-strong);
-  /* Subtle elevation on hover — gives row a sense of "lifting" without
-   * being noisy. */
-  box-shadow:
-    0 1px 2px oklch(from var(--foreground) l c h / 0.04),
-    0 2px 6px oklch(from var(--foreground) l c h / 0.04);
 }
 
 .maka-list-row[data-active="true"] {
-  background: oklch(from var(--accent) l c h / 0.08);
-  border-color: oklch(from var(--accent) l c h / 0.18);
+  background: oklch(from var(--accent) l c h / 0.06);
 }
 
 /* Subtle left accent bar on the active row — matches Slack / Linear /
    Telegram sidebar conventions. Positioned via the wrapper's `::before`
-   so it doesn't interfere with the row's grid. */
+   so it doesn't interfere with the row's grid. Top/bottom inset shrinks
+   to match the 32px row height (was 12px for a 56px card). */
 .maka-list-row[data-active="true"]::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 12px;
-  bottom: 12px;
+  top: 6px;
+  bottom: 6px;
   width: 3px;
   border-radius: 0 3px 3px 0;
   background: var(--accent);
@@ -758,6 +773,10 @@ button:active {
   flex: 1;
   min-width: 0;
   display: grid;
+  /* Phase 3: single-row layout — name takes the flex column, time
+   * sits in the auto column at the inline-end. Snippet drops out of
+   * the default DOM entirely (replaced by native title= tooltip on
+   * the button). */
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
@@ -765,22 +784,44 @@ button:active {
   background: transparent;
   color: inherit;
   cursor: pointer;
-  /* PR-UI-3: slightly tighter vertical padding (10→8) for more density,
-   * keep horizontal 12 for the same left/right rhythm. */
-  padding: 8px 12px;
+  /* Tighter vertical padding — 4px top/bottom keeps the 32px target
+   * even with a 14px name line + 14px line-height. */
+  padding: 4px 10px 4px 12px;
   text-align: left;
 }
 
 .maka-list-row-actions {
+  /* PR-SIDEBAR-IA-0 Phase 3 (xuan `2d4526b5` + kenji `e949119d`):
+   * actions overlay via absolute positioning instead of occupying
+   * a reserved flex column. In a 280px narrow sidebar a 126px
+   * reserved area left only ~74px for the title — kenji's math
+   * showed long Chinese names like "Artifact Pane 验收" would
+   * truncate too early. Absolute overlay gives the title the
+   * row's full content width by default; on hover/focus the
+   * actions paint over the right portion with the gradient bg
+   * masking the (visually-hidden) time/title text behind them.
+   *
+   * Layout shift invariant still holds: actions don't participate
+   * in row flex layout in either state, so showing/hiding them
+   * never resizes the title column.
+   */
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   gap: 2px;
   padding: 0 8px;
+  /* Gradient bg fades from transparent on the left so the title
+   * underneath blurs smoothly into the action chip cluster on the
+   * right; opaque from ~24% onwards so the buttons themselves sit
+   * on a solid hover-tinted background. */
   background: linear-gradient(
     to right,
     transparent 0%,
-    var(--foreground-2) 18%,
-    var(--foreground-2) 100%
+    var(--foreground-3) 24%,
+    var(--foreground-3) 100%
   );
   opacity: 0;
   transform: translateX(8px);
@@ -1276,8 +1317,11 @@ button:active {
    * elements. */
   gap: 6px;
   overflow: hidden;
-  font-size: 14px;
-  font-weight: 600;
+  /* PR-SIDEBAR-IA-0 Phase 3: 14→13px + 600→500 weight reads as a list
+   * item (Slack/Linear) instead of a card title. Bold cards felt
+   * heavy when stacked 60-deep. */
+  font-size: 13px;
+  font-weight: 500;
   min-width: 0;
 }
 
@@ -1323,32 +1367,39 @@ button:active {
   color: var(--foreground);
 }
 
+/* PR-SIDEBAR-IA-0 Phase 3: meta (relative time) now sits inline at
+ * the row's inline-end instead of stacked below the name. Color +
+ * size kept muted so it reads as secondary info, not a competing
+ * label. `margin-top` from the old stacked layout is removed. */
 .maka-list-row-meta {
-  margin-top: 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--foreground-50);
-  font-size: 12px;
+  font-size: 11px;
+  flex-shrink: 0;
 }
 
+/* PR-SIDEBAR-IA-0 Phase 3: `.maka-list-row-text` collapses to a single
+ * row (name on the inline-start). The previous stack-of-three
+ * layout (name / preview / meta) is gone — preview drops out of the
+ * default DOM, meta moves inline to the row's right column. */
 .maka-list-row-text {
   min-width: 0;
-  display: grid;
-  gap: 2px;
+  display: flex;
+  align-items: center;
+  min-height: 24px;
 }
 
-.maka-list-row-preview {
-  margin-top: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  color: var(--foreground-60);
-  font-size: 12px;
-  line-height: 1.4;
-}
+/* PR-SIDEBAR-IA-0 Phase 3: `.maka-list-row-preview` is no longer
+ * rendered in the default DOM — preview text is exposed via the row
+ * button's native `title=` tooltip on hover so users can still peek
+ * at the last message without paying the layout cost of a second
+ * stacked line. This rule intentionally remains DELETED (no fallback
+ * style). The `sidebar-row-density-contract.test.ts` gate asserts
+ * the rule is gone so a future "let's bring snippet back" patch
+ * lands as an explicit design discussion, not a silent regression.
+ */
 
 .maka-skill-tools {
   margin-left: 8px;
@@ -1369,9 +1420,10 @@ button:active {
   text-transform: uppercase;
 }
 
-.maka-list-row[data-active="true"] .maka-list-row-preview {
-  color: var(--foreground-70);
-}
+/* PR-SIDEBAR-IA-0 Phase 3: `.maka-list-row-preview` is no longer
+ * rendered in the default DOM (see comment above). The
+ * `[data-active]` variant of that rule is therefore dead and
+ * removed. */
 
 .maka-list-row-unread {
   width: 8px;

@@ -1161,10 +1161,28 @@ function SessionRow(props: {
           </div>
         </form>
       ) : (
+        // PR-SIDEBAR-IA-0 Phase 3 (WAWQAQ `14ed98b5` "list 很丑、很肥很
+        // 臃肿"; xuan `6b28984e` Phase 2 sign-off + Phase 3 32-40px
+        // target; xuan `2d4526b5` tightening: NO native title= snippet,
+        // title is ONLY for name truncation): slim row.
+        //
+        // The button is the row's hit target. The native `title=`
+        // attribute carries ONLY the session name so it serves as a
+        // truncation tooltip when the name overflows the row. The
+        // `lastMessagePreview` snippet is intentionally NOT exposed
+        // here — per xuan `2d4526b5`, snippet visibility is a
+        // separate, deliberate design (future PR), not a Phase 3
+        // afterthought via native tooltip.
+        //
+        // `data-active` on the row controls the active-state accent
+        // rail + bg tint via CSS; the row's `name` cluster also
+        // recolors to accent on selected so the row reads as
+        // "current" without a heavy full-bg pill.
         <button
           className="maka-list-row-main"
           type="button"
           data-session-id={session.id}
+          title={session.name}
           onClick={() => onSelect(session.id)}
           onDoubleClick={(event) => {
             event.stopPropagation();
@@ -1196,18 +1214,23 @@ function SessionRow(props: {
                 </span>
               )}
             </div>
-            {streaming ? (
-              <div className="maka-list-row-preview" data-streaming="true">
-                Maka 正在思考…
-              </div>
-            ) : session.lastMessagePreview ? (
-              <div className="maka-list-row-preview" title={session.lastMessagePreview}>
-                {session.lastMessagePreview}
-              </div>
-            ) : null}
-            <div className="maka-list-row-meta">{formatSessionMeta(session)}</div>
+            {/*
+              PR-SIDEBAR-IA-0 Phase 3 (xuan `2d4526b5`): snippet preview
+              (`.maka-list-row-preview`) is no longer rendered in the
+              default DOM AND is no longer exposed via native `title=`
+              tooltip. Snippet visibility is deliberately deferred to a
+              future PR with its own hover/focus detail design.
+              `formatSessionMeta` still shows the relative time inline
+              in the row's `auto` grid column; the unread dot replaces
+              the time when `hasUnread && !streaming` (mutually
+              exclusive — unread takes priority).
+            */}
+            {session.hasUnread && !streaming ? (
+              <span className="maka-list-row-unread" aria-label="未读消息" />
+            ) : (
+              <span className="maka-list-row-meta">{formatSessionMeta(session)}</span>
+            )}
           </div>
-          {session.hasUnread && !streaming && <span className="maka-list-row-unread" />}
         </button>
       )}
       {actions && !editing && (
