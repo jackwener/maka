@@ -26,6 +26,33 @@ const DEFAULT_SCENARIO = 'sidebar-search-modal-open';
 const DEFAULT_WINDOW_WIDTH = 1280;
 const DEFAULT_WINDOW_HEIGHT = 840;
 
+export const PROGRAMMATIC_SMOKE_CHECKS = [
+  {
+    id: 'programmatic-window-visible',
+    prompt: 'BrowserWindow exists, is visible, and matches the requested smoke bounds.',
+  },
+  {
+    id: 'programmatic-window-flags',
+    prompt: 'BrowserWindow reports resizable + movable through Electron APIs.',
+  },
+  {
+    id: 'programmatic-renderer-mounted',
+    prompt: 'Renderer app frame is mounted and document.readyState is complete.',
+  },
+  {
+    id: 'programmatic-search-modal-open',
+    prompt: 'Search modal and backdrop mount in the deterministic smoke fixture.',
+  },
+  {
+    id: 'programmatic-focus-target',
+    prompt: 'Search modal close button receives focus after modal open.',
+  },
+  {
+    id: 'programmatic-no-error-boundary',
+    prompt: 'Renderer does not show the React ErrorBoundary surface.',
+  },
+];
+
 export const REAL_WINDOW_SMOKE_CHECKS = [
   {
     id: 'launch-clean-window',
@@ -88,6 +115,7 @@ function parseArgs(argv) {
     failNote: null,
     unverifiedNote: null,
     diagnosticWaitMs: 1500,
+    programmaticOnly: false,
     help: false,
   };
   for (let i = 2; i < argv.length; i += 1) {
@@ -101,6 +129,7 @@ function parseArgs(argv) {
     else if (arg === '--fail-note') args.failNote = argv[++i] ?? '';
     else if (arg === '--unverified-note') args.unverifiedNote = argv[++i] ?? '';
     else if (arg === '--diagnostic-wait-ms') args.diagnosticWaitMs = Number(argv[++i]);
+    else if (arg === '--programmatic-only') args.programmaticOnly = true;
     else if (arg === '--help' || arg === '-h') args.help = true;
     else {
       console.error(`[real-window-smoke] unknown arg: ${arg}`);
@@ -111,7 +140,7 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`Usage: desktop-real-window-smoke.mjs [--scenario name] [--width n] [--height n] [--no-launch] [--no-cleanup-stale] [--fail-note text] [--unverified-note text] [--diagnostic-wait-ms n]
+  console.log(`Usage: desktop-real-window-smoke.mjs [--scenario name] [--width n] [--height n] [--no-launch] [--no-cleanup-stale] [--fail-note text] [--unverified-note text] [--diagnostic-wait-ms n] [--programmatic-only]
 
 Launches a real Electron window with an isolated smoke workspace, then prompts
 the reviewer to confirm native desktop behavior that screenshots cannot prove.
@@ -305,6 +334,85 @@ async function promptChecks(args) {
   return results;
 }
 
+function latestWindowDiagnostic(diagnostics) {
+  const entries = diagnostics.windowDiagnostics ?? [];
+  for (let i = entries.length - 1; i >= 0; i -= 1) {
+    const entry = entries[i];
+    if (entry && entry.windowExists) return entry;
+  }
+  return null;
+}
+
+function buildProgrammaticResults(args, diagnostics) {
+  const diagnostic = latestWindowDiagnostic(diagnostics);
+  const renderer = diagnostic?.renderer ?? {};
+  const expectedWidth = Math.floor(args.width);
+  const expectedHeight = Math.floor(args.height);
+  const bounds = diagnostic?.bounds;
+  const checks = [
+    {
+      check: PROGRAMMATIC_SMOKE_CHECKS[0],
+      ok: Boolean(
+        diagnostic?.windowExists &&
+        diagnostic.isVisible === true &&
+        bounds?.width === expectedWidth &&
+        bounds?.height === expectedHeight
+      ),
+      note: diagnostic
+        ? `visible=${diagnostic.isVisible} bounds=${JSON.stringify(bounds)} expected=${expectedWidth}x${expectedHeight}`
+        : 'no BrowserWindow diagnostic was captured',
+    },
+    {
+      check: PROGRAMMATIC_SMOKE_CHECKS[1],
+      ok: diagnostic?.isResizable === true && diagnostic?.isMovable === true,
+      note: diagnostic
+        ? `isResizable=${diagnostic.isResizable} isMovable=${diagnostic.isMovable}`
+        : 'no BrowserWindow diagnostic was captured',
+    },
+    {
+      check: PROGRAMMATIC_SMOKE_CHECKS[2],
+      ok: renderer.readyState === 'complete' && renderer.appFramePresent === true,
+      note: `readyState=${renderer.readyState ?? 'unknown'} appFramePresent=${renderer.appFramePresent ?? 'unknown'}`,
+    },
+    {
+      check: PROGRAMMATIC_SMOKE_CHECKS[3],
+      ok: renderer.searchModalPresent === true && renderer.searchModalBackdropPresent === true,
+      note: `searchModalPresent=${renderer.searchModalPresent ?? 'unknown'} backdrop=${renderer.searchModalBackdropPresent ?? 'unknown'}`,
+    },
+    {
+      check: PROGRAMMATIC_SMOKE_CHECKS[4],
+      ok:
+        renderer.activeElement?.tagName === 'BUTTON' &&
+        renderer.activeElement?.className?.includes('maka-search-modal-close'),
+      note: `activeElement=${JSON.stringify(renderer.activeElement ?? null)}`,
+    },
+    {
+      check: PROGRAMMATIC_SMOKE_CHECKS[5],
+      ok: renderer.errorBoundaryPresent === false,
+      note: `errorBoundaryPresent=${renderer.errorBoundaryPresent ?? 'unknown'}`,
+    },
+  ];
+  return checks.map(({ check, ok, note }) => ({
+    ...check,
+    layer: 'programmatic',
+    status: ok ? 'PASS' : 'FAIL',
+    ok,
+    note,
+  }));
+}
+
+function buildUnverifiedOsHitTestResults(args) {
+  const note = args.unverifiedNote?.trim() ||
+    'OS hit-test requires Computer Use / real mouse access and was not verified in this run';
+  return REAL_WINDOW_SMOKE_CHECKS.map((check) => ({
+    ...check,
+    layer: 'os-hit-test',
+    status: 'UNVERIFIED',
+    ok: false,
+    note,
+  }));
+}
+
 async function writeReport(args, launchInfo, results, diagnostics) {
   await mkdir(REPORT_DIR, { recursive: true });
   const now = new Date();
@@ -322,8 +430,9 @@ async function writeReport(args, launchInfo, results, diagnostics) {
     platform: `${os.platform()} ${os.arch()} ${os.release()}`,
     userDataDir: launchInfo?.userDataDir ?? null,
     diagnostics,
-    checks: results.map(({ id, prompt, status: resultStatus, ok: resultOk, note }) => ({
+    checks: results.map(({ id, layer, prompt, status: resultStatus, ok: resultOk, note }) => ({
       id,
+      layer,
       prompt,
       status: resultStatus ?? (resultOk ? 'PASS' : 'FAIL'),
       ok: resultOk,
@@ -383,6 +492,17 @@ function renderMarkdown(report) {
   for (const check of report.checks) {
     lines.push(`| ${check.id} | ${check.status ?? (check.ok ? 'PASS' : 'FAIL')} | ${escapeMd(check.note || check.prompt)} |`);
   }
+  const programmaticChecks = report.checks.filter((check) => check.layer === 'programmatic');
+  const osHitTestChecks = report.checks.filter((check) => check.layer === 'os-hit-test');
+  if (programmaticChecks.length > 0 || osHitTestChecks.length > 0) {
+    lines.push('', '## Layer Summary', '');
+    if (programmaticChecks.length > 0) {
+      lines.push(`- Programmatic: ${summarizeLayer(programmaticChecks)}`);
+    }
+    if (osHitTestChecks.length > 0) {
+      lines.push(`- OS hit-test: ${summarizeLayer(osHitTestChecks)}`);
+    }
+  }
   if ((report.diagnostics?.windowDiagnostics?.length ?? 0) > 0) {
     lines.push('', '## Window Diagnostics', '');
     for (const diagnostic of report.diagnostics.windowDiagnostics) {
@@ -397,6 +517,12 @@ function renderMarkdown(report) {
   }
   lines.push('');
   return `${lines.join('\n')}\n`;
+}
+
+function summarizeLayer(checks) {
+  if (checks.every((check) => check.status === 'PASS')) return 'PASS';
+  if (checks.some((check) => check.status === 'FAIL')) return 'FAIL';
+  return 'UNVERIFIED';
 }
 
 function escapeMd(value) {
@@ -422,7 +548,15 @@ async function main() {
     await launchInfo.waitForDiagnostics(Number.isFinite(args.diagnosticWaitMs) ? args.diagnosticWaitMs : 1500);
     diagnostics.windowDiagnosticObserved = (diagnostics.windowDiagnostics?.length ?? 0) > 0;
   }
-  const results = await promptChecks(args);
+  const programmaticResults = buildProgrammaticResults(args, diagnostics);
+  const results = args.programmaticOnly
+    ? programmaticResults
+    : [
+        ...programmaticResults,
+        ...(args.unverifiedNote !== null
+          ? buildUnverifiedOsHitTestResults(args)
+          : await promptChecks(args)),
+      ];
   const report = await writeReport(args, launchInfo, results, diagnostics);
   if (launchInfo?.child && !launchInfo.child.killed) {
     launchInfo.child.kill('SIGTERM');

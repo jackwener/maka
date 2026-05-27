@@ -44,6 +44,8 @@ describe('real Electron window smoke gate (PR-DESKTOP-SMOKE-0)', () => {
     assert.match(script, /npm --workspace @maka\/ui run build/);
     assert.match(script, /npm run build/);
     assert.match(script, /desktop-real-window-smoke\.mjs/);
+    const programmaticScript = pkg.scripts?.['smoke:programmatic-window'] ?? '';
+    assert.match(programmaticScript, /desktop-real-window-smoke\.mjs --programmatic-only/);
   });
 
   it('root `dev` still builds the workspace before launching desktop', async () => {
@@ -71,6 +73,9 @@ describe('real Electron window smoke gate (PR-DESKTOP-SMOKE-0)', () => {
     assert.match(src, /--fail-note/, 'real-window smoke must support durable fail reports when the live window cannot be verified');
     assert.match(src, /--diagnostic-wait-ms/, 'real-window smoke must wait briefly for settled BrowserWindow diagnostics');
     assert.match(src, /Window diagnostics/, 'real-window smoke report must include BrowserWindow/renderer diagnostics when available');
+    assert.match(src, /PROGRAMMATIC_SMOKE_CHECKS/, 'real-window smoke must include an accessibility-independent programmatic BrowserWindow/renderer layer');
+    assert.match(src, /os-hit-test/, 'real-window smoke must keep OS hit-test checks distinct from programmatic checks');
+    assert.match(src, /Layer Summary/, 'real-window smoke report must summarize programmatic and OS hit-test layers separately');
     assert.match(src, /apps\/desktop\/tests\/real-window-smoke/, 'real-window smoke must write durable reports');
   });
 
