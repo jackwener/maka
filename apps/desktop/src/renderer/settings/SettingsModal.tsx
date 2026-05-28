@@ -3290,7 +3290,7 @@ const CAPABILITY_READINESS_COPY: Record<CapabilityReadinessState, { label: strin
   not_configured: { label: '未配置', detail: '需要先打开开关或完成配置才能启用。', tone: 'neutral' },
   denied: { label: '系统拒绝', detail: '所需系统权限被拒绝或当前平台不支持。', tone: 'destructive' },
   enabled: { label: '运行可用', detail: '当前快照标记为可用，具体层级见下方。', tone: 'success' },
-  degraded: { label: '运行降级', detail: '之前可用，但最近的运行态探测失败。', tone: 'warning' },
+  degraded: { label: '部分可用', detail: '已有一部分能力可用，但仍有运行态、权限或子功能没有完成。', tone: 'warning' },
   paused: { label: '已暂停', detail: '功能开关被显式关闭，但配置仍保留。', tone: 'info' },
 };
 
@@ -3535,12 +3535,14 @@ function prettyCapabilityId(id: CapabilityId): string {
 function featureLabel(state: CapabilitySnapshot['feature']['state']): string {
   switch (state) {
     case 'enabled': return '已开启';
+    case 'partial': return '部分可用';
     case 'disabled': return '已关闭';
     case 'not_available': return '尚未实现';
   }
 }
 function featureTone(state: CapabilitySnapshot['feature']['state']): 'neutral' | 'info' | 'success' | 'warning' | 'destructive' {
   if (state === 'enabled') return 'success';
+  if (state === 'partial') return 'warning';
   if (state === 'disabled') return 'info';
   return 'neutral';
 }

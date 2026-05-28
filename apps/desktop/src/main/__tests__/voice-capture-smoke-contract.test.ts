@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
 const SETTINGS_MODAL = join(REPO_ROOT, 'apps', 'desktop', 'src', 'renderer', 'settings', 'SettingsModal.tsx');
+const CAPABILITY_SNAPSHOT = join(REPO_ROOT, 'apps', 'desktop', 'src', 'main', 'capability-snapshot.ts');
 
 describe('voice capture smoke Settings contract', () => {
   it('does not present voice models as a coming-soon nav item', async () => {
@@ -22,5 +23,24 @@ describe('voice capture smoke Settings contract', () => {
     assert.match(src, /validateVoiceCaptureRequest/, 'voice page must validate capture facts through @maka/core/voice');
     assert.match(src, /样本未保存/, 'voice page must tell users that the sample is not saved');
     assert.doesNotMatch(src, /localStorage\.setItem\([^)]*voice/i, 'voice smoke must not persist audio state in localStorage');
+  });
+
+  it('capability center reports voice as partial smoke, not a dead placeholder', async () => {
+    const src = await readFile(CAPABILITY_SNAPSHOT, 'utf8');
+    const voiceBlock = src.match(/id:\s*'voice'[\s\S]*?runtimeProbe:\s*\{[\s\S]*?\},\n\s*\}\),/);
+    assert.ok(voiceBlock, 'voice capability block must exist');
+    assert.match(voiceBlock![0], /state:\s*'partial'/, 'voice feature must be partial, not not_available');
+    assert.match(voiceBlock![0], /本地麦克风录音自检已可用/, 'voice feature reason must name the shipped smoke path');
+    assert.doesNotMatch(voiceBlock![0], /voice capture\/playback not implemented/, 'old placeholder reason must not return');
+  });
+
+  it('capability center reports local memory as partial instead of missing write contract only', async () => {
+    const src = await readFile(CAPABILITY_SNAPSHOT, 'utf8');
+    const memoryBlock = src.match(/id:\s*'memory_write'[\s\S]*?runtimeProbe:\s*\{[\s\S]*?\},\n\s*\}\),/);
+    assert.ok(memoryBlock, 'memory capability block must exist');
+    assert.match(memoryBlock![0], /label:\s*'Memory'/, 'capability label should cover visible local memory, not only writes');
+    assert.match(memoryBlock![0], /state:\s*'partial'/, 'memory feature must be partial, not not_available');
+    assert.match(memoryBlock![0], /本地 MEMORY\.md 已可见/, 'memory reason must name the shipped transparent file');
+    assert.doesNotMatch(memoryBlock![0], /memory write contract not implemented/, 'old placeholder reason must not return');
   });
 });
