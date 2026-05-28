@@ -52,6 +52,7 @@ import {
   normalizeWebSearchQuery,
 } from '@maka/core';
 import { queryTavily, TAVILY_TEST_QUERY, TAVILY_TEST_LIMIT } from './web-search/tavily.js';
+import { buildWebSearchAgentTool, WEB_SEARCH_TOOL_NAME } from './web-search/agent-tool.js';
 import { runThreadSearch } from './search/thread-search.js';
 import {
   ClaudeSubscriptionService,
@@ -165,7 +166,14 @@ const openGateway = new OpenGatewayService({
 });
 const backends = new BackendRegistry();
 const permissionEngine = new PermissionEngine({ newId: randomUUID, now: Date.now });
-const builtinTools = buildBuiltinTools().filter((tool) => tool.name !== 'Edit');
+const builtinTools = [
+  ...buildBuiltinTools().filter((tool) => tool.name !== 'Edit'),
+  // PR-AGENT-WEB-SEARCH-TOOL-0: Tavily-backed WebSearch tool. Closed
+  // over settingsStore so the renderer never sees the API key; the
+  // permission engine routes it through the `web_read` policy which
+  // prompts the user in explore / ask modes.
+  buildWebSearchAgentTool({ settingsStore }),
+];
 let lookupPricing = buildPricingLookup();
 const botRegistry = new BotRegistry({
   onIncomingMessage: (message) => {
@@ -264,7 +272,17 @@ backends.register('ai-sdk', async (ctx) => {
     tools: builtinTools,
     systemPrompt: ({ cwd }) => buildSystemPrompt(cwd),
     recordLlmCall: (event) => recordLlmCall({ repo: telemetryRepo, lookupPricing }, event),
-    recordToolInvocation: (event) => recordToolInvocation({ repo: telemetryRepo }, event),
+    recordToolInvocation: (event) =>
+      recordToolInvocation(
+        { repo: telemetryRepo },
+        // PR-AGENT-WEB-SEARCH-TOOL-0: scrub the query out of the
+        // telemetry record. The agent passes the raw user query as
+        // the tool argument; persisting it in `argsSummary` would
+        // leak user-derived content into the usage log.
+        event.toolName === WEB_SEARCH_TOOL_NAME
+          ? { ...event, argsSummary: undefined }
+          : event,
+      ),
     recordToolArtifacts: (event) => persistToolArtifacts(ctx.header.cwd, event),
     newId: randomUUID,
     now: Date.now,

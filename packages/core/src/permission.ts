@@ -44,7 +44,11 @@ export type PolicyDecision = 'allow' | 'prompt' | 'block';
 export const PERMISSION_POLICY: Record<PermissionMode, Record<ToolCategory, PolicyDecision>> = {
   explore: {
     read: 'allow',
-    web_read: 'allow',
+    // PR-AGENT-WEB-SEARCH-TOOL-0: explicit network egress (WebSearch
+    // via Tavily) prompts in non-autonomous modes. Agent-issued web
+    // requests are out-of-process side effects the user must confirm,
+    // even in the otherwise read-only `explore` mode.
+    web_read: 'prompt',
     shell_safe: 'allow',
     file_write: 'block',
     fs_destructive: 'block',
@@ -57,7 +61,7 @@ export const PERMISSION_POLICY: Record<PermissionMode, Record<ToolCategory, Poli
   },
   ask: {
     read: 'allow',
-    web_read: 'allow',
+    web_read: 'prompt',
     shell_safe: 'allow',
     file_write: 'prompt',
     fs_destructive: 'prompt',

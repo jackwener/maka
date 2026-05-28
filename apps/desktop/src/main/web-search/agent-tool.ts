@@ -1,0 +1,107 @@
+/**
+ * PR-AGENT-WEB-SEARCH-TOOL-0 — `WebSearch` agent tool. Returns a
+ * `MakaTool` factory that closes over the existing main-process
+ * Tavily client + the settings store. Renderer never imports this.
+ *
+ * Policy hookup: the tool name `WebSearch` is mapped to category
+ * `web_read` in `@maka/core/permission`. The PR matrix change makes
+ * `web_read` `prompt` in `explore` / `ask` and `allow` in `execute`,
+ * so the agent emits a permission request the user must approve in
+ * the default mode.
+ *
+ * Fail-closed paths:
+ *   - incognito context active → `incognito_active`
+ *   - `webSearch.enabled === false` → `not_configured`
+ *   - Tavily key empty → `not_configured`
+ *
+ * The query is treated as user-derived content; we never persist it
+ * to telemetry (see the `argsSummary` scrub in main.ts).
+ */
+
+import { z } from 'zod';
+import {
+  WEB_SEARCH_DEFAULT_LIMIT,
+  WEB_SEARCH_MAX_LIMIT,
+  normalizeWebSearchLimit,
+  normalizeWebSearchQuery,
+  type WebSearchResponse,
+} from '@maka/core';
+import { defaultWorkspacePrivacyContext } from '@maka/core/incognito';
+import type { MakaTool } from '@maka/runtime';
+import { queryTavily } from './tavily.js';
+import type { SettingsStore } from '@maka/storage';
+
+export const WEB_SEARCH_TOOL_NAME = 'WebSearch';
+
+export function buildWebSearchAgentTool(deps: {
+  settingsStore: SettingsStore;
+}): MakaTool {
+  return {
+    name: WEB_SEARCH_TOOL_NAME,
+    description:
+      'Query the live web via the configured search provider (Tavily). ' +
+      'Returns a short list of {title, url, snippet, source} rows. ' +
+      'Use ONLY when the user asks for current external information; ' +
+      'never call speculatively. Each call is gated on explicit user ' +
+      'approval in the default permission mode.',
+    parameters: z.object({
+      query: z
+        .string()
+        .min(1)
+        .max(200)
+        .describe('Search query, plain text, max 200 chars'),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(WEB_SEARCH_MAX_LIMIT)
+        .optional()
+        .describe(`Max results to return (default ${WEB_SEARCH_DEFAULT_LIMIT}).`),
+    }),
+    permissionRequired: true,
+    displayName: '联网搜索',
+    impl: async ({ query, limit }) => {
+      const normalizedQuery = normalizeWebSearchQuery(query);
+      if (normalizedQuery === null) {
+        const response: WebSearchResponse = {
+          ok: false,
+          reason: 'invalid_query',
+          message: '联网搜索请求未提供有效查询。',
+        };
+        return response;
+      }
+      const privacy = defaultWorkspacePrivacyContext();
+      if (privacy.incognitoActive) {
+        const response: WebSearchResponse = {
+          ok: false,
+          reason: 'incognito_active',
+          message: '隐身模式下禁用联网搜索。',
+        };
+        return response;
+      }
+      const settings = await deps.settingsStore.get();
+      if (!settings.webSearch.enabled) {
+        const response: WebSearchResponse = {
+          ok: false,
+          reason: 'not_configured',
+          message: '请先在 设置 · 联网搜索 中启用 Tavily 后再让 Maka 调用联网搜索工具。',
+        };
+        return response;
+      }
+      const apiKey = settings.webSearch.providers.tavily.apiKey;
+      if (apiKey.length === 0) {
+        const response: WebSearchResponse = {
+          ok: false,
+          reason: 'not_configured',
+          message: '请先在 设置 · 联网搜索 中保存 Tavily API key。',
+        };
+        return response;
+      }
+      return queryTavily({
+        apiKey,
+        query: normalizedQuery,
+        limit: normalizeWebSearchLimit(limit),
+      });
+    },
+  };
+}

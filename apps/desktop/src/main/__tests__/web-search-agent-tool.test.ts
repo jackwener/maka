@@ -1,0 +1,117 @@
+/**
+ * PR-AGENT-WEB-SEARCH-TOOL-0 — fail-closed gates for the agent
+ * WebSearch tool. The Tavily HTTP call itself is exercised in
+ * `tavily.ts` but stubbed here via a settings store that puts the
+ * tool in the various non-network branches.
+ */
+
+import { strict as assert } from 'node:assert';
+import { describe, it } from 'node:test';
+
+import { buildWebSearchAgentTool, WEB_SEARCH_TOOL_NAME } from '../web-search/agent-tool.js';
+import { defaultWebSearchSettings } from '@maka/core';
+import type { AppSettings } from '@maka/core';
+import type { SettingsStore } from '@maka/storage';
+import { createDefaultSettings } from '@maka/core/settings';
+
+function makeSettingsStore(override: (s: AppSettings) => AppSettings): SettingsStore {
+  const base = override(createDefaultSettings());
+  return {
+    get: async () => base,
+    update: async () => ({ settings: base }),
+    setOnboardingMilestone: async () => base,
+    usageStats: async () => ({
+      summary: {
+        totalRequests: 0,
+        totalCostUsd: 0,
+        totalTokens: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheTokens: 0,
+        cacheRead: 0,
+        cacheCreation: 0,
+      },
+      logs: [],
+      byProvider: [],
+      byModel: [],
+      byTool: [],
+      pricing: [],
+    }),
+  } as unknown as SettingsStore;
+}
+
+async function runTool(
+  store: SettingsStore,
+  args: { query?: unknown; limit?: number } = { query: 'hello' },
+) {
+  const tool = buildWebSearchAgentTool({ settingsStore: store });
+  return tool.impl(args as Parameters<typeof tool.impl>[0], {
+    sessionId: 's',
+    turnId: 't',
+    cwd: '/tmp',
+    toolCallId: 'tc',
+    abortSignal: new AbortController().signal,
+    emitOutput: () => {},
+  });
+}
+
+describe('WebSearch agent tool (PR-AGENT-WEB-SEARCH-TOOL-0)', () => {
+  it('registers under the canonical name expected by permission policy', () => {
+    const tool = buildWebSearchAgentTool({ settingsStore: makeSettingsStore((s) => s) });
+    assert.equal(tool.name, WEB_SEARCH_TOOL_NAME);
+    assert.equal(tool.name, 'WebSearch');
+    assert.equal(tool.permissionRequired, true);
+  });
+
+  it('fails closed with invalid_query for empty / whitespace-only query', async () => {
+    const store = makeSettingsStore((s) => ({
+      ...s,
+      webSearch: {
+        ...defaultWebSearchSettings(),
+        enabled: true,
+        providers: { tavily: { apiKey: 'tvly-xxx' } },
+      },
+    }));
+    const out1 = (await runTool(store, { query: '' })) as { ok: boolean; reason?: string };
+    assert.equal(out1.ok, false);
+    assert.equal(out1.reason, 'invalid_query');
+    const out2 = (await runTool(store, { query: '    ' })) as { ok: boolean; reason?: string };
+    assert.equal(out2.ok, false);
+    assert.equal(out2.reason, 'invalid_query');
+  });
+
+  it('fails closed with not_configured when webSearch.enabled is false', async () => {
+    const store = makeSettingsStore((s) => ({
+      ...s,
+      webSearch: {
+        ...defaultWebSearchSettings(),
+        enabled: false,
+        providers: { tavily: { apiKey: 'tvly-real-key' } },
+      },
+    }));
+    const out = (await runTool(store)) as { ok: boolean; reason?: string };
+    assert.equal(out.ok, false);
+    assert.equal(out.reason, 'not_configured');
+  });
+
+  it('fails closed with not_configured when apiKey is empty', async () => {
+    const store = makeSettingsStore((s) => ({
+      ...s,
+      webSearch: {
+        ...defaultWebSearchSettings(),
+        enabled: true,
+        providers: { tavily: { apiKey: '' } },
+      },
+    }));
+    const out = (await runTool(store)) as { ok: boolean; reason?: string; message?: string };
+    assert.equal(out.ok, false);
+    assert.equal(out.reason, 'not_configured');
+    // Generalized copy — never leaks the empty-key fact as a raw code.
+    assert.match(out.message ?? '', /Tavily/);
+  });
+
+  it('tool description warns the agent against speculative calls', () => {
+    const tool = buildWebSearchAgentTool({ settingsStore: makeSettingsStore((s) => s) });
+    assert.match(tool.description, /never call speculatively|explicit user approval/i);
+  });
+});

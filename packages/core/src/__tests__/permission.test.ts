@@ -273,9 +273,8 @@ describe('PERMISSION_POLICY matrix invariants', () => {
     expect(PERMISSION_POLICY.execute.privileged).toBe('prompt');
   });
 
-  test('explore mode allows reads (read + web_read + shell_safe)', () => {
+  test('explore mode allows local reads + safe shell (web_read prompts post PR-AGENT-WEB-SEARCH-TOOL-0)', () => {
     expect(PERMISSION_POLICY.explore.read).toBe('allow');
-    expect(PERMISSION_POLICY.explore.web_read).toBe('allow');
     expect(PERMISSION_POLICY.explore.shell_safe).toBe('allow');
   });
 
@@ -287,5 +286,14 @@ describe('PERMISSION_POLICY matrix invariants', () => {
     expect(PERMISSION_POLICY.explore.network_send).toBe('block');
     expect(PERMISSION_POLICY.explore.privileged).toBe('block');
     expect(PERMISSION_POLICY.explore.subagent).toBe('block');
+  });
+
+  test('web_read prompts in non-autonomous modes (PR-AGENT-WEB-SEARCH-TOOL-0)', () => {
+    // Agent-issued web requests are out-of-process side effects; the
+    // user must confirm them even in `explore` mode. `execute` (yolo)
+    // still allows so the user can opt into autonomous web search.
+    expect(PERMISSION_POLICY.explore.web_read).toBe('prompt');
+    expect(PERMISSION_POLICY.ask.web_read).toBe('prompt');
+    expect(PERMISSION_POLICY.execute.web_read).toBe('allow');
   });
 });
