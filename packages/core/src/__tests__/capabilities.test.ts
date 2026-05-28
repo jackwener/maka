@@ -2,6 +2,7 @@ import { describe, test } from 'node:test';
 import { expect } from '../test-helpers.js';
 import {
   CAPABILITY_READINESS_STATES,
+  FEATURE_ENABLEMENT_STATES,
   OS_PERMISSION_STATES,
   deriveCapabilityReadiness,
   isCapabilityReadinessState,
@@ -19,6 +20,7 @@ const noRuntime: CapabilityRuntimeProbeSignal = { state: 'not_run', source: 'run
 describe('permission and capability snapshot contracts', () => {
   test('locks permission and capability readiness enums', () => {
     expect(OS_PERMISSION_STATES).toEqual(['unsupported', 'unknown', 'not_determined', 'denied', 'granted']);
+    expect(FEATURE_ENABLEMENT_STATES).toEqual(['not_available', 'partial', 'disabled', 'enabled']);
     expect(CAPABILITY_READINESS_STATES).toEqual(['not_configured', 'denied', 'enabled', 'degraded', 'paused']);
     expect(isOsPermissionState('granted')).toBe(true);
     expect(isOsPermissionState('authorized')).toBe(false);
@@ -42,6 +44,15 @@ describe('permission and capability snapshot contracts', () => {
       osPermissions: [requiredPermission('accessibility', 'granted')],
       runtimeProbe: { state: 'healthy', source: 'runtime_probe' },
     })).toBe('not_configured');
+  });
+
+  test('partial feature is degraded after configuration and permission gates pass', () => {
+    expect(deriveCapabilityReadiness({
+      feature: { state: 'partial', source: 'runtime', reason: 'local smoke only' },
+      configuration: presentConfig,
+      osPermissions: [requiredPermission('microphone', 'granted')],
+      runtimeProbe: { state: 'not_run', source: 'runtime_probe' },
+    })).toBe('degraded');
   });
 
   test('missing configuration is not_configured before runtime health', () => {

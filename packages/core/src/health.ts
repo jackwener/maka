@@ -273,6 +273,7 @@ function healthLayerFromCapability(capability: CapabilitySnapshot): HealthSignal
   }
   if (capability.configuration.state === 'missing') return 'configuration';
   if (capability.feature.state === 'not_available') return 'feature';
+  if (capability.feature.state === 'partial') return 'feature';
   if (capability.runtimeProbe.state === 'healthy') return 'runtime_probe';
   return 'feature';
 }

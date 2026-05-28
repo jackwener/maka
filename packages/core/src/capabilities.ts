@@ -20,6 +20,7 @@ export type OsPermissionState = typeof OS_PERMISSION_STATES[number];
 
 export const FEATURE_ENABLEMENT_STATES = [
   'not_available',
+  'partial',
   'disabled',
   'enabled',
 ] as const;
@@ -174,6 +175,7 @@ export function deriveCapabilityReadiness(input: DeriveCapabilityReadinessInput)
     return 'not_configured';
   }
 
+  if (input.feature.state === 'partial') return 'degraded';
   if (input.runtimeProbe.state === 'degraded') return 'degraded';
   return 'enabled';
 }

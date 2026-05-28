@@ -74,13 +74,21 @@ export function buildCapabilitySnapshotCollection(input: {
       id: 'voice',
       label: 'Voice',
       now,
-      feature: { state: 'not_available', source: 'scaffold', reason: 'voice capture/playback not implemented' },
+      feature: {
+        state: 'partial',
+        source: 'runtime',
+        reason: '本地麦克风录音自检已可用；STT/TTS 通道尚未接入',
+      },
       requiredPermissions: [
         { id: 'microphone', required: true, status: permissions.microphone.status },
       ],
       actionApproval: { state: 'not_required', source: 'not_applicable' },
       memoryAcceptance: { state: 'disabled', source: 'memory_contract' },
-      runtimeProbe: { state: 'not_available', source: 'not_applicable' },
+      runtimeProbe: {
+        state: 'not_run',
+        source: 'runtime_probe',
+        reason: '在 Settings · 语音模型运行本地录音自检',
+      },
     }),
     staticCapability({
       id: 'open_gateway',
@@ -102,13 +110,21 @@ export function buildCapabilitySnapshotCollection(input: {
     }),
     staticCapability({
       id: 'memory_write',
-      label: 'Memory Write',
+      label: 'Memory',
       now,
-      feature: { state: 'not_available', source: 'scaffold', reason: 'memory write contract not implemented' },
+      feature: {
+        state: 'partial',
+        source: 'runtime',
+        reason: '本地 MEMORY.md 已可见；自动抽取/写入仍需用户确认',
+      },
       requiredPermissions: [],
       actionApproval: { state: 'not_required', source: 'not_applicable' },
       memoryAcceptance: { state: 'draft_required', source: 'memory_contract' },
-      runtimeProbe: { state: 'not_available', source: 'not_applicable' },
+      runtimeProbe: {
+        state: 'not_run',
+        source: 'runtime_probe',
+        reason: '透明本地记忆为文件读写能力，不做后台探测',
+      },
     }),
     ...BOT_PROVIDERS.map((provider) =>
       botCapability(provider, input.settings, input.botStatuses[provider], now),
