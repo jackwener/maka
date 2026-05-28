@@ -5,6 +5,7 @@ import type {
   WebSearchProviderSettings,
   WebSearchSettings,
 } from './web-search.js';
+import type { LocalMemorySettings } from './local-memory.js';
 import {
   MASKED_TOKEN_SENTINEL,
   defaultWebSearchSettings,
@@ -12,12 +13,14 @@ import {
   isWebSearchProvider,
   reconcileMaskedToken,
 } from './web-search.js';
+import { defaultLocalMemorySettings, normalizeLocalMemorySettings } from './local-memory.js';
 
 export type SettingsSection =
   | 'general'
   | 'personalization'
   | 'theme'
   | 'daily-review'
+  | 'memory'
   | 'models'
   | 'usage'
   | 'voice-models'
@@ -253,6 +256,7 @@ export interface AppSettings {
   onboarding: OnboardingSettings;
   openGateway: OpenGatewaySettings;
   webSearch: WebSearchSettings;
+  localMemory: LocalMemorySettings;
 }
 
 export interface UsageRequestLog {
@@ -307,6 +311,7 @@ export type UpdateAppSettingsInput = Partial<{
   appearance: Partial<AppearanceSettings>;
   personalization: Partial<PersonalizationSettings>;
   openGateway: Partial<OpenGatewaySettings>;
+  localMemory: Partial<LocalMemorySettings>;
   webSearch: Partial<{
     enabled: boolean;
     defaultProvider: WebSearchProvider;
@@ -409,6 +414,7 @@ export function createDefaultSettings(): AppSettings {
       token: '',
     },
     webSearch: defaultWebSearchSettings(),
+    localMemory: defaultLocalMemorySettings(),
   };
 }
 
@@ -460,6 +466,9 @@ export function mergeSettings(current: AppSettings, patch: UpdateAppSettingsInpu
       ...current.openGateway,
       ...(patch.openGateway ?? {}),
     },
+    localMemory: patch.localMemory
+      ? normalizeLocalMemorySettings({ ...current.localMemory, ...patch.localMemory })
+      : current.localMemory,
     webSearch: mergeWebSearchSettings(current.webSearch, patch.webSearch),
   };
 }
@@ -528,6 +537,7 @@ export function normalizeSettings(input: unknown): AppSettings {
     personalization: value.personalization,
     openGateway: value.openGateway,
     webSearch: value.webSearch,
+    localMemory: value.localMemory,
   });
   // PR110b: milestones bypass the generic patch surface so we can
   // sanitize them with the closed-enum + at-most-one validator on
@@ -601,6 +611,7 @@ export function normalizeSettings(input: unknown): AppSettings {
     },
     openGateway: normalizeOpenGatewaySettings(base.openGateway),
     webSearch: normalizeWebSearchSettings(base.webSearch),
+    localMemory: normalizeLocalMemorySettings(base.localMemory),
   };
 }
 

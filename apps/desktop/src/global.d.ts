@@ -38,6 +38,7 @@ import type {
   TurnRecord,
   PermissionSnapshot,
   OpenGatewayRuntimeStatus,
+  LocalMemoryState,
   AuthorizationUrlPayload,
   SubscriptionAccountState,
   SubscriptionActionResult,
@@ -146,6 +147,14 @@ declare global {
       };
       health: {
         getSnapshot(): Promise<HealthSnapshot>;
+      };
+      memory: {
+        getState(): Promise<LocalMemoryState>;
+        save(content: string): Promise<LocalMemoryState>;
+        reset(): Promise<LocalMemoryState>;
+        setEnabled(enabled: boolean): Promise<LocalMemoryState>;
+        setAgentReadEnabled(enabled: boolean): Promise<LocalMemoryState>;
+        openFile(): Promise<{ ok: true } | { ok: false; message: string }>;
       };
       search: {
         thread(

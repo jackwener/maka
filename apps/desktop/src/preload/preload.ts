@@ -39,6 +39,7 @@ import type {
   TurnRecord,
   PermissionSnapshot,
   OpenGatewayRuntimeStatus,
+  LocalMemoryState,
   AuthorizationUrlPayload,
   SubscriptionAccountState,
   SubscriptionActionResult,
@@ -220,6 +221,26 @@ contextBridge.exposeInMainWorld('maka', {
   health: {
     getSnapshot(): Promise<HealthSnapshot> {
       return ipcRenderer.invoke('health:getSnapshot');
+    },
+  },
+  memory: {
+    getState(): Promise<LocalMemoryState> {
+      return ipcRenderer.invoke('memory:getState');
+    },
+    save(content: string): Promise<LocalMemoryState> {
+      return ipcRenderer.invoke('memory:save', content);
+    },
+    reset(): Promise<LocalMemoryState> {
+      return ipcRenderer.invoke('memory:reset');
+    },
+    setEnabled(enabled: boolean): Promise<LocalMemoryState> {
+      return ipcRenderer.invoke('memory:setEnabled', enabled);
+    },
+    setAgentReadEnabled(enabled: boolean): Promise<LocalMemoryState> {
+      return ipcRenderer.invoke('memory:setAgentReadEnabled', enabled);
+    },
+    openFile(): Promise<{ ok: true } | { ok: false; message: string }> {
+      return ipcRenderer.invoke('memory:openFile');
     },
   },
   search: {

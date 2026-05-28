@@ -36,6 +36,7 @@ import type {
   UpdateAppSettingsInput,
   UsageRange,
   PlanReminder,
+  LocalMemoryState,
 } from '@maka/core';
 import {
   DAILY_REVIEW_LIST_LIMIT,
@@ -125,6 +126,7 @@ import {
 } from './visual-smoke-fixture.js';
 import { resolveBuildInfo } from './build-info.js';
 import { OpenGatewayService } from './open-gateway.js';
+import { LocalMemoryService } from './local-memory-service.js';
 
 const buildInfo = resolveBuildInfo(app.isPackaged, app.getAppPath());
 
@@ -153,6 +155,12 @@ const claudeSubscription = new ClaudeSubscriptionService({
   userDataDir: app.getPath('userData'),
 });
 const planReminderStore = createPlanReminderStore(workspaceRoot);
+const localMemory = new LocalMemoryService({
+  workspaceRoot,
+  getSettings: () => settingsStore.get(),
+  updateSettings: (patch) => settingsStore.update(patch),
+  getPrivacyContext: async () => defaultWorkspacePrivacyContext(),
+});
 const openGateway = new OpenGatewayService({
   getSettings: () => settingsStore.get(),
   listSessions: () => runtime.listSessions(),
@@ -638,6 +646,23 @@ function registerIpc(): void {
     const error = await shell.openPath(resolved.path);
     if (error) return { ok: false, reason: 'open-failed' };
     return { ok: true, opened: resolved.key };
+  });
+  ipcMain.handle('memory:getState', async (): Promise<LocalMemoryState> => localMemory.getState());
+  ipcMain.handle('memory:save', async (_event, content: unknown): Promise<LocalMemoryState> => {
+    if (typeof content !== 'string') return localMemory.getState();
+    return localMemory.save(content);
+  });
+  ipcMain.handle('memory:reset', async (): Promise<LocalMemoryState> => localMemory.reset());
+  ipcMain.handle('memory:setEnabled', async (_event, enabled: unknown): Promise<LocalMemoryState> =>
+    localMemory.setEnabled(enabled === true),
+  );
+  ipcMain.handle('memory:setAgentReadEnabled', async (_event, enabled: unknown): Promise<LocalMemoryState> =>
+    localMemory.setAgentReadEnabled(enabled === true),
+  );
+  ipcMain.handle('memory:openFile', async (): Promise<{ ok: true } | { ok: false; message: string }> => {
+    await localMemory.getState();
+    const error = await shell.openPath(localMemory.file);
+    return error ? { ok: false, message: error } : { ok: true };
   });
   // Opens an artifact in Finder. Reuses the artifact-root realpath guard
   // (mirrors PR56 open-path-guard) so renderer never assembles absolute

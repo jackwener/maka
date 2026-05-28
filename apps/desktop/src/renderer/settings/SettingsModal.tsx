@@ -3,6 +3,7 @@ import {
   Activity,
   BarChart3,
   Bot,
+  Brain,
   CalendarDays,
   Cpu,
   Database,
@@ -49,6 +50,7 @@ import type {
   UsageStats,
   SubscriptionAccountState,
   WebSearchCredentialStatus,
+  LocalMemoryState,
 } from '@maka/core';
 import type { BotStatus } from '@maka/runtime';
 import type { TestProxyInput } from '@maka/core/settings/network-settings';
@@ -106,6 +108,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   { id: 'models', label: '模型', Icon: Cpu, enabled: true, group: 'AI' },
   { id: 'usage', label: '使用统计', Icon: BarChart3, enabled: true, group: 'AI' },
   { id: 'daily-review', label: '每日回顾', Icon: CalendarDays, enabled: true, group: 'AI' },
+  { id: 'memory', label: '记忆', Icon: Brain, enabled: true, group: 'AI' },
   { id: 'voice-models', label: '语音模型', Icon: Volume2, enabled: true, comingSoon: true, group: 'AI' },
   { id: 'open-gateway', label: '开放网关', Icon: Sparkles, enabled: true, group: 'AI' },
   // Group 3: 集成 — bot、搜索、网络
@@ -535,6 +538,13 @@ function SettingsPage(props: {
       return <HealthCenterPage />;
     case 'daily-review':
       return <DailyReviewSettingsPage onOpenDailyReview={props.onOpenDailyReview} />;
+    case 'memory':
+      return (
+        <MemorySettingsPage
+          settings={props.settings}
+          onReloadSettings={props.onReloadSettings}
+        />
+      );
     case 'search':
       return (
         <WebSearchSettingsPage
@@ -2117,6 +2127,194 @@ function presentWebSearchCredentialStatus(
   return enabled
     ? { label: '未测试 · 已启用', tone: 'warning' }
     : { label: '未测试', tone: 'info' };
+}
+
+function MemorySettingsPage(props: {
+  settings: AppSettings;
+  onReloadSettings(): Promise<void>;
+}) {
+  const [state, setState] = useState<LocalMemoryState | null>(null);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  async function reload() {
+    const next = await window.maka.memory.getState();
+    setState(next);
+    setDraft(next.content);
+  }
+
+  useEffect(() => {
+    void reload();
+  }, []);
+
+  async function setEnabled(enabled: boolean) {
+    setBusy(true);
+    try {
+      const next = await window.maka.memory.setEnabled(enabled);
+      await props.onReloadSettings();
+      setState(next);
+      setDraft(next.content);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setAgentReadEnabled(agentReadEnabled: boolean) {
+    setBusy(true);
+    try {
+      const next = await window.maka.memory.setAgentReadEnabled(agentReadEnabled);
+      await props.onReloadSettings();
+      setState(next);
+      setDraft(next.content);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function save() {
+    setBusy(true);
+    try {
+      const next = await window.maka.memory.save(draft);
+      setState(next);
+      setDraft(next.content);
+      if (next.status === 'safe_mode') {
+        toast.error('保存被拦截', 'MEMORY.md 内容过大，已进入安全模式。');
+      } else {
+        toast.success('已保存 MEMORY.md', '写入本地文件并保留上一版备份。');
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reset() {
+    setBusy(true);
+    try {
+      const next = await window.maka.memory.reset();
+      setState(next);
+      setDraft(next.content);
+      toast.success('已重置 MEMORY.md', '上一版已保存为备份文件。');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openFile() {
+    const result = await window.maka.memory.openFile();
+    if (!result.ok) toast.error('打开失败', result.message);
+  }
+
+  async function copyPath() {
+    if (!state?.path) return;
+    try {
+      await navigator.clipboard.writeText(state.path);
+      toast.success('已复制路径', state.path);
+    } catch {
+      toast.error('复制失败', '剪贴板不可用。');
+    }
+  }
+
+  const effective = state ?? {
+    path: '',
+    enabled: props.settings.localMemory.enabled,
+    agentReadEnabled: props.settings.localMemory.agentReadEnabled,
+    status: 'disabled',
+    content: '',
+    entryCount: 0,
+  } satisfies LocalMemoryState;
+
+  return (
+    <div className="settingsStructuredPage">
+      <div className="settingsFormRow">
+        <div>
+          <strong>本地 MEMORY.md</strong>
+          <small>透明 Markdown 文件，保存在当前本机工作区。这里的内容不会自动从聊天里抽取。</small>
+        </div>
+        <span className="settingsConnectionBadge" data-tone={memoryStatusTone(effective.status)}>
+          {memoryStatusLabel(effective.status)}
+        </span>
+        <Switch checked={effective.enabled} disabled={busy} onChange={(enabled) => void setEnabled(enabled)} />
+      </div>
+
+      <div className="settingsFormRow">
+        <div>
+          <strong>模型上下文可读取</strong>
+          <small>默认关闭。开启后才允许后续 prompt 注入读取本地记忆；隐身模式下仍会禁用。</small>
+        </div>
+        <Switch
+          checked={effective.agentReadEnabled}
+          disabled={busy || !effective.enabled}
+          onChange={(enabled) => void setAgentReadEnabled(enabled)}
+        />
+      </div>
+
+      <div className="settingsConnectionMeta">
+        <span>{effective.path || 'MEMORY.md 尚未创建'}</span>
+        <span>{effective.entryCount} 条条目</span>
+      </div>
+
+      {effective.latestEntry && (
+        <div className="settingsMemoryPreview">
+          <strong>{effective.latestEntry.title}</strong>
+          <small>{effective.latestEntry.origin === 'manual' ? '手动记录' : '手写条目'}</small>
+          <p>{effective.latestEntry.content}</p>
+        </div>
+      )}
+
+      <label className="settingsMemoryEditor">
+        <span>文件内容</span>
+        <textarea
+          value={draft}
+          onChange={(event) => setDraft(event.currentTarget.value)}
+          disabled={busy || effective.status === 'incognito_blocked' || !effective.enabled}
+          rows={12}
+          spellCheck={false}
+        />
+      </label>
+
+      {effective.reason && (
+        <div className="settingsNotice" data-tone="passive" role="status">
+          {effective.reason}
+        </div>
+      )}
+
+      <div className="settingsActionRow">
+        <button type="button" className="maka-button" disabled={busy || !effective.enabled} onClick={() => void save()}>
+          保存
+        </button>
+        <button type="button" className="maka-button maka-button-ghost" disabled={busy || !effective.enabled} onClick={() => void openFile()}>
+          打开 MEMORY.md
+        </button>
+        <button type="button" className="maka-button maka-button-ghost" disabled={!effective.path} onClick={() => void copyPath()}>
+          复制路径
+        </button>
+        <button type="button" className="maka-button maka-button-ghost" disabled={busy || !effective.enabled} onClick={() => void reset()}>
+          重置并备份
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function memoryStatusLabel(status: LocalMemoryState['status']): string {
+  switch (status) {
+    case 'ok': return '本地文件已就绪';
+    case 'disabled': return '已关闭';
+    case 'safe_mode': return '安全模式';
+    case 'incognito_blocked': return '隐身禁用';
+    case 'error': return '读取失败';
+  }
+}
+
+function memoryStatusTone(status: LocalMemoryState['status']): 'success' | 'info' | 'warning' | 'destructive' {
+  switch (status) {
+    case 'ok': return 'success';
+    case 'disabled': return 'info';
+    case 'safe_mode':
+    case 'incognito_blocked': return 'warning';
+    case 'error': return 'destructive';
+  }
 }
 
 function NetworkSettingsPage(props: {

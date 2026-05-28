@@ -342,6 +342,21 @@ export {
   validateMemoryWriteRequest,
 } from './memory.js';
 
+// local-memory.ts — transparent user-visible MEMORY.md MVP.
+export type {
+  LocalMemoryEntryPreview,
+  LocalMemoryParseResult,
+  LocalMemorySettings,
+  LocalMemoryState,
+} from './local-memory.js';
+export {
+  LOCAL_MEMORY_MAX_BYTES,
+  defaultLocalMemoryMarkdown,
+  defaultLocalMemorySettings,
+  normalizeLocalMemorySettings,
+  parseLocalMemoryMarkdown,
+} from './local-memory.js';
+
 // voice.ts (PR-VOICE-0) — core contract; no IPC/storage/provider/runtime/UI.
 export type {
   VoiceCapabilitySnapshot,
