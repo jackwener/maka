@@ -106,6 +106,9 @@ import {
   resolveVisualSmokeFixture,
   seedVisualSmokeFixture,
 } from './visual-smoke-fixture.js';
+import { resolveBuildInfo } from './build-info.js';
+
+const buildInfo = resolveBuildInfo(app.isPackaged, app.getAppPath());
 
 const visualSmokeFixture = resolveVisualSmokeFixture(
   process.env.MAKA_VISUAL_SMOKE_FIXTURE,
@@ -577,6 +580,8 @@ function registerIpc(): void {
     arch: osArch(),
     osRelease: osRelease(),
     workspacePath: workspaceRoot,
+    buildMode: buildInfo.mode,
+    buildCommit: buildInfo.commit,
   }));
   ipcMain.handle('app:openPath', async (_event, key: string): Promise<OpenPathResult> => {
     const resolved = await resolveOpenPath({ key, workspaceRoot });

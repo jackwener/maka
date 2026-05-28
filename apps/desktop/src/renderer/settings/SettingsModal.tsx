@@ -654,6 +654,10 @@ function AboutSettingsPage() {
     // Markdown block ready to paste into a bug report. Deliberately excludes
     // workspacePath since that can leak the OS username; user can still copy
     // it from the Data page if needed.
+    const buildLine =
+      info.buildMode === 'dev'
+        ? `- Build: dev${info.buildCommit ? ` @ ${info.buildCommit}` : ''}`
+        : '- Build: packaged';
     const summary = [
       `**Maka** v${info.appVersion}`,
       ``,
@@ -662,6 +666,7 @@ function AboutSettingsPage() {
       `- Chrome: ${info.chromeVersion}`,
       `- Platform: ${platformPretty} ${info.osRelease}`,
       `- Arch: ${info.arch}`,
+      buildLine,
     ].join('\n');
     try {
       await navigator.clipboard.writeText(summary);
@@ -681,7 +686,13 @@ function AboutSettingsPage() {
           <div className="settingsAboutHeading">
             <h2>Maka</h2>
             <span className="settingsAboutVersion">v{info.appVersion}</span>
-            <span className="settingsAboutChannel">本地开发版</span>
+            <span className="settingsAboutChannel">
+              {info.buildMode === 'dev'
+                ? info.buildCommit
+                  ? `本地开发版 · ${info.buildCommit}`
+                  : '本地开发版'
+                : '正式版'}
+            </span>
           </div>
           <p className="settingsAboutTagline">本地优先的 AI 助手 · Electron + React + Vercel AI SDK</p>
         </div>
