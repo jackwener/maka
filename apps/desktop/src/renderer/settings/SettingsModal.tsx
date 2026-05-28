@@ -51,6 +51,7 @@ import type {
   SubscriptionAccountState,
   WebSearchCredentialStatus,
   LocalMemoryState,
+  VoicePermissionStatus,
 } from '@maka/core';
 import type { BotStatus } from '@maka/runtime';
 import type { TestProxyInput } from '@maka/core/settings/network-settings';
@@ -58,7 +59,9 @@ import {
   HEALTH_SIGNAL_LAYERS,
   OS_PERMISSION_IDS,
   deriveProviderAuthContractFromConnection,
+  defaultVoiceCaptureCaps,
   isToastPosition,
+  validateVoiceCaptureRequest,
   webSearchCredentialStatusFromResponse,
 } from '@maka/core';
 import { BOT_PROVIDERS, createDefaultSettings } from '@maka/core/settings';
@@ -109,7 +112,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
   { id: 'usage', label: '使用统计', Icon: BarChart3, enabled: true, group: 'AI' },
   { id: 'daily-review', label: '每日回顾', Icon: CalendarDays, enabled: true, group: 'AI' },
   { id: 'memory', label: '记忆', Icon: Brain, enabled: true, group: 'AI' },
-  { id: 'voice-models', label: '语音模型', Icon: Volume2, enabled: true, comingSoon: true, group: 'AI' },
+  { id: 'voice-models', label: '语音模型', Icon: Volume2, enabled: true, group: 'AI' },
   { id: 'open-gateway', label: '开放网关', Icon: Sparkles, enabled: true, group: 'AI' },
   // Group 3: 集成 — bot、搜索、网络
   { id: 'bot-chat', label: '机器人对话', Icon: Bot, enabled: true, group: '集成' },
@@ -545,6 +548,8 @@ function SettingsPage(props: {
           onReloadSettings={props.onReloadSettings}
         />
       );
+    case 'voice-models':
+      return <VoiceModelsSettingsPage />;
     case 'search':
       return (
         <WebSearchSettingsPage
@@ -780,6 +785,223 @@ function DailyReviewSettingsPage(props: { onOpenDailyReview?: () => void }) {
       </ul>
     </section>
   );
+}
+
+type VoiceSmokeState =
+  | { status: 'idle'; message: string }
+  | { status: 'checking'; message: string }
+  | { status: 'recording'; message: string }
+  | { status: 'ok'; message: string; durationMs: number; audioBytes: number }
+  | { status: 'error'; message: string };
+
+function VoiceModelsSettingsPage() {
+  const [permission, setPermission] = useState<VoicePermissionStatus>('unknown');
+  const [smoke, setSmoke] = useState<VoiceSmokeState>({
+    status: 'idle',
+    message: '尚未运行本机录音自检。',
+  });
+  const [isBusy, setIsBusy] = useState(false);
+  const toast = useToast();
+  const caps = defaultVoiceCaptureCaps();
+
+  useEffect(() => {
+    let cancelled = false;
+    void readBrowserMicrophonePermission().then((next) => {
+      if (!cancelled) setPermission(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function runCaptureSmoke() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setPermission('unsupported');
+      setSmoke({ status: 'error', message: '当前运行环境不支持浏览器麦克风 API。' });
+      return;
+    }
+    if (typeof MediaRecorder === 'undefined') {
+      setPermission('unsupported');
+      setSmoke({ status: 'error', message: '当前运行环境不支持 MediaRecorder，无法做本地录音自检。' });
+      return;
+    }
+
+    setIsBusy(true);
+    setSmoke({ status: 'checking', message: '正在请求 macOS / 浏览器麦克风权限…' });
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: caps.maxChannels,
+          sampleRate: caps.maxSampleRate,
+        },
+      });
+      setPermission('granted');
+      setSmoke({ status: 'recording', message: '正在录制 2 秒本地样本；样本只在内存里计算大小，结束后立即丢弃。' });
+      const startedAt = performance.now();
+      const chunks: Blob[] = [];
+      const recorder = new MediaRecorder(stream);
+      recorder.addEventListener('dataavailable', (event) => {
+        if (event.data.size > 0) chunks.push(event.data);
+      });
+      const stopped = new Promise<void>((resolve, reject) => {
+        recorder.addEventListener('stop', () => resolve(), { once: true });
+        recorder.addEventListener('error', () => reject(new Error('录音自检失败')), { once: true });
+      });
+      recorder.start();
+      await waitMs(2_000);
+      if (recorder.state !== 'inactive') recorder.stop();
+      await stopped;
+      const durationMs = Math.round(performance.now() - startedAt);
+      const audioBytes = chunks.reduce((sum, chunk) => sum + chunk.size, 0);
+      const validation = validateVoiceCaptureRequest({
+        mode: 'push_to_talk',
+        permission: 'granted',
+        durationMs,
+        audioBytes,
+        sampleRate: caps.maxSampleRate,
+        channels: caps.maxChannels,
+      });
+      if (!validation.ok) {
+        setSmoke({ status: 'error', message: voiceValidationCopy(validation.reason) });
+        return;
+      }
+      const message = `录音链路可用：${formatVoiceDuration(durationMs)}，${formatVoiceBytes(audioBytes)}。样本未保存。`;
+      setSmoke({ status: 'ok', message, durationMs, audioBytes });
+      toast.success('语音自检通过', message);
+    } catch (error) {
+      const next = classifyVoicePermissionError(error);
+      setPermission(next);
+      const message = next === 'denied'
+        ? '麦克风权限被拒绝；请在系统设置里允许 Maka 访问麦克风后重试。'
+        : '录音自检失败；请确认系统权限和音频设备可用。';
+      setSmoke({ status: 'error', message });
+      toast.error('语音自检失败', message);
+    } finally {
+      stream?.getTracks().forEach((track) => track.stop());
+      setIsBusy(false);
+    }
+  }
+
+  return (
+    <section className="settingsComingSoonPage" aria-label="语音模型">
+      <header className="settingsComingSoonBanner" role="status">
+        <span className="settingsComingSoonBannerDot" aria-hidden="true" />
+        <strong>本机录音自检 · 已上线</strong>
+        <span>只做本地权限与采集链路 smoke；不上传音频、不保存样本、不写入记忆。</span>
+      </header>
+
+      <div className="settingsComingSoonHero">
+        <span className="settingsComingSoonIcon" aria-hidden="true">
+          <Volume2 size={24} strokeWidth={1.5} />
+        </span>
+        <div>
+          <div className="settingsComingSoonHeroHeading">
+            <h3>语音模型</h3>
+            <span className="settingsComingSoonBadge">V0.1 · capture smoke</span>
+          </div>
+          <p>
+            这页现在可以验证麦克风权限和本地录音链路。STT / TTS 模型接入会叠在这个边界上：
+            转写结果必须先回到 composer 由用户编辑确认，音频样本默认不落盘。
+          </p>
+        </div>
+      </div>
+
+      <dl className="settingsBotStatusGrid" aria-label="语音能力状态">
+        <div>
+          <dt>麦克风权限</dt>
+          <dd>{voicePermissionLabel(permission)}</dd>
+        </div>
+        <div>
+          <dt>采集上限</dt>
+          <dd>{Math.round(caps.maxDurationMs / 1000)} 秒 · {Math.round(caps.maxAudioBytes / 1024 / 1024)} MB</dd>
+        </div>
+        <div>
+          <dt>通道</dt>
+          <dd>单声道 · ≤ {Math.round(caps.maxSampleRate / 1000)} kHz</dd>
+        </div>
+        <div>
+          <dt>隐私</dt>
+          <dd>不保存音频 · 不进遥测</dd>
+        </div>
+      </dl>
+
+      <div className="settingsActionRow">
+        <button className="maka-button" type="button" onClick={() => void runCaptureSmoke()} disabled={isBusy}>
+          {isBusy ? '自检中…' : '运行录音自检'}
+        </button>
+      </div>
+
+      <div className="settingsNotice" data-tone={smoke.status === 'error' ? undefined : 'passive'} role="status">
+        {smoke.message}
+      </div>
+
+      <div className="settingsComingSoonHeroHeading">
+        <h3>当前边界</h3>
+      </div>
+      <ul className="settingsComingSoonList">
+        <li>录音样本只在 renderer 内存里用于计算 duration / bytes，结束后立即停止 tracks 并丢弃 chunks。</li>
+        <li>没有 STT provider 前，不会把音频传给任何云端服务。</li>
+        <li>未来转写文本只进入 composer 草稿；用户发送前必须能编辑。</li>
+      </ul>
+    </section>
+  );
+}
+
+async function readBrowserMicrophonePermission(): Promise<VoicePermissionStatus> {
+  const query = (navigator.permissions as { query?: (descriptor: { name: string }) => Promise<{ state: string }> } | undefined)?.query;
+  if (!query) return 'unknown';
+  try {
+    const result = await query.call(navigator.permissions, { name: 'microphone' });
+    if (result.state === 'granted') return 'granted';
+    if (result.state === 'denied') return 'denied';
+    if (result.state === 'prompt') return 'not_determined';
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+function classifyVoicePermissionError(error: unknown): VoicePermissionStatus {
+  const name = error instanceof DOMException ? error.name : '';
+  if (name === 'NotAllowedError' || name === 'SecurityError') return 'denied';
+  if (name === 'NotFoundError' || name === 'NotReadableError') return 'unsupported';
+  return 'unknown';
+}
+
+function voicePermissionLabel(status: VoicePermissionStatus): string {
+  switch (status) {
+    case 'granted': return '已授权';
+    case 'denied': return '已拒绝';
+    case 'restricted': return '受系统限制';
+    case 'not_determined': return '待授权';
+    case 'unsupported': return '不支持';
+    case 'unknown': return '未知';
+  }
+}
+
+function voiceValidationCopy(reason: string): string {
+  switch (reason) {
+    case 'duration_exceeded': return '录音超过时长上限。';
+    case 'audio_too_large': return '录音样本超过大小上限。';
+    case 'invalid_audio_shape': return '录音格式不符合当前采集契约。';
+    case 'permission_not_granted': return '麦克风权限未授予。';
+    default: return '语音采集自检未通过。';
+  }
+}
+
+function formatVoiceDuration(durationMs: number): string {
+  return `${Math.max(0, durationMs / 1000).toFixed(1)} 秒`;
+}
+
+function formatVoiceBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function ComingSoonPage(props: { copy: ComingSoonCopy }) {
