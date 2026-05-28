@@ -58,7 +58,8 @@ import {
   isToastPosition,
 } from '@maka/core';
 import { BOT_PROVIDERS, createDefaultSettings } from '@maka/core/settings';
-import { RelativeTime, useModalA11y, useToast } from '@maka/ui';
+import { RelativeTime, redactSecrets, useModalA11y, useToast } from '@maka/ui';
+import { normalizeSearchUrl } from '@maka/core';
 import { ProvidersPanel } from './ProvidersPanel';
 import { openPathFailureCopy, openPathActionLabel } from '../open-path';
 import { applyUiLocale, type UiLocalePreference } from '../theme';
@@ -2003,20 +2004,51 @@ function WebSearchSettingsPage(props: {
           <span>查询失败：{demoError}</span>
         </div>
       )}
-      {demoResults && demoResults.length === 0 && !demoError && (
-        <div className="settingsConnectionMeta">没有结果。</div>
-      )}
-      {demoResults && demoResults.length > 0 && (
-        <ul className="settingsWebSearchResults">
-          {demoResults.map((row, idx) => (
-            <li key={`${row.url}-${idx}`} className="settingsWebSearchResult">
-              <a href={row.url} target="_blank" rel="noreferrer">{row.title}</a>
-              <small>{row.source}</small>
-              <p>{row.snippet}</p>
-            </li>
-          ))}
-        </ul>
-      )}
+      {(() => {
+        // PR-SETTINGS-WEB-SEARCH-URL-HARDEN-0: match the chat-side
+        // WebSearchPreview hardening (xuan `e511aa5`): the renderer
+        // does NOT trust raw URLs / text coming back over IPC even
+        // though the main-process Tavily client filters first. Drop
+        // non-http(s) / malformed rows and redact every text cell
+        // before it reaches the DOM.
+        const safeRows: ReadonlyArray<{ title: string; url: string; source: string; snippet: string }> | null =
+          demoResults
+            ? demoResults
+                .map((row) => {
+                  const normalized = normalizeSearchUrl(row.url);
+                  if (!normalized.ok) return null;
+                  return {
+                    title: redactSecrets(row.title),
+                    url: redactSecrets(normalized.value),
+                    source: redactSecrets(row.source),
+                    snippet: redactSecrets(row.snippet),
+                  };
+                })
+                .filter(
+                  (
+                    row,
+                  ): row is { title: string; url: string; source: string; snippet: string } =>
+                    row !== null,
+                )
+            : null;
+        if (safeRows && safeRows.length === 0 && !demoError) {
+          return <div className="settingsConnectionMeta">没有结果。</div>;
+        }
+        if (safeRows && safeRows.length > 0) {
+          return (
+            <ul className="settingsWebSearchResults">
+              {safeRows.map((row, idx) => (
+                <li key={`${row.url}-${idx}`} className="settingsWebSearchResult">
+                  <a href={row.url} target="_blank" rel="noreferrer">{row.title}</a>
+                  <small>{row.source}</small>
+                  <p>{row.snippet}</p>
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        return null;
+      })()}
     </div>
   );
 }
