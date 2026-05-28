@@ -46,6 +46,7 @@ import type {
   UpdateAppSettingsResult,
   UsageRange,
   UsageStats,
+  SubscriptionAccountState,
 } from '@maka/core';
 import type { BotStatus } from '@maka/runtime';
 import type { TestProxyInput } from '@maka/core/settings/network-settings';
@@ -927,8 +928,287 @@ function AccountSettingsPage(props: {
         共 {totalCount} 个连接 · {enabledCount} 已启用。修改 API key / baseUrl / 默认模型会清掉「已验证」状态，
         需要重新测试。失败的测试不会自动禁用连接 —— 禁用始终是用户动作。
       </p>
+
+      {/*
+        PR-OAUTH-SUBSCRIPTION-0: Claude subscription card lives in
+        Settings · 账号 (kenji `cf41871b` decision #3 — auth state
+        belongs with the account, not the model catalog).
+      */}
+      <h3 className="settingsSubheading">订阅</h3>
+      <ClaudeSubscriptionCard />
     </div>
   );
+}
+
+/**
+ * PR-OAUTH-SUBSCRIPTION-0: Claude subscription card.
+ *
+ * Renders the runtime state, login/logout actions, paste-code modal,
+ * and quota meter. Tokens never enter renderer — this component
+ * consumes only `SubscriptionAccountState`.
+ */
+function ClaudeSubscriptionCard() {
+  const [state, setState] = useState<SubscriptionAccountState | null>(null);
+  const [pendingAction, setPendingAction] = useState(false);
+  const [authRequestId, setAuthRequestId] = useState<string | null>(null);
+  const [stateHint, setStateHint] = useState<string | null>(null);
+  const [pasteValue, setPasteValue] = useState('');
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const toast = useToast();
+
+  const refresh = async () => {
+    try {
+      const next = await window.maka.claudeSubscription.getAccountState();
+      setState(next);
+    } catch {
+      // ignore — surface as state.runtimeState = not_logged_in
+    }
+  };
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  async function startLogin() {
+    setPendingAction(true);
+    try {
+      const payload = await window.maka.claudeSubscription.getAuthUrl();
+      setAuthRequestId(payload.authRequestId);
+      setStateHint(payload.stateHint);
+      setPasteValue('');
+      setPasteError(null);
+      const opened = await window.maka.claudeSubscription.openAuthUrl(payload.url);
+      if (!opened.ok) {
+        toast.error('无法打开浏览器', opened.message);
+        setAuthRequestId(null);
+        setStateHint(null);
+      }
+      await refresh();
+    } finally {
+      setPendingAction(false);
+    }
+  }
+
+  async function submitPaste() {
+    if (!authRequestId) return;
+    setPendingAction(true);
+    setPasteError(null);
+    try {
+      const result = await window.maka.claudeSubscription.completeAuthorization(
+        authRequestId,
+        pasteValue,
+      );
+      if (result.ok) {
+        toast.success('登录成功', '已绑定 Claude 订阅。');
+        setAuthRequestId(null);
+        setStateHint(null);
+        setPasteValue('');
+        await refresh();
+      } else {
+        setPasteError(result.message);
+      }
+    } finally {
+      setPendingAction(false);
+    }
+  }
+
+  async function cancelLogin() {
+    if (!authRequestId) return;
+    await window.maka.claudeSubscription.cancelAuthorization(authRequestId);
+    setAuthRequestId(null);
+    setStateHint(null);
+    setPasteValue('');
+    setPasteError(null);
+    await refresh();
+  }
+
+  async function logout() {
+    if (!confirm('退出登录将删除本地保存的订阅凭据，确认吗？')) return;
+    setPendingAction(true);
+    try {
+      const result = await window.maka.claudeSubscription.logout();
+      if (result.ok) {
+        toast.success('已退出登录', '本地凭据已清除。');
+        await refresh();
+      } else {
+        toast.error('退出失败', result.message);
+      }
+    } finally {
+      setPendingAction(false);
+    }
+  }
+
+  async function refreshQuota() {
+    setPendingAction(true);
+    try {
+      await window.maka.claudeSubscription.refreshQuota();
+      await refresh();
+    } finally {
+      setPendingAction(false);
+    }
+  }
+
+  // Closed-state render mapping per the runtime state enum.
+  const presentation = state ? presentSubscriptionState(state) : { label: '加载中…', tone: 'muted', detail: '' };
+
+  return (
+    <div className="settingsConnectionRow" data-status={state?.runtimeState ?? 'loading'}>
+      <div className="settingsConnectionRowHead">
+        <div className="settingsConnectionRowText">
+          <div className="settingsConnectionRowName">
+            <strong>Claude 订阅 (Pro / Max)</strong>
+          </div>
+          <small>
+            通过 Anthropic 官方 OAuth 登录使用订阅配额。
+            {state?.profile?.email ? ` · ${state.profile.email}` : ''}
+          </small>
+        </div>
+        <span className="settingsConnectionBadge" data-tone={presentation.tone}>
+          {presentation.label}
+        </span>
+      </div>
+      <p className="settingsConnectionDetail">{presentation.detail}</p>
+
+      {state?.quota && (state.quota.fiveHour || state.quota.sevenDay) && (
+        <div className="settingsQuotaSection">
+          {state.quota.fiveHour && (
+            <div className="settingsQuotaRow">
+              <span>5 小时窗口</span>
+              <span>{state.quota.fiveHour.utilization}%</span>
+            </div>
+          )}
+          {state.quota.sevenDay && (
+            <div className="settingsQuotaRow">
+              <span>7 天窗口</span>
+              <span>{state.quota.sevenDay.utilization}%</span>
+            </div>
+          )}
+          <small className="settingsHelpText">
+            数据更新于 {new Date(state.quota.fetchedAt).toLocaleString()}
+          </small>
+        </div>
+      )}
+
+      <div className="settingsConnectionActions">
+        {state?.runtimeState === 'not_logged_in' || state?.runtimeState === 'refresh_failed' ? (
+          <button
+            type="button"
+            className="maka-button"
+            data-variant="primary"
+            onClick={() => void startLogin()}
+            disabled={pendingAction || authRequestId !== null}
+          >
+            {state.runtimeState === 'refresh_failed' ? '重新登录' : '登录订阅'}
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              className="maka-button"
+              onClick={() => void refreshQuota()}
+              disabled={pendingAction}
+            >
+              刷新配额
+            </button>
+            <button
+              type="button"
+              className="maka-button"
+              data-variant="ghost"
+              onClick={() => void logout()}
+              disabled={pendingAction}
+            >
+              退出登录
+            </button>
+          </>
+        )}
+      </div>
+
+      {authRequestId && (
+        <div className="settingsOauthPastePanel" role="region" aria-label="粘贴授权码">
+          <p>
+            在 Claude.ai 完成登录后，会跳转到 Anthropic 控制台显示一段授权码（含 <code>#</code> 分隔符），
+            把它粘贴到下面：
+          </p>
+          {stateHint && (
+            <small>提示：你的 state 以 <code>{stateHint}</code> 开头。</small>
+          )}
+          <textarea
+            value={pasteValue}
+            onChange={(event) => setPasteValue(event.currentTarget.value)}
+            placeholder="粘贴授权码（格式：xxx#yyy）"
+            aria-label="授权码"
+            rows={3}
+            spellCheck={false}
+            autoComplete="off"
+          />
+          {pasteError && <small className="settingsErrorText">{pasteError}</small>}
+          <div className="settingsConnectionActions">
+            <button
+              type="button"
+              className="maka-button"
+              data-variant="primary"
+              onClick={() => void submitPaste()}
+              disabled={pendingAction || pasteValue.trim().length === 0}
+            >
+              提交授权码
+            </button>
+            <button
+              type="button"
+              className="maka-button"
+              data-variant="ghost"
+              onClick={() => void cancelLogin()}
+              disabled={pendingAction}
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface SubscriptionStatePresentation {
+  label: string;
+  tone: string;
+  detail: string;
+}
+
+function presentSubscriptionState(state: SubscriptionAccountState): SubscriptionStatePresentation {
+  switch (state.runtimeState) {
+    case 'not_logged_in':
+      return { label: '未登录', tone: 'muted', detail: '使用 Claude 订阅配额前需要先登录。' };
+    case 'authorizing':
+      return { label: '登录中…', tone: 'info', detail: '请在弹出的浏览器窗口完成登录并粘贴授权码。' };
+    case 'authenticated':
+      return {
+        label: '已登录',
+        tone: 'success',
+        detail: '已绑定 Claude 订阅。订阅 send 通路在 PR-OAUTH-SUBSCRIPTION-1 接入，目前仅展示账号与配额。',
+      };
+    case 'refreshing':
+      return { label: '刷新中…', tone: 'info', detail: '正在刷新访问令牌。' };
+    case 'refresh_failed':
+      return {
+        label: '刷新失败',
+        tone: 'warning',
+        detail: state.errorMessage ?? '令牌刷新失败，请重新登录。',
+      };
+    case 'quota_unavailable':
+      return {
+        label: '配额暂不可用',
+        tone: 'warning',
+        detail: state.errorMessage ?? '已登录，但配额接口暂时无法访问。',
+      };
+    case 'provider_rejected':
+      return {
+        label: '订阅 API 拒绝',
+        tone: 'destructive',
+        detail: state.errorMessage ?? '订阅端点拒绝了请求，可能需要重新登录。',
+      };
+    default:
+      return { label: '未知状态', tone: 'muted', detail: '' };
+  }
 }
 
 function AccountConnectionRow(props: {

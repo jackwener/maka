@@ -224,6 +224,35 @@ export {
   stripSearchTrackingParams,
 } from './search.js';
 
+// oauth-subscription.ts (PR-OAUTH-SUBSCRIPTION-0) — closed-state types
+// + pure PKCE helpers for Claude subscription OAuth. No token-shaped
+// fields exposed; main-process service owns tokens.
+export type {
+  AuthorizationUrlPayload,
+  ClaudeAuthorizationConfig,
+  OAuthSubscriptionProvider,
+  OAuthSubscriptionRuntimeState,
+  PastedAuthorization,
+  QuotaSnapshot,
+  QuotaWindow,
+  Sha256Digest,
+  SubscriptionAccountProfile,
+  SubscriptionAccountState,
+  SubscriptionActionFailureReason,
+  SubscriptionActionResult,
+} from './oauth-subscription.js';
+export {
+  PENDING_AUTHORIZATION_TTL_MS,
+  PKCE_VERIFIER_LENGTH_BYTES,
+  QUOTA_CACHE_TTL_MS,
+  TOKEN_REFRESH_SKEW_MS,
+  base64urlEncode,
+  buildClaudeAuthorizationUrl,
+  constantTimeStringEqual,
+  parsePastedAuthorization,
+  pkceCodeChallenge,
+} from './oauth-subscription.js';
+
 // incognito.ts (PR-INCOGNITO-0) — cross-lane privacy contract; no IPC/storage/UI.
 export type {
   WorkspacePrivacyContext,

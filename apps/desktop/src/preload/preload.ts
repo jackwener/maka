@@ -38,6 +38,9 @@ import type {
   RetryTurnInput,
   TurnRecord,
   PermissionSnapshot,
+  AuthorizationUrlPayload,
+  SubscriptionAccountState,
+  SubscriptionActionResult,
 } from '@maka/core';
 import type {
   PricingConfig,
@@ -222,6 +225,36 @@ contextBridge.exposeInMainWorld('maka', {
     // into telemetry.
     thread(request: SearchRequest): Promise<SearchResult[] | { ok: false; reason: SearchErrorReason; message: string }> {
       return ipcRenderer.invoke('search:thread', request);
+    },
+  },
+  // PR-OAUTH-SUBSCRIPTION-0: Claude subscription OAuth bridge.
+  // NEVER returns raw OAuth credentials; renderer only sees account
+  // state + quota + action results (xuan G-X3 + the
+  // claude-subscription-ipc-boundary contract test enforces this).
+  claudeSubscription: {
+    getAuthUrl(): Promise<AuthorizationUrlPayload> {
+      return ipcRenderer.invoke('claude-subscription:get-auth-url');
+    },
+    openAuthUrl(url: string): Promise<SubscriptionActionResult> {
+      return ipcRenderer.invoke('claude-subscription:open-auth-url', url);
+    },
+    completeAuthorization(authRequestId: string, pasted: string): Promise<SubscriptionActionResult> {
+      return ipcRenderer.invoke('claude-subscription:complete-authorization', authRequestId, pasted);
+    },
+    cancelAuthorization(authRequestId?: string): Promise<{ ok: true }> {
+      return ipcRenderer.invoke('claude-subscription:cancel-authorization', authRequestId);
+    },
+    getAccountState(): Promise<SubscriptionAccountState> {
+      return ipcRenderer.invoke('claude-subscription:get-account-state');
+    },
+    refreshQuota(): Promise<SubscriptionActionResult> {
+      return ipcRenderer.invoke('claude-subscription:refresh-quota');
+    },
+    refreshTokens(): Promise<SubscriptionActionResult> {
+      return ipcRenderer.invoke('claude-subscription:refresh-tokens');
+    },
+    logout(): Promise<SubscriptionActionResult> {
+      return ipcRenderer.invoke('claude-subscription:logout');
     },
   },
   settings: {

@@ -36,6 +36,7 @@ import type {
   UsageRange,
 } from '@maka/core';
 import { runThreadSearch } from './search/thread-search.js';
+import { ClaudeSubscriptionService } from './oauth/claude-subscription-service.js';
 import { defaultWorkspacePrivacyContext } from '@maka/core/incognito';
 import type {
   PricingConfig,
@@ -118,6 +119,14 @@ const settingsStore = createSettingsStore(workspaceRoot);
 const telemetryRepo = createTelemetryRepo(workspaceRoot);
 const artifactStore = createArtifactStore(workspaceRoot);
 const credentialStore = createSafeStorageCredentialStore(workspaceRoot);
+// PR-OAUTH-SUBSCRIPTION-0: Claude subscription OAuth service.
+// Lives in main process only; renderer accesses via IPC. Tokens
+// never cross the IPC boundary (xuan G-X3). Cloak path is dynamic-
+// imported behind MAKA_CLAUDE_SUBSCRIPTION_CLOAK flag (xuan G-X4)
+// and lives in a separate module not statically imported here.
+const claudeSubscription = new ClaudeSubscriptionService({
+  userDataDir: app.getPath('userData'),
+});
 const backends = new BackendRegistry();
 const permissionEngine = new PermissionEngine({ newId: randomUUID, now: Date.now });
 const builtinTools = buildBuiltinTools().filter((tool) => tool.name !== 'Edit');
@@ -759,6 +768,54 @@ function registerIpc(): void {
   // receives the runtime via DI so unit tests stay Electron-agnostic.
   // We deliberately do NOT log the request body — query text never enters
   // telemetry.
+  // ===========================================================
+  // PR-OAUTH-SUBSCRIPTION-0: Claude subscription OAuth IPC.
+  // All handlers return either `SubscriptionAccountState` or
+  // `SubscriptionActionResult` — never raw tokens (xuan G-X3).
+  // ===========================================================
+  ipcMain.handle('claude-subscription:get-auth-url', async () =>
+    claudeSubscription.getAuthorizationUrl(),
+  );
+  ipcMain.handle(
+    'claude-subscription:open-auth-url',
+    async (_event, url: unknown) => {
+      if (typeof url !== 'string' || !/^https:\/\/claude\.ai\//.test(url)) {
+        return { ok: false, reason: 'unknown', message: '授权链接无效。' };
+      }
+      return claudeSubscription.openAuthorizationUrl(url);
+    },
+  );
+  ipcMain.handle(
+    'claude-subscription:complete-authorization',
+    async (_event, authRequestId: unknown, pasted: unknown) => {
+      if (typeof authRequestId !== 'string') {
+        return { ok: false, reason: 'authorization_pending', message: '授权会话不存在。' };
+      }
+      return claudeSubscription.completeAuthorization(authRequestId, pasted);
+    },
+  );
+  ipcMain.handle(
+    'claude-subscription:cancel-authorization',
+    async (_event, authRequestId: unknown) => {
+      claudeSubscription.cancelAuthorization(
+        typeof authRequestId === 'string' ? authRequestId : undefined,
+      );
+      return { ok: true } as const;
+    },
+  );
+  ipcMain.handle('claude-subscription:get-account-state', async () =>
+    claudeSubscription.getAccountState(),
+  );
+  ipcMain.handle('claude-subscription:refresh-quota', async () =>
+    claudeSubscription.refreshQuota(),
+  );
+  ipcMain.handle('claude-subscription:refresh-tokens', async () =>
+    claudeSubscription.refreshTokens(),
+  );
+  ipcMain.handle('claude-subscription:logout', async () =>
+    claudeSubscription.logout(),
+  );
+
   ipcMain.handle('search:thread', async (_event, request: unknown) => {
     // PR-SEARCH-2 review fixup (@xuan `2f1aba55`): pass `unknown`
     // through to the helper, which runs an object-shape guard and

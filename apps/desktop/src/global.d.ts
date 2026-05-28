@@ -37,6 +37,9 @@ import type {
   RetryTurnInput,
   TurnRecord,
   PermissionSnapshot,
+  AuthorizationUrlPayload,
+  SubscriptionAccountState,
+  SubscriptionActionResult,
 } from '@maka/core';
 import type {
   PricingConfig,
@@ -145,6 +148,19 @@ declare global {
           | SearchResult[]
           | { ok: false; reason: SearchErrorReason; message: string }
         >;
+      };
+      claudeSubscription: {
+        getAuthUrl(): Promise<AuthorizationUrlPayload>;
+        openAuthUrl(url: string): Promise<SubscriptionActionResult>;
+        completeAuthorization(
+          authRequestId: string,
+          pasted: string,
+        ): Promise<SubscriptionActionResult>;
+        cancelAuthorization(authRequestId?: string): Promise<{ ok: true }>;
+        getAccountState(): Promise<SubscriptionAccountState>;
+        refreshQuota(): Promise<SubscriptionActionResult>;
+        refreshTokens(): Promise<SubscriptionActionResult>;
+        logout(): Promise<SubscriptionActionResult>;
       };
       usage: {
         summary(query: UsageQuery): Promise<Result<UsageSummaryV2>>;

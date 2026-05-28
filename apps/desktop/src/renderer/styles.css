@@ -4886,6 +4886,67 @@ button:active {
   border-color: oklch(from var(--info) l c h / 0.20);
   background: oklch(from var(--info) l c h / 0.03);
 }
+
+/* PR-OAUTH-SUBSCRIPTION-0: Claude subscription card states. */
+.settingsConnectionRow[data-status="not_logged_in"] {
+  border-color: var(--border);
+  background: var(--foreground-2);
+}
+.settingsConnectionRow[data-status="authorizing"],
+.settingsConnectionRow[data-status="refreshing"] {
+  border-color: oklch(from var(--info) l c h / 0.30);
+  background: oklch(from var(--info) l c h / 0.04);
+}
+.settingsConnectionRow[data-status="authenticated"] {
+  border-color: oklch(from var(--success) l c h / 0.24);
+  background: oklch(from var(--success) l c h / 0.04);
+}
+.settingsConnectionRow[data-status="refresh_failed"],
+.settingsConnectionRow[data-status="quota_unavailable"] {
+  border-color: oklch(from var(--warning, var(--info)) l c h / 0.30);
+  background: oklch(from var(--warning, var(--info)) l c h / 0.05);
+}
+.settingsConnectionRow[data-status="provider_rejected"] {
+  border-color: oklch(from var(--destructive) l c h / 0.30);
+  background: oklch(from var(--destructive) l c h / 0.05);
+}
+
+.settingsQuotaSection {
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: oklch(from var(--foreground) l c h / 0.03);
+}
+.settingsQuotaRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.settingsOauthPastePanel {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: oklch(from var(--foreground) l c h / 0.04);
+}
+.settingsOauthPastePanel textarea {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--mono-font, monospace);
+  font-size: 12px;
+  resize: vertical;
+}
+.settingsErrorText {
+  color: var(--destructive-text, var(--destructive, red));
+}
 .settingsConnectionRow[data-status="disabled"] {
   opacity: 0.72;
 }
