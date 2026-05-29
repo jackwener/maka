@@ -37,13 +37,18 @@ describe('OpenGatewayService', () => {
     assert.equal(health.status, 200);
     assert.equal(health.body.ok, true);
     assert.equal(health.body.gateway.running, true);
+    assert.match(health.headers.get('x-maka-request-id') ?? '', /^gw_[0-9a-f-]{8}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{12}$/);
+    assert.equal(health.headers.get('access-control-expose-headers'), 'X-Maka-Request-Id');
 
     const unauthorized = await fetchJson(`${status.baseUrl}/v1/capabilities`);
     assert.equal(unauthorized.status, 401);
     assert.equal(unauthorized.body.error, 'unauthorized');
+    assert.equal(unauthorized.body.requestId, unauthorized.headers.get('x-maka-request-id'));
 
     const authorized = await fetchJson(`${status.baseUrl}/v1/capabilities`, 'dev-token');
     assert.equal(authorized.status, 200);
+    assert.match(authorized.headers.get('x-maka-request-id') ?? '', /^gw_[0-9a-f-]{8}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{12}$/);
+    assert.equal(authorized.body.requestId, undefined);
     assert.deepEqual(authorized.body.capabilities, [
       'events.state',
       'gateway.openapi',
@@ -839,7 +844,7 @@ function createGatewaySettings(patch: Partial<AppSettings['openGateway']>): AppS
 async function fetchJson(
   url: string,
   input?: string | { token?: string; method?: string; body?: unknown },
-): Promise<{ status: number; body: any }> {
+): Promise<{ status: number; headers: Headers; body: any }> {
   const token = typeof input === 'string' ? input : input?.token;
   const response = await fetch(url, {
     method: typeof input === 'string' ? undefined : input?.method,
@@ -848,6 +853,7 @@ async function fetchJson(
   });
   return {
     status: response.status,
+    headers: response.headers,
     body: await response.json(),
   };
 }

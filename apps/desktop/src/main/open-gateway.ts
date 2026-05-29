@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import type {
   AppSettings,
   OpenGatewayRuntimeStatus,
@@ -97,6 +98,7 @@ export class OpenGatewayService {
 
     await this.stop();
     const server = createServer((req, res) => {
+      res.setHeader(OPEN_GATEWAY_REQUEST_ID_HEADER, createGatewayRequestId());
       void this.handle(req, res).catch((error) => {
         writeJson(res, 500, { ok: false, error: 'internal_error', message: error instanceof Error ? error.message : 'Gateway error' });
       });
@@ -154,6 +156,7 @@ export class OpenGatewayService {
     res.setHeader('Access-Control-Allow-Origin', 'http://127.0.0.1');
     res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Expose-Headers', OPEN_GATEWAY_REQUEST_ID_HEADER);
     if (req.method === 'OPTIONS') {
       writeJson(res, 204, {});
       return;
@@ -594,7 +597,7 @@ function writeJson(res: ServerResponse, statusCode: number, payload: unknown): v
     res.end();
     return;
   }
-  res.end(JSON.stringify(payload));
+  res.end(JSON.stringify(attachRequestIdToErrorPayload(res, payload)));
 }
 
 type JsonBodyResult =
@@ -612,6 +615,20 @@ const OPEN_GATEWAY_REPLAY_MISS_EVENT = 'gateway_replay_miss';
 const OPEN_GATEWAY_INCIDENT_LIMIT = 20;
 const OPEN_GATEWAY_INCIDENT_AGGREGATE_LIMIT = 50;
 const OPEN_GATEWAY_INCIDENT_TEXT_LIMIT = 500;
+const OPEN_GATEWAY_REQUEST_ID_HEADER = 'X-Maka-Request-Id';
+
+function createGatewayRequestId(): string {
+  return `gw_${randomUUID()}`;
+}
+
+function attachRequestIdToErrorPayload(res: ServerResponse, payload: unknown): unknown {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
+  const record = payload as Record<string, unknown>;
+  if (record.ok !== false || typeof record.error !== 'string') return payload;
+  const requestId = res.getHeader(OPEN_GATEWAY_REQUEST_ID_HEADER);
+  if (typeof requestId !== 'string' || requestId.length === 0) return payload;
+  return { ...record, requestId };
+}
 
 interface GatewayEventClient {
   response: ServerResponse;
