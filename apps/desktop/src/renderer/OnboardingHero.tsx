@@ -20,7 +20,7 @@
 //     wired in a later PR.
 
 import { ArrowRight, Sparkles, KeyRound, Settings as SettingsIcon, Cpu, AlertCircle, FolderOpen, Paperclip } from 'lucide-react';
-import { useCallback, useRef, useState, type KeyboardEvent } from 'react';
+import { useCallback, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import type { LlmConnection, OnboardingState, ProviderType, QuickChatMode, SettingsSection } from '@maka/core';
 import { appendPromptContextDraft, detectUiLocale, type UiLocale } from '@maka/ui';
 import { ProviderLogo, providerDisplay } from './settings/ProvidersPanel';
@@ -111,6 +111,7 @@ export interface OnboardingHeroProps {
    */
   onRefreshConnections?: () => Promise<void> | void;
   onImportTextFile?: () => Promise<string | undefined>;
+  onImportDroppedTextFiles?: (files: File[]) => Promise<string | undefined>;
   onImportFolderOutline?: () => Promise<string | undefined>;
 }
 
@@ -150,6 +151,7 @@ export function OnboardingHero(props: OnboardingHeroProps) {
           onQuickChatSubmit={props.onQuickChatSubmit}
           quickChatPending={props.quickChatPending === true}
           onImportTextFile={props.onImportTextFile}
+          onImportDroppedTextFiles={props.onImportDroppedTextFiles}
           onImportFolderOutline={props.onImportFolderOutline}
         />
       );
@@ -387,10 +389,12 @@ function ReadyEmptyHero(props: {
   onQuickChatSubmit: (prompt: string, mode?: QuickChatMode) => void;
   quickChatPending: boolean;
   onImportTextFile?: () => Promise<string | undefined>;
+  onImportDroppedTextFiles?: (files: File[]) => Promise<string | undefined>;
   onImportFolderOutline?: () => Promise<string | undefined>;
 }) {
   const [draft, setDraft] = useState('');
   const [draftMode, setDraftMode] = useState<QuickChatMode | undefined>();
+  const [dragActive, setDragActive] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const copy = READY_HERO_COPY_BY_LOCALE[detectUiLocale()];
 
@@ -463,6 +467,54 @@ function ReadyEmptyHero(props: {
     });
   }, [props]);
 
+  const appendImportedPrompt = useCallback((prompt: string) => {
+    let nextDraft = prompt;
+    setDraft((current) => {
+      nextDraft = appendPromptContextDraft(current, prompt);
+      return nextDraft;
+    });
+    setDraftMode(undefined);
+    window.requestAnimationFrame(() => {
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      input.setSelectionRange(nextDraft.length, nextDraft.length);
+    });
+  }, []);
+
+  const canAcceptDroppedTextFiles = useCallback(() => (
+    Boolean(props.onImportDroppedTextFiles && !props.quickChatPending)
+  ), [props]);
+
+  const hasDraggedFiles = useCallback((event: DragEvent<HTMLElement>) => (
+    Array.from(event.dataTransfer.types).includes('Files')
+  ), []);
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!canAcceptDroppedTextFiles() || !hasDraggedFiles(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setDragActive(true);
+  }, [canAcceptDroppedTextFiles, hasDraggedFiles]);
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    setDragActive(false);
+  }, []);
+
+  const handleDrop = useCallback((event: DragEvent<HTMLDivElement>) => {
+    if (!hasDraggedFiles(event)) return;
+    event.preventDefault();
+    setDragActive(false);
+    if (!canAcceptDroppedTextFiles()) return;
+    const files = Array.from(event.dataTransfer.files);
+    if (files.length === 0) return;
+    void (async () => {
+      const prompt = await props.onImportDroppedTextFiles?.(files);
+      if (prompt) appendImportedPrompt(prompt);
+    })();
+  }, [appendImportedPrompt, canAcceptDroppedTextFiles, hasDraggedFiles, props]);
+
   return (
     <section className="maka-onboarding maka-onboarding-ready" aria-label={copy.ariaLabel}>
       <header>
@@ -474,7 +526,13 @@ function ReadyEmptyHero(props: {
         <p>{copy.intro}</p>
       </header>
 
-      <div className="maka-onboarding-quickchat">
+      <div
+        className="maka-onboarding-quickchat"
+        data-drag-active={dragActive ? 'true' : undefined}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         <textarea
           ref={inputRef}
           className="maka-onboarding-quickchat-input"

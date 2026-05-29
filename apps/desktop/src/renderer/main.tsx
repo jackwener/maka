@@ -1220,7 +1220,7 @@ function AppShell(props: {
     composerRef.current?.appendText(prompt);
   }
 
-  async function importDroppedTextFilesIntoComposer(files: File[]) {
+  async function importDroppedTextFilesPrompt(files: File[]): Promise<string | undefined> {
     if (files.length === 0) return;
     try {
       const payloads = await Promise.all(files.map(async (file) => ({
@@ -1231,13 +1231,20 @@ function AppShell(props: {
       const result = await window.maka.context.importDroppedTextFiles(payloads);
       if (!result.ok) {
         toastApi.error('导入文本失败', result.message);
-        return;
+        return undefined;
       }
       toastApi.success('已导入文本文件', `${result.name}${result.truncated ? ' · 已截断' : ''}`);
-      composerRef.current?.appendText(result.prompt);
+      return result.prompt;
     } catch (error) {
       toastApi.error('导入文本失败', cleanErrorMessage(error));
+      return undefined;
     }
+  }
+
+  async function importDroppedTextFilesIntoComposer(files: File[]) {
+    const prompt = await importDroppedTextFilesPrompt(files);
+    if (!prompt) return;
+    composerRef.current?.appendText(prompt);
   }
 
   async function importFolderOutlinePrompt(): Promise<string | undefined> {
@@ -1959,6 +1966,7 @@ function AppShell(props: {
                         onRefreshConnections={refreshConnections}
                         onImportTextFile={importTextFilePrompt}
                         onImportFolderOutline={importFolderOutlinePrompt}
+                        onImportDroppedTextFiles={importDroppedTextFilesPrompt}
                       />
                       {onboardingState.kind === 'ready_empty' && (
                         <FirstRunChecklist

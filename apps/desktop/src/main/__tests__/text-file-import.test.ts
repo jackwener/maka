@@ -201,9 +201,11 @@ describe('text file context import', () => {
     const onboardingSource = await readFile(join(process.cwd(), 'src/renderer/OnboardingHero.tsx'), 'utf8');
     const uiSource = await readFile(join(process.cwd(), '../../packages/ui/src/components.tsx'), 'utf8');
     const cssSource = await readFile(join(process.cwd(), 'src/renderer/maka-tokens.css'), 'utf8');
+    const stylesSource = await readFile(join(process.cwd(), 'src/renderer/styles.css'), 'utf8');
 
     assert.match(mainSource, /onImportTextFile=\{importTextFilePrompt\}/);
     assert.match(mainSource, /onImportTextFile=\{importTextFileIntoComposer\}/);
+    assert.match(mainSource, /onImportDroppedTextFiles=\{importDroppedTextFilesPrompt\}/);
     assert.match(mainSource, /onImportDroppedTextFiles=\{importDroppedTextFilesIntoComposer\}/);
     assert.match(mainSource, /window\.maka\.context\.importDroppedTextFiles\(payloads\)/);
     assert.match(mainSource, /composerRef\.current\?\.appendText\(prompt\)/);
@@ -218,10 +220,13 @@ describe('text file context import', () => {
     assert.match(onboardingSource, /导入文本文件/);
     assert.match(onboardingSource, /导入文件夹目录/);
     assert.match(onboardingSource, /appendPromptContextDraft\(current, prompt\)/);
+    assert.match(onboardingSource, /onImportDroppedTextFiles/);
+    assert.match(onboardingSource, /onDrop=\{handleDrop\}/);
     assert.match(uiSource, /aria-label="导入文本文件"/);
     assert.match(uiSource, /aria-label="导入文件夹目录"/);
     assert.match(uiSource, /onDrop=\{onComposerDrop\}/);
     assert.match(cssSource, /\.maka-composer\[data-drag-active="true"\]/);
+    assert.match(stylesSource, /\.maka-onboarding-quickchat\[data-drag-active="true"\]/);
     assert.match(uiSource, /rememberComposerDraft\(draftStoreRef\.current, previousKey/);
     assert.match(uiSource, /readComposerDraft\(draftStoreRef\.current, nextKey\)/);
     assert.match(uiSource, /rememberComposerHistoryEntry\(promptHistoryRef\.current\.entries, text\)/);

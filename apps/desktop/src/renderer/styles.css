@@ -1347,6 +1347,13 @@ button:active {
   font: inherit;
   line-height: 1.5;
 }
+.maka-onboarding-quickchat[data-drag-active="true"] .maka-onboarding-quickchat-input {
+  border-color: oklch(from var(--accent) l c h / 0.46);
+  background: oklch(from var(--accent) 0.98 calc(c * 0.20) h / 0.35);
+  box-shadow:
+    0 0 0 1px oklch(from var(--accent) l c h / 0.22),
+    0 0 0 4px oklch(from var(--accent) l c h / 0.08);
+}
 .maka-onboarding-quickchat-input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
