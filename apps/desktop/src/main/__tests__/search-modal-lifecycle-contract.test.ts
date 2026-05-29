@@ -194,4 +194,16 @@ describe('SearchModal lifecycle contract (PR-SIDEBAR-IA-0 Phase 3 P0 fixup)', ()
     assert.doesNotMatch(searchModal, /dangerouslySetInnerHTML/, 'SearchModal must not use dangerouslySetInnerHTML for snippets');
     assert.match(styles, /\.maka-search-modal-snippet-hit/, 'Highlighted search snippets must have dedicated styling');
   });
+
+  it('search result list announces result count and truncation state', async () => {
+    const components = await readFile(COMPONENTS_PATH, 'utf8');
+    const styles = await readFile(STYLES_PATH, 'utf8');
+    const searchModal = components.slice(components.indexOf('export function SearchModal'), components.indexOf('/**\n * Render an ordered list of session groups'));
+
+    assert.match(searchModal, /const resultsTruncated = showResults && results\.some\(\(result\) => result\.truncated === true\)/, 'SearchModal must derive truncation state from SearchResult.truncated');
+    assert.match(searchModal, /className="maka-search-modal-result-summary" aria-live="polite"/, 'Search result summary must be announced politely');
+    assert.match(searchModal, /找到 \{results\.length\} 条匹配/, 'Search results must show a count');
+    assert.match(searchModal, /结果较多，已显示前 \{results\.length\} 条/, 'Truncated result sets must say only the first results are shown');
+    assert.match(styles, /\.maka-search-modal-result-summary/, 'Search result summary needs dedicated styling');
+  });
 });
