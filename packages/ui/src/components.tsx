@@ -2620,6 +2620,7 @@ export function ChatView(props: {
    * keeping enum-to-Chinese translation outside @maka/ui.
    */
   turnFailedReasonLabels?: Record<string, string>;
+  turnFailedRecoveryLabels?: Record<string, string>;
   turnLineageBadgesByTurn?: Record<string, TurnLineageBadge[]>;
   onLineageBadgeClick?: (targetTurnId: string) => void;
   skills?: SkillEntry[];
@@ -2930,6 +2931,7 @@ export function ChatView(props: {
                 footerActions={props.turnFooterActionsByTurn?.[turn.turnId]}
                 onFooterAction={(actionId) => props.onTurnFooterAction?.(turn.turnId, actionId)}
                 failedReasonLabel={props.turnFailedReasonLabels?.[turn.turnId]}
+                failedRecoveryLabel={props.turnFailedRecoveryLabels?.[turn.turnId]}
                 lineageBadges={props.turnLineageBadgesByTurn?.[turn.turnId]}
                 onLineageBadgeClick={props.onLineageBadgeClick}
                 previousModelId={expectedModelId}
@@ -3749,6 +3751,13 @@ function TurnView(props: {
    */
   failedReasonLabel?: string;
   /**
+   * PR-PawWork-run-incident-lite: pre-derived recovery guidance for a failed
+   * turn. Caller computes this from error class, retained partial output, and
+   * tool activity so the banner can distinguish "retry" from "inspect tool
+   * output first".
+   */
+  failedRecoveryLabel?: string;
+  /**
    * PR109e-e: forward + reverse lineage badges. The renderer
    * computes the labels (with short turn ids) and click targets;
    * @maka/ui just renders the badge UI.
@@ -3865,6 +3874,9 @@ function TurnView(props: {
                   <AlertOctagon size={14} strokeWidth={2} />
                 </span>
                 <span>{props.failedReasonLabel}</span>
+                {props.failedRecoveryLabel && (
+                  <span className="maka-turn-failed-recovery">{props.failedRecoveryLabel}</span>
+                )}
               </div>
             )}
             <MessageBody role="assistant" text={turn.assistant.text} />

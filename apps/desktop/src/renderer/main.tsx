@@ -65,6 +65,7 @@ import { deriveChatHeaderAlert } from './chat-header-alert';
 import { deriveStaleSessionIds } from './stale-sessions';
 import { deriveSessionStatusGroups } from './session-status-grouping';
 import {
+  deriveFailedTurnRecovery,
   describeTurnErrorClass,
   presentSessionStatus,
   sessionStatusAriaLabel,
@@ -350,6 +351,7 @@ function AppShell() {
   const {
     turnFooterActionsByTurn,
     turnFailedReasonLabels,
+    turnFailedRecoveryLabels,
     turnLineageBadgesByTurn,
   } = useMemo(() => {
     const turnsForLineage = materializeTurns(messages, liveTools);
@@ -358,6 +360,7 @@ function AppShell() {
     const shortId = (turnId: string) => turnId.slice(0, 6);
     const footer: Record<string, ReadonlyArray<TurnFooterActionMeta>> = {};
     const failedLabels: Record<string, string> = {};
+    const failedRecoveryLabels: Record<string, string> = {};
     const badges: Record<string, TurnLineageBadge[]> = {};
     for (const turn of turnsForLineage) {
       const lineageEntry = lineage.get(turn.turnId);
@@ -376,6 +379,12 @@ function AppShell() {
       });
       if (turn.status === 'failed') {
         failedLabels[turn.turnId] = describeTurnErrorClass(turn.errorClass);
+        failedRecoveryLabels[turn.turnId] = deriveFailedTurnRecovery({
+          errorClass: turn.errorClass,
+          partialOutputRetained: turn.partialOutputRetained,
+          toolActivityCount: turn.tools.length,
+          erroredToolCount: turn.tools.filter((tool) => tool.status === 'errored').length,
+        }).label;
       }
       const turnBadges: TurnLineageBadge[] = [];
       // Forward badges — pointing back at the origin
@@ -421,6 +430,7 @@ function AppShell() {
     return {
       turnFooterActionsByTurn: footer,
       turnFailedReasonLabels: failedLabels,
+      turnFailedRecoveryLabels: failedRecoveryLabels,
       turnLineageBadgesByTurn: badges,
     };
   }, [activeId, messages, liveTools, pendingTurnActions]);
@@ -2031,6 +2041,7 @@ function AppShell() {
                 turnFooterActionsByTurn={turnFooterActionsByTurn}
                 onTurnFooterAction={handleTurnFooterAction}
                 turnFailedReasonLabels={turnFailedReasonLabels}
+                turnFailedRecoveryLabels={turnFailedRecoveryLabels}
                 turnLineageBadgesByTurn={turnLineageBadgesByTurn}
                 onLineageBadgeClick={handleLineageBadgeClick}
                 skills={skills}

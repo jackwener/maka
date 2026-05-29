@@ -27,6 +27,7 @@ import {
   TURN_STATUSES,
 } from '@maka/core';
 import {
+  deriveFailedTurnRecovery,
   describeBlockedReason,
   describeTurnErrorClass,
   presentSessionStatus,
@@ -171,8 +172,19 @@ describe('turn-control-history Path 15 matrix', () => {
       // Error class copy
       for (const cls of FIXTURE_ERROR_CLASSES) {
         helperOutputs.push(describeTurnErrorClass(cls));
+        helperOutputs.push(deriveFailedTurnRecovery({
+          errorClass: cls,
+          partialOutputRetained: cls === 'timeout',
+          toolActivityCount: cls === 'tool_failed' ? 1 : 0,
+          erroredToolCount: cls === 'tool_failed' ? 1 : 0,
+        }).label);
       }
       helperOutputs.push(describeTurnErrorClass(undefined));
+      helperOutputs.push(deriveFailedTurnRecovery({
+        partialOutputRetained: false,
+        toolActivityCount: 0,
+        erroredToolCount: 0,
+      }).label);
       // Footer action labels + tooltips for every TurnStatus × hasContent
       for (const status of TURN_STATUSES) {
         for (const hasContent of [true, false]) {

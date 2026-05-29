@@ -11,6 +11,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { SESSION_BLOCKED_REASONS, SESSION_STATUSES } from '@maka/core';
 import {
+  deriveFailedTurnRecovery,
   describeBlockedReason,
   describeTurnErrorClass,
   presentSessionStatus,
@@ -173,5 +174,66 @@ describe('describeTurnErrorClass (PR109e-d @kenji gate #3)', () => {
   it('is case-insensitive', () => {
     assert.equal(describeTurnErrorClass('TIMEOUT'), describeTurnErrorClass('timeout'));
     assert.equal(describeTurnErrorClass('Network'), describeTurnErrorClass('network'));
+  });
+});
+
+describe('deriveFailedTurnRecovery (PawWork run-incident lite)', () => {
+  it('asks the user to inspect tool output when a tool failed', () => {
+    const result = deriveFailedTurnRecovery({
+      errorClass: 'tool_failed',
+      partialOutputRetained: false,
+      toolActivityCount: 1,
+      erroredToolCount: 1,
+    });
+    assert.equal(result.action, 'inspect_tool');
+    assert.match(result.label, /工具|结果/);
+  });
+
+  it('routes auth failures to connection/login checks before retrying', () => {
+    for (const cls of ['auth', '401', '403']) {
+      const result = deriveFailedTurnRecovery({
+        errorClass: cls,
+        partialOutputRetained: false,
+        toolActivityCount: 0,
+        erroredToolCount: 0,
+      });
+      assert.equal(result.action, 'check_connection');
+      assert.match(result.label, /模型|连接|登录/);
+    }
+  });
+
+  it('offers continue when partial output was retained and no tool failed', () => {
+    const result = deriveFailedTurnRecovery({
+      errorClass: 'timeout',
+      partialOutputRetained: true,
+      toolActivityCount: 0,
+      erroredToolCount: 0,
+    });
+    assert.equal(result.action, 'continue');
+    assert.match(result.label, /保留|继续/);
+  });
+
+  it('offers direct retry only when no side-effect or partial-output evidence exists', () => {
+    const result = deriveFailedTurnRecovery({
+      errorClass: 'timeout',
+      partialOutputRetained: false,
+      toolActivityCount: 0,
+      erroredToolCount: 0,
+    });
+    assert.equal(result.action, 'retry');
+    assert.match(result.label, /重试/);
+  });
+
+  it('keeps all recovery labels Chinese and does not echo raw error classes', () => {
+    for (const errorClass of ['timeout', 'auth', 'tool_failed', 'provider_unavailable']) {
+      const text = deriveFailedTurnRecovery({
+        errorClass,
+        partialOutputRetained: errorClass === 'provider_unavailable',
+        toolActivityCount: errorClass === 'tool_failed' ? 1 : 0,
+        erroredToolCount: errorClass === 'tool_failed' ? 1 : 0,
+      }).label;
+      assert.match(text, /[一-鿿]/);
+      assert.ok(!text.includes(errorClass), `${errorClass} leaked into "${text}"`);
+    }
   });
 });

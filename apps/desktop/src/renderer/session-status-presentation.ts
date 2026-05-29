@@ -126,3 +126,41 @@ export function describeTurnErrorClass(errorClass: string | undefined): string {
   if (lower === 'permission_required' || lower.includes('permission')) return '等待权限确认';
   return '未知错误';
 }
+
+export type FailedTurnRecoveryAction = 'retry' | 'continue' | 'inspect_tool' | 'check_connection';
+
+export interface FailedTurnRecoveryPresentation {
+  action: FailedTurnRecoveryAction;
+  label: string;
+}
+
+export interface FailedTurnRecoveryInput {
+  errorClass?: string;
+  partialOutputRetained: boolean;
+  toolActivityCount: number;
+  erroredToolCount: number;
+}
+
+/**
+ * User-facing recovery guidance for a failed turn. This intentionally
+ * separates "what failed" (`describeTurnErrorClass`) from "what should I do
+ * next", following the same incident-summary discipline as the runtime logs:
+ * do not ask the user to blindly retry if a tool already ran or partial output
+ * was retained.
+ */
+export function deriveFailedTurnRecovery(input: FailedTurnRecoveryInput): FailedTurnRecoveryPresentation {
+  const lower = input.errorClass?.toLowerCase() ?? '';
+  if (input.erroredToolCount > 0 || lower === 'tool_failed' || lower.includes('tool')) {
+    return { action: 'inspect_tool', label: '先检查工具结果，再决定是否重试' };
+  }
+  if (lower === 'auth' || lower.includes('auth') || lower === '401' || lower === '403') {
+    return { action: 'check_connection', label: '先检查模型连接或登录状态' };
+  }
+  if (input.partialOutputRetained) {
+    return { action: 'continue', label: '已保留部分输出，可从这里继续' };
+  }
+  if (input.toolActivityCount > 0) {
+    return { action: 'inspect_tool', label: '工具记录已保留，重试前先看结果' };
+  }
+  return { action: 'retry', label: '没有执行工具，可直接重试' };
+}
