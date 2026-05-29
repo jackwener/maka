@@ -44,7 +44,6 @@ import type {
   SettingsSection,
   ThemePalette,
   ThemePreference,
-  ToastPosition,
   UiDensity,
   UpdateAppSettingsResult,
   UsageRange,
@@ -63,7 +62,6 @@ import {
   deriveProviderAuthContractFromConnection,
   appendManualLocalMemoryEntryDraft,
   defaultVoiceCaptureCaps,
-  isToastPosition,
   setLocalMemoryEntryStatusDraft,
   validateVoiceCaptureRequest,
   webSearchCredentialStatusFromResponse,
@@ -224,15 +222,6 @@ export function SettingsModal(props: {
   onThemeChange(pref: ThemePreference): void;
   density: UiDensity;
   onDensityChange(density: UiDensity): void;
-  /**
-   * PR-UI-D2 fixup v2 (@kenji msg b4dbfa91): current toast position
-   * (source-of-truth lifted from `App`) and live setter. The Theme
-   * Settings picker calls `onToastPositionChange(next)` synchronously
-   * on click so `ToastProvider` re-renders with the new `position`
-   * prop — no `querySelector('.maka-toast-viewport')` DOM hack.
-   */
-  toastPosition: ToastPosition;
-  onToastPositionChange(position: ToastPosition): void;
   onUserLabelChange?(label: string): void;
   /**
    * Force the modal to a specific section when it (re-)mounts or when the
@@ -271,8 +260,6 @@ export function SettingsModal(props: {
           onThemeChange={props.onThemeChange}
           density={props.density}
           onDensityChange={props.onDensityChange}
-          toastPosition={props.toastPosition}
-          onToastPositionChange={props.onToastPositionChange}
           onUserLabelChange={props.onUserLabelChange}
           requestedSection={props.requestedSection}
           onOpenDailyReview={props.onOpenDailyReview}
@@ -291,8 +278,6 @@ function SettingsSurface(props: {
   onThemeChange(pref: ThemePreference): void;
   density: UiDensity;
   onDensityChange(density: UiDensity): void;
-  toastPosition: ToastPosition;
-  onToastPositionChange(position: ToastPosition): void;
   onUserLabelChange?(label: string): void;
   requestedSection?: SettingsSection;
   onOpenDailyReview?(): void;
@@ -413,14 +398,12 @@ function SettingsSurface(props: {
               defaultSlug={props.defaultSlug}
               themePref={props.themePref}
               density={props.density}
-              toastPosition={props.toastPosition}
               onRefreshConnections={props.onRefresh}
               onUpdateSettings={updateSettings}
               onReloadSettings={reloadSettings}
               onReloadUsage={reloadUsage}
               onThemeChange={props.onThemeChange}
               onDensityChange={props.onDensityChange}
-              onToastPositionChange={props.onToastPositionChange}
               onOpenDailyReview={props.onOpenDailyReview}
             />
           )}
@@ -440,14 +423,12 @@ function SettingsPage(props: {
   defaultSlug: string | null;
   themePref: ThemePreference;
   density: UiDensity;
-  toastPosition: ToastPosition;
   onRefreshConnections(): Promise<void>;
   onUpdateSettings(patch: Parameters<typeof window.maka.settings.update>[0]): Promise<UpdateAppSettingsResult>;
   onReloadSettings(): Promise<void>;
   onReloadUsage(range?: UsageRange): Promise<void>;
   onThemeChange(pref: ThemePreference): void;
   onDensityChange(density: UiDensity): void;
-  onToastPositionChange(position: ToastPosition): void;
   onOpenDailyReview?(): void;
 }) {
   switch (props.section) {
@@ -497,12 +478,10 @@ function SettingsPage(props: {
         <ThemeSettingsPage
           themePref={props.themePref}
           density={props.density}
-          toastPosition={props.toastPosition}
           settings={props.settings}
           onUpdate={props.onUpdateSettings}
           onThemeChange={props.onThemeChange}
           onDensityChange={props.onDensityChange}
-          onToastPositionChange={props.onToastPositionChange}
         />
       );
     case 'personalization':
@@ -1717,18 +1696,6 @@ const DENSITY_OPTIONS: Array<{ value: UiDensity; label: string; help: string }> 
   { value: 'spacious', label: '宽松', help: '更大留白，适合长会话沉浸阅读。' },
 ];
 
-/** PR-UI-16: user-pickable toast position. Six grid corners cover the
- *  practical needs (top/bottom × left/center/right). Default
- *  `bottom-right` matches the v1 hardcoded behavior. */
-const TOAST_POSITION_OPTIONS: Array<{ value: ToastPosition; label: string }> = [
-  { value: 'top-left', label: '左上' },
-  { value: 'top-center', label: '顶部居中' },
-  { value: 'top-right', label: '右上' },
-  { value: 'bottom-left', label: '左下' },
-  { value: 'bottom-center', label: '底部居中' },
-  { value: 'bottom-right', label: '右下（默认）' },
-];
-
 /**
  * Mini chat-surface mockup rendered inside each theme radio tile. Replaces
  * the generic gradient swatch with a representative preview so the user
@@ -1796,12 +1763,10 @@ const PALETTE_HELP: Record<ThemePalette, string> = {
 function ThemeSettingsPage(props: {
   themePref: ThemePreference;
   density: UiDensity;
-  toastPosition: ToastPosition;
   settings: AppSettings;
   onUpdate(patch: Parameters<typeof window.maka.settings.update>[0]): Promise<UpdateAppSettingsResult>;
   onThemeChange(pref: ThemePreference): void;
   onDensityChange(density: UiDensity): void;
-  onToastPositionChange(position: ToastPosition): void;
 }) {
   async function setTheme(next: ThemePreference) {
     // Apply immediately for instant feedback, then persist. If persistence
@@ -1824,71 +1789,6 @@ function ThemeSettingsPage(props: {
   async function setPalette(next: ThemePalette) {
     await props.onUpdate({ appearance: { palette: next } });
   }
-
-  // PR-UI-16 + PR-UI-D2 fixup v2 (@kenji msg b4dbfa91):
-  // user-driven toast position picker.
-  //
-  // v1 had two real bugs:
-  //   1. Used `querySelector('.maka-toast-viewport')` to write
-  //      `data-position` on the DOM directly. ToastViewport returns
-  //      `null` when there are no live toasts, so the DOM node didn't
-  //      exist — the change was invisible until the next render.
-  //   2. Wrote `localStorage` BEFORE `await onUpdate(...)`. If
-  //      `onUpdate` failed, the mirror would diverge from
-  //      `settings.json` and a subsequent pre-React boot would read
-  //      a position that doesn't match disk.
-  //
-  // v2 (this version):
-  //   - Calls `onToastPositionChange(next)` SYNCHRONOUSLY first. This
-  //     bubbles up to `App`'s `setToastPosition`, which re-renders
-  //     `<ToastProvider position={toastPosition}>` with the new prop.
-  //     `ToastViewport` reads `position` from context and emits
-  //     `data-position={position}` on its own — no DOM mutation
-  //     from outside React.
-  //   - Awaits `onUpdate({ appearance: { toastPosition: next } })`.
-  //   - On success, writes the localStorage mirror using the
-  //     normalized value returned by the server
-  //     (`result.settings.appearance.toastPosition`). If the server
-  //     ever rejects or rewrites the value (e.g. closed-enum
-  //     fail-closed), the mirror stays consistent with disk.
-  //   - On failure, does NOT touch localStorage. The mirror keeps
-  //     its previous value, which still matches `settings.json`.
-  async function setToastPosition(next: ToastPosition) {
-    props.onToastPositionChange(next);
-    let result: UpdateAppSettingsResult;
-    try {
-      result = await props.onUpdate({ appearance: { toastPosition: next } });
-    } catch {
-      // Persistence failed. React state reverts to disk's value on
-      // the next settings load; localStorage stays at the previous
-      // value, so pre-React boot remains consistent.
-      return;
-    }
-    const normalized = result.settings.appearance.toastPosition;
-    if (normalized && isToastPosition(normalized)) {
-      try {
-        localStorage.setItem('maka-toast-position-v1', normalized);
-      } catch {
-        /* localStorage unavailable; ignore */
-      }
-      // If the server normalized the value to something different
-      // (e.g. closed-enum fail-closed to 'bottom-right'), also push
-      // the normalized value through React state so the picker
-      // reflects the persisted truth.
-      if (normalized !== next) {
-        props.onToastPositionChange(normalized);
-      }
-    }
-  }
-
-  // PR-UI-D2 fixup v2: source-of-truth is the LIFTED `App` state, not
-  // `settings.appearance.toastPosition`. The two are kept in sync on
-  // settings load by `AppShell.onToastPositionChange` and on user
-  // click by `setToastPosition` above. Reading from `props.toastPosition`
-  // means the picker's `aria-checked` reflects the live state in
-  // ToastProvider, not a value that's about to be settled by a
-  // pending IPC.
-  const currentToastPosition: ToastPosition = props.toastPosition;
 
   return (
     <div className="settingsStructuredPage">
@@ -1959,7 +1859,7 @@ function ThemeSettingsPage(props: {
       </div>
 
       <p className="settingsHelpText">
-        切换会立即生效，并保存在 <code className="maka-empty-state-code">settings.json</code> 里下次启动延续。通知统一显示在屏幕右下角（与 macOS / Windows 系统通知一致）。
+        切换会立即生效，并保存在 <code className="maka-empty-state-code">settings.json</code> 里下次启动延续。通知统一显示在屏幕右下角。
       </p>
     </div>
   );
