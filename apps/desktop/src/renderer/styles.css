@@ -385,6 +385,12 @@ button:active {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.maka-search-modal-snippet-hit {
+  color: var(--foreground);
+  background: oklch(from var(--accent) l c h / 0.14);
+  border-radius: 3px;
+  padding: 0 2px;
+}
 
 .maka-sidebar-modules {
   /* Top-level module nav. Lightweight visual hierarchy per xuan

@@ -1973,7 +1973,7 @@ export function SearchModal(props: {
                       // and the snippet is bounded by SNIPPET_MAX_CODE_POINTS.
                       // No markdown rendering, no <img>, no <a href> —
                       // per kenji SEARCH gate (no path / no URL exposure).
-                      <div className="maka-search-modal-result-snippet">{result.snippet}</div>
+                      <div className="maka-search-modal-result-snippet">{renderSearchSnippet(result.snippet, trimmed)}</div>
                     )}
                   </button>
                 </li>
@@ -1984,6 +1984,31 @@ export function SearchModal(props: {
       </div>
     </div>
   );
+}
+
+function renderSearchSnippet(snippet: string, query: string): ReactNode {
+  const needle = query.trim();
+  if (!needle) return snippet;
+  const haystack = snippet.toLocaleLowerCase();
+  const lowerNeedle = needle.toLocaleLowerCase();
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  let matchIndex = haystack.indexOf(lowerNeedle);
+  while (matchIndex !== -1) {
+    if (matchIndex > cursor) {
+      parts.push(snippet.slice(cursor, matchIndex));
+    }
+    const end = matchIndex + needle.length;
+    parts.push(
+      <mark key={`${matchIndex}-${end}`} className="maka-search-modal-snippet-hit">
+        {snippet.slice(matchIndex, end)}
+      </mark>,
+    );
+    cursor = end;
+    matchIndex = haystack.indexOf(lowerNeedle, cursor);
+  }
+  if (cursor < snippet.length) parts.push(snippet.slice(cursor));
+  return parts.length > 0 ? parts : snippet;
 }
 
 /**
