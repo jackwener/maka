@@ -857,7 +857,7 @@ function VoiceModelsSettingsPage() {
       <header className="settingsFeatureStatusBanner" role="status">
         <span className="settingsFeatureStatusBannerDot" aria-hidden="true" />
         <strong>本机录音自检 · 已上线</strong>
-        <span>只做本地权限与采集链路 smoke；不上传音频、不保存样本、不写入记忆。</span>
+        <span>只做本地权限与采集链路自检；不上传音频、不保存样本、不写入记忆。</span>
       </header>
 
       <div className="settingsFeatureStatusHero">
