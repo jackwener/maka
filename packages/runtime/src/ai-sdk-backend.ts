@@ -889,6 +889,7 @@ export class AiSdkBackend implements AgentBackend {
 
   private makeErrorEvent(turnId: string, err: unknown): ErrorEvent {
     const message = generalizedErrorMessage(err);
+    const reason = errorReasonFromClass(classifyError(err));
     const code = err instanceof Error && 'code' in err
       ? String((err as { code?: unknown }).code)
       : undefined;
@@ -899,6 +900,7 @@ export class AiSdkBackend implements AgentBackend {
       ts: this.now(),
       recoverable: false,
       ...(code !== undefined ? { code } : {}),
+      ...(reason !== undefined ? { reason } : {}),
       message,
     };
   }
@@ -985,6 +987,21 @@ function classifyError(error: unknown): string {
   if (text.includes('timeout')) return 'Timeout';
   if (text.includes('network') || text.includes('fetch')) return 'Network';
   return error.name || 'Other';
+}
+
+function errorReasonFromClass(errorClass: string): string | undefined {
+  switch (errorClass) {
+    case 'Timeout':
+      return 'timeout';
+    case 'Auth':
+      return 'auth';
+    case 'RateLimit':
+      return 'rate_limit';
+    case 'Network':
+      return 'network';
+    default:
+      return undefined;
+  }
 }
 
 export function formatSyntheticToolErrorText(error: unknown): string {

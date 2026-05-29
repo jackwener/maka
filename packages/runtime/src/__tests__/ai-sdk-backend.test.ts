@@ -87,6 +87,29 @@ describe('AiSdkBackend error surfaces', () => {
     assert.equal(JSON.stringify(events).includes('sk-live-secret-token-value'), false);
     assert.deepEqual(messages[0]?.content, events.find((event) => event.type === 'tool_result')?.content);
   });
+
+  test('model stream timeout errors carry a stable reason for turn-history UI', () => {
+    const backend = new AiSdkBackend({
+      sessionId: 'session-1',
+      header: header(),
+      appendMessage: async () => {},
+      connection: connection(),
+      apiKey: 'sk-test',
+      modelId: 'claude-sonnet-4-5-20250929',
+      permissionEngine: new PermissionEngine({ newId: () => 'permission-id', now: () => 1 }),
+      modelFactory: () => ({}),
+      tools: [],
+      newId: idGenerator(),
+      now: () => 1,
+    });
+
+    const event = (backend as unknown as {
+      makeErrorEvent(turnId: string, err: unknown): Extract<SessionEvent, { type: 'error' }>;
+    }).makeErrorEvent('turn-1', new Error('Model stream idle timeout after 120000ms'));
+
+    assert.equal(event.message, 'Request timed out');
+    assert.equal(event.reason, 'timeout');
+  });
 });
 
 describe('AiSdkBackend stop', () => {
