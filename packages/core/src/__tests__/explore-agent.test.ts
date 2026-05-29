@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import {
+  DEEP_RESEARCH_REPORT_SECTIONS,
   DEEP_RESEARCH_SESSION_LABEL,
   DEEP_RESEARCH_WORKFLOW_STEPS,
   buildDeepResearchSystemPromptFragment,
@@ -42,6 +43,10 @@ describe('deep research session profile', () => {
       assert.match(prompt, new RegExp(step.title));
       assert.match(prompt, new RegExp(step.body.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
+    for (const section of DEEP_RESEARCH_REPORT_SECTIONS) {
+      assert.match(prompt, new RegExp(section.title));
+      assert.match(prompt, new RegExp(section.body.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    }
   });
 
   it('keeps the visible workflow compact and implementation-oriented', () => {
@@ -51,5 +56,16 @@ describe('deep research session profile', () => {
       ['先定位入口', '再追数据流', '然后对照参考', '最后给可合入方案'],
     );
     assert.match(DEEP_RESEARCH_WORKFLOW_STEPS.at(-1)?.body ?? '', /不在只读模式里动手改/);
+  });
+
+  it('keeps the final report contract evidence-backed and PR-oriented', () => {
+    assert.equal(DEEP_RESEARCH_REPORT_SECTIONS.length, 4);
+    assert.deepEqual(
+      DEEP_RESEARCH_REPORT_SECTIONS.map((section) => section.title),
+      ['结论先行', '源码证据', '借鉴拆解', '落地改进'],
+    );
+    assert.match(DEEP_RESEARCH_REPORT_SECTIONS[1]?.body ?? '', /文件、函数、配置、测试/);
+    assert.match(DEEP_RESEARCH_REPORT_SECTIONS[2]?.body ?? '', /borrow \/ diverge \/ risk \/ gate/);
+    assert.match(DEEP_RESEARCH_REPORT_SECTIONS[3]?.body ?? '', /验证命令/);
   });
 });

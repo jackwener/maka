@@ -76,6 +76,7 @@ import {
   formatPlanReminderDeliveryTarget,
   formatPermissionRequestWait,
   formatRelativeTimestamp,
+  DEEP_RESEARCH_REPORT_SECTIONS,
   DEEP_RESEARCH_WORKFLOW_STEPS,
   isDeepResearchSession,
   normalizeSearchUrl,
@@ -3354,6 +3355,17 @@ function DeepResearchEmptyHero(props: { onPromptSuggestion?(prompt: string): voi
           </li>
         ))}
       </ol>
+      <section className="maka-deep-research-report" aria-label="深度研究输出结构">
+        <h2>输出必须能直接落地</h2>
+        <ul>
+          {DEEP_RESEARCH_REPORT_SECTIONS.map((section) => (
+            <li key={section.title}>
+              <span className="maka-deep-research-report-title">{section.title}</span>
+              <span className="maka-deep-research-report-body">{section.body}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
       {props.onPromptSuggestion && (
         <ul className="maka-prompt-suggestions" aria-label="深度研究起手式">
           {DEEP_RESEARCH_PROMPT_SUGGESTIONS.map((suggestion) => (

@@ -30,6 +30,25 @@ export const DEEP_RESEARCH_WORKFLOW_STEPS = [
   },
 ] as const;
 
+export const DEEP_RESEARCH_REPORT_SECTIONS = [
+  {
+    title: '结论先行',
+    body: '用 3-5 条讲清楚真实现状、主要差距和优先建议。',
+  },
+  {
+    title: '源码证据',
+    body: '列出文件、函数、配置、测试和运行时路径，避免只给印象判断。',
+  },
+  {
+    title: '借鉴拆解',
+    body: '每个可借鉴点都写 borrow / diverge / risk / gate。',
+  },
+  {
+    title: '落地改进',
+    body: '给出按小步改进拆分的文件清单、边界和验证命令。',
+  },
+] as const;
+
 export function isQuickChatMode(value: unknown): value is QuickChatMode {
   return typeof value === 'string' && (QUICK_CHAT_MODES as readonly string[]).includes(value);
 }
@@ -55,5 +74,8 @@ export function buildDeepResearchSystemPromptFragment(): string {
     '',
     'Research workflow:',
     ...DEEP_RESEARCH_WORKFLOW_STEPS.map((step) => `- ${step.title}: ${step.body}`),
+    '',
+    'Final report contract:',
+    ...DEEP_RESEARCH_REPORT_SECTIONS.map((section) => `- ${section.title}: ${section.body}`),
   ].join('\n');
 }
