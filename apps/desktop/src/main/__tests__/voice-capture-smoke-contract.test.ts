@@ -23,6 +23,8 @@ describe('voice capture smoke Settings contract', () => {
     assert.match(src, /new MediaRecorder\(stream\)/, 'voice page must use MediaRecorder for local smoke');
     assert.match(src, /validateVoiceCaptureRequest/, 'voice page must validate capture facts through @maka/core/voice');
     assert.match(src, /样本未保存/, 'voice page must tell users that the sample is not saved');
+    assert.match(src, /等待运行本机录音自检/, 'voice idle state should read as an actionable local check');
+    assert.doesNotMatch(src, /尚未运行本机录音自检/, 'voice idle state should not read like unfinished implementation copy');
     assert.doesNotMatch(src, /localStorage\.setItem\([^)]*voice/i, 'voice smoke must not persist audio state in localStorage');
   });
 

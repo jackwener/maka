@@ -878,7 +878,7 @@ function VoiceModelsSettingsPage() {
   const [permission, setPermission] = useState<VoicePermissionStatus>('unknown');
   const [smoke, setSmoke] = useState<VoiceSmokeState>({
     status: 'idle',
-    message: '尚未运行本机录音自检。',
+    message: '等待运行本机录音自检。',
   });
   const [isBusy, setIsBusy] = useState(false);
   const toast = useToast();
