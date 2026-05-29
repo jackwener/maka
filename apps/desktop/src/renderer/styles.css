@@ -8067,6 +8067,7 @@ button:active {
 .maka-turn-failed-banner {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   margin: 2px 0 6px;
   padding: 4px 8px;
@@ -8080,6 +8081,14 @@ button:active {
 .maka-turn-failed-icon {
   display: inline-flex;
   align-items: center;
+}
+.maka-turn-failed-recovery {
+  color: var(--text-muted);
+}
+.maka-turn-failed-recovery::before {
+  content: "·";
+  margin-right: 6px;
+  color: var(--border-strong);
 }
 
 /* PR109e-e: Lineage badges. Forward badges sit at the top of the turn
