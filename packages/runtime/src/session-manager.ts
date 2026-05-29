@@ -45,6 +45,7 @@ import type {
 } from '@maka/core/runtime-inputs';
 import type { PermissionResponse } from '@maka/core/permission';
 import type { PermissionMode } from '@maka/core/permission';
+import { DEEP_RESEARCH_SESSION_LABEL, isDeepResearchSession } from '@maka/core';
 
 import type { AgentBackend } from './ai-sdk-backend.js';
 
@@ -204,14 +205,20 @@ export class SessionManager {
 
   async setPermissionMode(sessionId: string, mode: PermissionMode): Promise<SessionSummary> {
     const previous = await this.deps.store.readHeader(sessionId);
-    if (previous.permissionMode === mode) return headerToSummary(previous);
+    const leavingDeepResearch = isDeepResearchSession(previous.labels) && mode !== 'explore';
+    if (previous.permissionMode === mode && !leavingDeepResearch) return headerToSummary(previous);
 
     const active = this.active.get(sessionId);
     if (active && active.activeStreams > 0) {
       throw new Error('Cannot change permission mode while a turn is running');
     }
 
-    const next = await this.deps.store.updateHeader(sessionId, { permissionMode: mode });
+    const next = await this.deps.store.updateHeader(sessionId, {
+      permissionMode: mode,
+      labels: leavingDeepResearch
+        ? previous.labels.filter((label) => label !== DEEP_RESEARCH_SESSION_LABEL)
+        : previous.labels,
+    });
     await this.deps.store.appendMessage(sessionId, {
       type: 'system_note',
       id: this.deps.newId(),

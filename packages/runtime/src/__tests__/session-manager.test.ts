@@ -1,5 +1,5 @@
 import { describe, test } from 'node:test';
-import { deriveTurnRecords } from '@maka/core';
+import { DEEP_RESEARCH_SESSION_LABEL, deriveTurnRecords } from '@maka/core';
 import type {
   CreateSessionInput,
   PermissionMode,
@@ -117,6 +117,28 @@ describe('SessionManager permission mode updates', () => {
 
     expect(summary.permissionMode).toBe('ask');
     expect((await store.readMessages(session.id)).length).toBe(0);
+  });
+
+  test('leaving explore clears the deep research label so visible read-only copy stays truthful', async () => {
+    const store = new MemorySessionStore();
+    const backends = new BackendRegistry();
+    backends.register('fake', (ctx) => new TestBackend(ctx));
+    const manager = new SessionManager({ store, backends, newId: nextId(), now: nextNow(6_000) });
+    const session = await manager.createSession(makeInput({
+      permissionMode: 'explore',
+      labels: [DEEP_RESEARCH_SESSION_LABEL, 'kept'],
+    }));
+
+    const summary = await manager.setPermissionMode(session.id, 'ask');
+
+    expect(summary.permissionMode).toBe('ask');
+    expect(summary.labels).toEqual(['kept']);
+    expect((await store.readHeader(session.id)).labels).toEqual(['kept']);
+
+    const messages = await store.readMessages(session.id);
+    const modeNote = messages.find((message) => message.type === 'system_note' && message.kind === 'mode_change');
+    if (modeNote?.type !== 'system_note') throw new Error('mode_change note was not written');
+    expect(modeNote.data).toEqual({ from: 'explore', to: 'ask' });
   });
 
   test('backend configuration updates rebuild an already-active backend', async () => {
