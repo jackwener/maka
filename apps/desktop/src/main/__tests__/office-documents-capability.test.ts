@@ -37,7 +37,12 @@ describe('Office document capability contract', () => {
 
     assert.match(settings, /capability\.guidance\.length > 0/);
     assert.match(settings, /处理建议/);
+    assert.match(settings, /OFFICECLI_INSTALL_COMMAND/);
+    assert.match(settings, /复制 macOS\/Linux 安装命令/);
+    assert.match(settings, /iOfficeAI\/OfficeCLI\/releases/);
+    assert.doesNotMatch(settings, /execFile\(|spawn\(|child_process/);
     assert.match(styles, /\.settingsCapabilityGuidance/);
+    assert.match(styles, /\.settingsCapabilityGuidanceActions/);
   });
 
   it('allows only read-only officecli commands as safe shell prefixes', async () => {

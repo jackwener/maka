@@ -3754,6 +3754,9 @@ const OS_PERMISSION_STATE_COPY: Record<OsPermissionState, { label: string; tone:
   granted: { label: '已授权', tone: 'success' },
 };
 
+const OFFICECLI_INSTALL_COMMAND = 'curl -fsSL https://raw.githubusercontent.com/iOfficeAI/OfficeCLI/main/install.sh | bash';
+const OFFICECLI_RELEASES_URL = 'https://github.com/iOfficeAI/OfficeCLI/releases';
+
 function PermissionCenterPage() {
   const [permissions, setPermissions] = useState<PermissionSnapshot | null>(null);
   const [capabilities, setCapabilities] = useState<CapabilitySnapshotCollection | null>(null);
@@ -3871,7 +3874,20 @@ function PermissionCenterPage() {
 
 function CapabilityRow(props: { capability: CapabilitySnapshot }) {
   const { capability } = props;
+  const toast = useToast();
   const readinessCopy = CAPABILITY_READINESS_COPY[capability.readiness];
+  const showOfficeCliInstallActions =
+    capability.id === 'office_documents' && capability.runtimeProbe.state !== 'healthy';
+
+  async function copyOfficeCliInstallCommand() {
+    try {
+      await navigator.clipboard.writeText(OFFICECLI_INSTALL_COMMAND);
+      toast.success('已复制安装命令', '在终端执行后点击刷新重新探测。');
+    } catch {
+      toast.error('复制失败', '剪贴板不可用。');
+    }
+  }
+
   return (
     <li className="settingsCapabilityRow" data-readiness={capability.readiness}>
       <div className="settingsCapabilityHeader">
@@ -3940,6 +3956,19 @@ function CapabilityRow(props: { capability: CapabilitySnapshot }) {
               <li key={`${capability.id}-guidance-${index}`}>{item}</li>
             ))}
           </ul>
+          {showOfficeCliInstallActions && (
+            <div className="settingsCapabilityGuidanceActions" aria-label="Office 文档安装辅助">
+              <code>{OFFICECLI_INSTALL_COMMAND}</code>
+              <div>
+                <button type="button" className="maka-button secondary" onClick={() => void copyOfficeCliInstallCommand()}>
+                  复制 macOS/Linux 安装命令
+                </button>
+                <a href={OFFICECLI_RELEASES_URL} target="_blank" rel="noreferrer">
+                  打开二进制下载页
+                </a>
+              </div>
+            </div>
+          )}
         </div>
       )}
       {/*

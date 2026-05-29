@@ -8574,6 +8574,42 @@ button:active {
   line-height: 1.55;
 }
 
+.settingsCapabilityGuidanceActions {
+  display: grid;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.settingsCapabilityGuidanceActions code {
+  display: block;
+  max-width: 100%;
+  overflow: auto;
+  padding: 7px 8px;
+  border: 1px solid var(--foreground-10);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground-70);
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.settingsCapabilityGuidanceActions > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.settingsCapabilityGuidanceActions a {
+  color: var(--foreground-70);
+  font-size: 0.76rem;
+  text-decoration: none;
+}
+
+.settingsCapabilityGuidanceActions a:hover {
+  text-decoration: underline;
+}
+
 .settingsCapabilityAuditSlot {
   border-top: 1px dashed var(--border);
   padding-top: 8px;
