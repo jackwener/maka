@@ -107,7 +107,7 @@ const FORBIDDEN_VISIBLE_COPY: ForbiddenCopy[] = [
   },
   {
     label: 'dev/demo backend terminology leaked into visible readiness copy',
-    needle: /FakeBackend|开发演示|演示版/,
+    needle: /FakeBackend|Fake backend|backend\s*\/\s*连接|开发演示|演示版/,
     reason:
       "readiness and chat-header copy must describe stale local simulation sessions in user terms, not leak development backend names or demo-stage language.",
   },

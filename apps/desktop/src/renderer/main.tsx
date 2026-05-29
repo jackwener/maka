@@ -272,7 +272,7 @@ function AppShell(props: {
     ? connections.find((connection) => connection.slug === activeSession.llmConnectionSlug)
     : undefined;
   const activeConnectionLabel = activeSession?.backend === 'fake'
-    ? 'Fake backend'
+    ? '本地模拟连接'
     : activeConnection?.name ?? activeSession?.llmConnectionSlug;
   const activeModelLabel = activeSession?.backend === 'fake'
     ? undefined

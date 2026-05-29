@@ -2392,7 +2392,7 @@ function SessionRow(props: {
                   // session uses a backend / connection that no longer exists,
                   // but @xuan's send-path silent rebind will swap to the
                   // default on send. Tooltip explains why.
-                  title="此会话使用的 backend / 连接已不可用，发送时会切换到默认连接"
+                  title="此会话使用的模型连接已不可用，发送时会切换到默认连接"
                   aria-label="会话已过期"
                 >
                   已过期
