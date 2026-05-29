@@ -200,6 +200,18 @@ describe('SearchModal lifecycle contract (PR-SIDEBAR-IA-0 Phase 3 P0 fixup)', ()
     assert.match(styles, /\.maka-search-modal-clear/, 'Clear search button needs dedicated styling');
   });
 
+  it('empty query invalidates any already-started search request before clearing UI state', async () => {
+    const components = await readFile(COMPONENTS_PATH, 'utf8');
+    const searchModal = components.slice(components.indexOf('export function SearchModal'), components.indexOf('/**\n * Render an ordered list of session groups'));
+
+    assert.match(
+      searchModal,
+      /if \(trimmed\.length === 0\) \{\s*ticketRef\.current \+= 1;\s*setResults\(\[\]\);/m,
+      'Clearing the query must invalidate in-flight search responses before clearing results, otherwise stale responses can repopulate an empty query',
+    );
+    assert.match(searchModal, /if \(ticket !== ticketRef\.current\) return; \/\/ newer query in flight/, 'Search responses must still be guarded by the latest ticket');
+  });
+
   it('search snippets highlight query matches without unsafe HTML rendering', async () => {
     const components = await readFile(COMPONENTS_PATH, 'utf8');
     const styles = await readFile(STYLES_PATH, 'utf8');

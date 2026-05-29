@@ -1781,6 +1781,7 @@ export function SearchModal(props: {
     if (!searchThread) return;
     const trimmed = query.trim();
     if (trimmed.length === 0) {
+      ticketRef.current += 1;
       setResults([]);
       setError(null);
       setPending(false);
