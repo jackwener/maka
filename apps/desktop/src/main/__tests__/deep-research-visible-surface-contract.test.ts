@@ -47,6 +47,9 @@ describe('deep research visible surface contract', () => {
     assert.match(ui, /DEEP_RESEARCH_REPORT_SECTIONS\.map/);
     assert.match(ui, /aria-label="深度研究输出结构"/);
     assert.match(ui, /输出必须能直接落地/);
+    assert.match(ui, /DEEP_RESEARCH_SCOPE_OPTIONS\.map/);
+    assert.match(ui, /aria-label="深度研究范围"/);
+    assert.match(ui, /默认按标准深度研究/);
   });
 
   it('ships styling for the header mode pill', async () => {
@@ -56,6 +59,6 @@ describe('deep research visible surface contract', () => {
     assert.match(css, /white-space:\s*nowrap/);
     assert.match(css, /var\(--info-text\)/);
     assert.match(css, /\.maka-deep-research-workflow\s*\{/);
-    assert.match(css, /\.maka-deep-research-report\s*\{/);
+    assert.match(css, /\.maka-deep-research-report,\s*\.maka-deep-research-scope\s*\{/);
   });
 });

@@ -1090,21 +1090,24 @@ button:active {
   line-height: 1.45;
 }
 
-.maka-deep-research-report {
+.maka-deep-research-report,
+.maka-deep-research-scope {
   display: grid;
   gap: 8px;
   padding: 12px 0 0;
   border-top: 1px solid var(--border);
 }
 
-.maka-deep-research-report h2 {
+.maka-deep-research-report h2,
+.maka-deep-research-scope h2 {
   margin: 0;
   color: var(--foreground);
   font-size: 13px;
   line-height: 1.3;
 }
 
-.maka-deep-research-report ul {
+.maka-deep-research-report ul,
+.maka-deep-research-scope ul {
   display: grid;
   gap: 6px;
   margin: 0;
@@ -1112,7 +1115,8 @@ button:active {
   list-style: none;
 }
 
-.maka-deep-research-report li {
+.maka-deep-research-report li,
+.maka-deep-research-scope li {
   display: grid;
   grid-template-columns: minmax(72px, max-content) minmax(0, 1fr);
   gap: 10px;
@@ -1120,14 +1124,16 @@ button:active {
   min-width: 0;
 }
 
-.maka-deep-research-report-title {
+.maka-deep-research-report-title,
+.maka-deep-research-scope-label {
   color: var(--foreground);
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
 }
 
-.maka-deep-research-report-body {
+.maka-deep-research-report-body,
+.maka-deep-research-scope-body {
   min-width: 0;
   color: var(--foreground-60);
   font-size: 12px;

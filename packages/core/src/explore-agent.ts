@@ -49,6 +49,21 @@ export const DEEP_RESEARCH_REPORT_SECTIONS = [
   },
 ] as const;
 
+export const DEEP_RESEARCH_SCOPE_OPTIONS = [
+  {
+    label: '快速',
+    body: '只扫入口、关键文件和最可能的数据流，适合已知范围的小问题。',
+  },
+  {
+    label: '标准',
+    body: '默认深度：梳理核心链路、相关测试和主要风险，再给落地建议。',
+  },
+  {
+    label: '深挖',
+    body: '跨模块、参考项目和边界条件多轮追踪；只在用户明确要求时使用。',
+  },
+] as const;
+
 export function isQuickChatMode(value: unknown): value is QuickChatMode {
   return typeof value === 'string' && (QUICK_CHAT_MODES as readonly string[]).includes(value);
 }
@@ -74,6 +89,10 @@ export function buildDeepResearchSystemPromptFragment(): string {
     '',
     'Research workflow:',
     ...DEEP_RESEARCH_WORKFLOW_STEPS.map((step) => `- ${step.title}: ${step.body}`),
+    '',
+    'Research scope budget:',
+    ...DEEP_RESEARCH_SCOPE_OPTIONS.map((option) => `- ${option.label}: ${option.body}`),
+    '- If the user does not specify a scope, use 标准. Use 深挖 only when the user explicitly asks for deep / exhaustive / full-project research.',
     '',
     'Final report contract:',
     ...DEEP_RESEARCH_REPORT_SECTIONS.map((section) => `- ${section.title}: ${section.body}`),

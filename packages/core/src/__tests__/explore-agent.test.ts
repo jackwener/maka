@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import {
   DEEP_RESEARCH_REPORT_SECTIONS,
+  DEEP_RESEARCH_SCOPE_OPTIONS,
   DEEP_RESEARCH_SESSION_LABEL,
   DEEP_RESEARCH_WORKFLOW_STEPS,
   buildDeepResearchSystemPromptFragment,
@@ -47,6 +48,12 @@ describe('deep research session profile', () => {
       assert.match(prompt, new RegExp(section.title));
       assert.match(prompt, new RegExp(section.body.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     }
+    for (const option of DEEP_RESEARCH_SCOPE_OPTIONS) {
+      assert.match(prompt, new RegExp(option.label));
+      assert.match(prompt, new RegExp(option.body.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    }
+    assert.match(prompt, /If the user does not specify a scope, use 标准/);
+    assert.match(prompt, /Use 深挖 only when the user explicitly asks/);
   });
 
   it('keeps the visible workflow compact and implementation-oriented', () => {
@@ -67,5 +74,15 @@ describe('deep research session profile', () => {
     assert.match(DEEP_RESEARCH_REPORT_SECTIONS[1]?.body ?? '', /文件、函数、配置、测试/);
     assert.match(DEEP_RESEARCH_REPORT_SECTIONS[2]?.body ?? '', /borrow \/ diverge \/ risk \/ gate/);
     assert.match(DEEP_RESEARCH_REPORT_SECTIONS[3]?.body ?? '', /验证命令/);
+  });
+
+  it('keeps the PawWork-style research scope budget explicit', () => {
+    assert.deepEqual(
+      DEEP_RESEARCH_SCOPE_OPTIONS.map((option) => option.label),
+      ['快速', '标准', '深挖'],
+    );
+    assert.match(DEEP_RESEARCH_SCOPE_OPTIONS[0]?.body ?? '', /小问题/);
+    assert.match(DEEP_RESEARCH_SCOPE_OPTIONS[1]?.body ?? '', /默认深度/);
+    assert.match(DEEP_RESEARCH_SCOPE_OPTIONS[2]?.body ?? '', /明确要求/);
   });
 });

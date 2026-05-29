@@ -77,6 +77,7 @@ import {
   formatPermissionRequestWait,
   formatRelativeTimestamp,
   DEEP_RESEARCH_REPORT_SECTIONS,
+  DEEP_RESEARCH_SCOPE_OPTIONS,
   DEEP_RESEARCH_WORKFLOW_STEPS,
   isDeepResearchSession,
   normalizeSearchUrl,
@@ -3362,6 +3363,17 @@ function DeepResearchEmptyHero(props: { onPromptSuggestion?(prompt: string): voi
             <li key={section.title}>
               <span className="maka-deep-research-report-title">{section.title}</span>
               <span className="maka-deep-research-report-body">{section.body}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className="maka-deep-research-scope" aria-label="深度研究范围">
+        <h2>默认按标准深度研究</h2>
+        <ul>
+          {DEEP_RESEARCH_SCOPE_OPTIONS.map((option) => (
+            <li key={option.label}>
+              <span className="maka-deep-research-scope-label">{option.label}</span>
+              <span className="maka-deep-research-scope-body">{option.body}</span>
             </li>
           ))}
         </ul>
