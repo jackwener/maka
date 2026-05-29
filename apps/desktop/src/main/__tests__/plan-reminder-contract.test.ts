@@ -52,6 +52,9 @@ describe('Plan reminder MVP contract', () => {
     assert.match(ui, /延后 10 分钟/, '计划 UI must expose a bounded snooze path');
     assert.match(ui, /清空记录/, '计划 UI must clear run history without deleting the reminder');
     assert.match(ui, /onClearRunHistory/, 'clear history action must be wired through PlanReminderPanel');
+    assert.match(ui, /计划提醒筛选/, '计划 UI must expose list filtering for non-trivial reminder lists');
+    assert.match(ui, /当前筛选没有提醒/, '计划 UI must distinguish empty filters from an empty reminder store');
+    assert.match(ui, /filterCounts/, 'filter buttons must show counts per reminder status');
   });
 
   it('scheduler records trigger outcomes and emits due events', async () => {

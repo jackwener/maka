@@ -1836,6 +1836,46 @@ button:active {
   gap: 8px;
 }
 
+.maka-plan-filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.maka-plan-filter {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground-60);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 7px;
+}
+
+.maka-plan-filter span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.maka-plan-filter span:last-child {
+  color: var(--foreground-40);
+  font-variant-numeric: tabular-nums;
+}
+
+.maka-plan-filter[data-active="true"] {
+  border-color: oklch(from var(--accent) l c h / 0.45);
+  background: oklch(from var(--accent) l c h / 0.09);
+  color: var(--foreground);
+}
+
 .maka-plan-empty {
   position: static;
   width: auto;

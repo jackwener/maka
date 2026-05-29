@@ -58,6 +58,7 @@ import type {
   PlanReminder,
   PlanReminderDeliveryTarget,
   PlanReminderRecurrence,
+  PlanReminderStatus,
   ProviderType,
   SearchErrorReason,
   SearchRequest,
@@ -1033,6 +1034,7 @@ function PlanReminderPanel(props: {
   onClearRunHistory?(id: string): void;
   onDelete?(id: string): void;
 }) {
+  type PlanReminderListFilter = 'all' | PlanReminderStatus;
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
   const [runAtLocal, setRunAtLocal] = useState(() => toDatetimeLocalValue(Date.now() + 60 * 60 * 1000));
@@ -1042,7 +1044,17 @@ function PlanReminderPanel(props: {
   const [deliveryPlatform, setDeliveryPlatform] = useState<BotProvider>('telegram');
   const [deliveryChatId, setDeliveryChatId] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [listFilter, setListFilter] = useState<PlanReminderListFilter>('all');
   const parsedRunAt = Date.parse(runAtLocal);
+  const visibleReminders = listFilter === 'all'
+    ? props.reminders
+    : props.reminders.filter((reminder) => reminder.status === listFilter);
+  const filterCounts: Record<PlanReminderListFilter, number> = {
+    all: props.reminders.length,
+    scheduled: props.reminders.filter((reminder) => reminder.status === 'scheduled').length,
+    paused: props.reminders.filter((reminder) => reminder.status === 'paused').length,
+    completed: props.reminders.filter((reminder) => reminder.status === 'completed').length,
+  };
   const delivery: PlanReminderDeliveryTarget = deliveryChannel === 'bot'
     ? { channel: 'bot', platform: deliveryPlatform, chatId: deliveryChatId.trim() }
     : { channel: 'local' };
@@ -1223,6 +1235,26 @@ function PlanReminderPanel(props: {
       </form>
 
       <div className="maka-plan-list" aria-label="计划提醒列表">
+        <div className="maka-plan-filters" aria-label="计划提醒筛选">
+          {[
+            ['all', '全部'],
+            ['scheduled', '待触发'],
+            ['paused', '已暂停'],
+            ['completed', '已完成'],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className="maka-plan-filter"
+              data-active={listFilter === value ? 'true' : 'false'}
+              aria-pressed={listFilter === value}
+              onClick={() => setListFilter(value as PlanReminderListFilter)}
+            >
+              <span>{label}</span>
+              <span>{filterCounts[value as PlanReminderListFilter]}</span>
+            </button>
+          ))}
+        </div>
         {props.reminders.length === 0 ? (
           <EmptyState
             Icon={Clock}
@@ -1230,8 +1262,15 @@ function PlanReminderPanel(props: {
             body="创建一次性或重复提醒；Maka 会持久化并在到点时记录执行结果。"
             extraClassName="maka-plan-empty"
           />
+        ) : visibleReminders.length === 0 ? (
+          <EmptyState
+            Icon={Clock}
+            title="当前筛选没有提醒"
+            body="切换筛选查看其他状态，或创建新的计划提醒。"
+            extraClassName="maka-plan-empty"
+          />
         ) : (
-          props.reminders.map((reminder) => (
+          visibleReminders.map((reminder) => (
             <article key={reminder.id} className="maka-plan-card" data-status={reminder.status}>
               <div className="maka-plan-card-main">
                 <div className="maka-plan-card-title">{reminder.title}</div>
