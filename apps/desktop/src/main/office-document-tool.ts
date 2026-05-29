@@ -22,6 +22,7 @@ const OFFICE_DOCUMENT_MAX_BUFFER = 512 * 1024;
 
 export type OfficeDocumentResult =
   | {
+      kind: 'office_document';
       ok: true;
       operation: OfficeDocumentOperation;
       path?: string;
@@ -31,6 +32,7 @@ export type OfficeDocumentResult =
       truncated: boolean;
     }
   | {
+      kind: 'office_document';
       ok: false;
       operation?: OfficeDocumentOperation;
       path?: string;
@@ -115,6 +117,7 @@ export async function runOfficeDocumentOperation(input: {
   const operation = normalizeOperation(input.operation);
   if (!operation) {
     return {
+      kind: 'office_document',
       ok: false,
       reason: 'invalid_operation',
       message: 'Office 文档工具只支持 help / view / get / query / validate 只读操作。',
@@ -136,6 +139,7 @@ export async function runOfficeDocumentOperation(input: {
   const pathResult = await resolveOfficeDocumentPath(input.cwd, input.path);
   if (!pathResult.ok) {
     return {
+      kind: 'office_document',
       ok: false,
       operation,
       reason: pathResult.reason,
@@ -153,6 +157,7 @@ export async function runOfficeDocumentOperation(input: {
   });
   if (!argsResult.ok) {
     return {
+      kind: 'office_document',
       ok: false,
       operation,
       path: pathResult.rel,
@@ -192,6 +197,7 @@ async function runOfficeCliOperation(input: {
     const stderr = sanitizeOfficeCliOutput(output.stderr, workspaceRoot);
     const capped = capOutput(stdout);
     return {
+      kind: 'office_document',
       ok: true,
       operation: input.operation,
       ...(input.relPath ? { path: input.relPath } : {}),
@@ -205,6 +211,7 @@ async function runOfficeCliOperation(input: {
     const killed = (error as { killed?: boolean }).killed;
     if (code === 'ENOENT') {
       return {
+        kind: 'office_document',
         ok: false,
         operation: input.operation,
         ...(input.relPath ? { path: input.relPath } : {}),
@@ -215,6 +222,7 @@ async function runOfficeCliOperation(input: {
     }
     if (code === 'ETIMEDOUT' || killed) {
       return {
+        kind: 'office_document',
         ok: false,
         operation: input.operation,
         ...(input.relPath ? { path: input.relPath } : {}),
@@ -224,6 +232,7 @@ async function runOfficeCliOperation(input: {
       };
     }
     return {
+      kind: 'office_document',
       ok: false,
       operation: input.operation,
       ...(input.relPath ? { path: input.relPath } : {}),

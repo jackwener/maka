@@ -7,6 +7,8 @@ const REPO_ROOT = resolve(process.cwd(), '..', '..');
 const CAPABILITY_SNAPSHOT = join(REPO_ROOT, 'apps', 'desktop', 'src', 'main', 'capability-snapshot.ts');
 const MAIN = join(REPO_ROOT, 'apps', 'desktop', 'src', 'main', 'main.ts');
 const PERMISSION = join(REPO_ROOT, 'packages', 'core', 'src', 'permission.ts');
+const CORE_EVENTS = join(REPO_ROOT, 'packages', 'core', 'src', 'events.ts');
+const UI_COMPONENTS = join(REPO_ROOT, 'packages', 'ui', 'src', 'components.tsx');
 
 describe('Office document capability contract', () => {
   it('surfaces Office 文档 as a capability backed by officecli probe', async () => {
@@ -47,5 +49,31 @@ describe('Office document capability contract', () => {
     assert.doesNotMatch(permission, /'officecli set'/);
     assert.doesNotMatch(permission, /'officecli add'/);
     assert.doesNotMatch(permission, /'officecli close'/);
+  });
+
+  it('renders Office document tool results through a structured preview, not raw JSON', async () => {
+    const [events, components, styles] = await Promise.all([
+      readFile(CORE_EVENTS, 'utf8'),
+      readFile(UI_COMPONENTS, 'utf8'),
+      readFile(join(REPO_ROOT, 'apps', 'desktop', 'src', 'renderer', 'styles.css'), 'utf8'),
+    ]);
+
+    assert.match(events, /kind:\s*'office_document'/);
+    assert.match(components, /content\.kind === 'office_document'/);
+    assert.match(components, /function OfficeDocumentPreview/);
+    assert.match(components, /redactSecrets\(result\.stdout/);
+    assert.match(components, /redactSecrets\(result\.stderr/);
+    assert.match(components, /capLines\(redactSecrets\(result\.stdout/);
+    assert.match(components, /data-kind="office_document"/);
+    assert.match(components, /function presentOfficeDocumentReason/);
+    assert.match(components, /officecli 未安装/);
+    assert.doesNotMatch(components, /诊断：\{redactSecrets\(result\.reason\)\}/);
+    const officeBranch = components.indexOf("content.kind === 'office_document'");
+    const jsonBranch = components.indexOf("content.kind === 'json'");
+    assert.ok(officeBranch > 0, 'Office document branch must exist');
+    assert.ok(jsonBranch > 0, 'JSON branch must exist');
+    assert.ok(officeBranch < jsonBranch, 'Office document results must be intercepted before raw JSON rendering');
+    assert.match(styles, /\.maka-office-document-preview/);
+    assert.match(styles, /\.maka-office-document-stream/);
   });
 });

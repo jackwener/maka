@@ -168,6 +168,18 @@ export type ToolResultContent =
         snippet: string;
         source: string;
       }>;
+    }
+  | {
+      kind: 'office_document';
+      ok: boolean;
+      operation?: string;
+      path?: string;
+      args?: string[];
+      stdout?: string;
+      stderr?: string;
+      truncated?: boolean;
+      reason?: string;
+      message?: string;
     };
 
 export interface PermissionRequestEvent extends BaseEvent {

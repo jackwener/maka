@@ -3612,6 +3612,92 @@ button:active {
   color: var(--destructive);
 }
 
+.maka-office-document-preview {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--foreground-10);
+  border-radius: 8px;
+  background: var(--foreground-3);
+  white-space: normal;
+}
+
+.maka-office-document-preview[data-ok="false"] {
+  border-color: oklch(from var(--destructive) l c h / 0.22);
+}
+
+.maka-office-document-head {
+  display: grid;
+  gap: 2px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--foreground-10);
+}
+
+.maka-office-document-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--foreground);
+}
+
+.maka-office-document-head small,
+.maka-office-document-message small {
+  font-size: 11px;
+  color: var(--foreground-50);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.maka-office-document-args {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--foreground-60);
+  background: transparent;
+  font-size: 11px;
+}
+
+.maka-office-document-message {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: oklch(from var(--destructive) l c h / 0.07);
+  color: var(--destructive);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.maka-office-document-empty {
+  margin: 0;
+  color: var(--foreground-50);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.maka-office-document-stream {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 200px;
+  overflow: auto;
+  border: 1px solid var(--foreground-10);
+  border-radius: 6px;
+  background: var(--background);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.maka-office-document-stream[data-stream="stderr"] {
+  background: oklch(from var(--destructive) l c h / 0.04);
+  color: var(--destructive);
+}
+
 .composer {
   flex: 0 0 auto;
   padding-top: 10px;
