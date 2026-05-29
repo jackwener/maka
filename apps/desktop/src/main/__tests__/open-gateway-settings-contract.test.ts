@@ -21,8 +21,10 @@ describe('Open Gateway Settings endpoint contract', () => {
     assert.match(settingsSource, /最近失败计数/);
     assert.match(settingsSource, /复制总览 curl/);
     assert.match(settingsSource, /复制接口说明 curl/);
+    assert.match(settingsSource, /复制单会话状态 curl/);
     assert.match(settingsSource, /复制事件流 curl/);
     assert.match(settingsSource, /Authorization: Bearer/);
+    assert.ok(settingsSource.includes('/v1/sessions/${sessionId}/state'));
     assert.match(settingsSource, /Accept: text\/event-stream/);
     assert.match(settingsSource, /curl -N -sS/);
     assert.match(settingsSource, /encodeURIComponent\(eventSessionId\.trim\(\)\)/);

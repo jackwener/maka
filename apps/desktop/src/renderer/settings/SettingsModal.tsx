@@ -3013,6 +3013,13 @@ function OpenGatewaySettingsPage(props: {
     toast.success('已复制接口说明 curl', '可交给外部工具发现本机 API。');
   }
 
+  async function copySessionStateCurl() {
+    const sessionId = eventSessionId.trim() ? encodeURIComponent(eventSessionId.trim()) : '<SESSION_ID>';
+    const command = `curl -sS ${shellSingleQuote(`${baseUrl}/v1/sessions/${sessionId}/state`)} -H ${shellSingleQuote(`Authorization: Bearer ${gateway.token}`)}`;
+    await navigator.clipboard.writeText(command);
+    toast.success('已复制单会话状态 curl', sessionId === '<SESSION_ID>' ? '把 <SESSION_ID> 替换成目标会话 ID 后运行。' : '可在终端查看单个会话状态。');
+  }
+
   async function copyEventStreamCurl() {
     const sessionId = eventSessionId.trim() ? encodeURIComponent(eventSessionId.trim()) : '<SESSION_ID>';
     const command = [
@@ -3082,7 +3089,7 @@ function OpenGatewaySettingsPage(props: {
           />
         </label>
         <label>
-          <span>事件 sessionId</span>
+          <span>会话 sessionId</span>
           <input
             value={eventSessionId}
             disabled={saving}
@@ -3118,6 +3125,9 @@ function OpenGatewaySettingsPage(props: {
         </button>
         <button className="maka-button secondary" type="button" disabled={!gateway.token} onClick={() => void copyOpenApiCurl()}>
           复制接口说明 curl
+        </button>
+        <button className="maka-button secondary" type="button" disabled={!gateway.token} onClick={() => void copySessionStateCurl()}>
+          复制单会话状态 curl
         </button>
         <button className="maka-button secondary" type="button" disabled={!gateway.token} onClick={() => void copyEventStreamCurl()}>
           复制事件流 curl
