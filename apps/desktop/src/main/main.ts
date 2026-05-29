@@ -138,7 +138,14 @@ import { buildPersonalizationPromptFragment } from './personalization-prompt.js'
 import { resolveProjectGitInfo } from './project-context.js';
 import { buildSessionEnvironmentPromptFragment } from './session-environment-prompt.js';
 import { buildSettingsUpdateResult, maskAppSettings, preserveSensitivePlaceholders, toSettingsTestResult } from './settings-ipc-helpers.js';
-import { buildSkillAgentTool, buildSkillsPromptFragment, createStarterSkill, listInstalledSkills, resolveSkillOpenPath } from './skills.js';
+import {
+  buildSkillAgentTool,
+  buildSkillsPromptFragment,
+  createStarterSkill,
+  ensureBundledOfficeSkills,
+  listInstalledSkills,
+  resolveSkillOpenPath,
+} from './skills.js';
 import {
   buildWorkspaceInstructionsPromptFragment,
   createWorkspaceInstructionFile,
@@ -522,6 +529,7 @@ function visualSmokeWindowBounds(defaults: SavedBounds): SavedBounds {
 
 async function createWindow(): Promise<void> {
   await mkdir(workspaceRoot, { recursive: true });
+  await ensureBundledOfficeSkills(workspaceRoot);
   installApplicationMenu();
   // Restore previously-saved bounds when available; first launch and
   // legacy installs both fall back to the default 1240x820 frame. After
