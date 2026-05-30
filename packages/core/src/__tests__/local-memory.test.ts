@@ -6,6 +6,7 @@ import {
   buildLocalMemoryPromptBody,
   defaultLocalMemoryMarkdown,
   defaultLocalMemorySettings,
+  findLocalMemoryEntryDraftRange,
   normalizeLocalMemorySettings,
   parseLocalMemoryMarkdown,
   setLocalMemoryEntryStatusDraft,
@@ -233,6 +234,51 @@ describe('local MEMORY.md contract', () => {
     if (!restored.ok) return;
     assert.equal(parseLocalMemoryMarkdown(restored.draft).activeEntries[0]?.id, 'keep');
     assert.match(buildLocalMemoryPromptBody(restored.draft) ?? '', /Prefer concise answers/);
+  });
+
+  it('locates a memory entry draft range by stable or legacy id', () => {
+    const source = [
+      '# Maka Memory',
+      '',
+      '## First',
+      '<!-- maka-memory: id=first origin=manual status=active -->',
+      'First content.',
+      '',
+      '## Legacy Title',
+      'Legacy content.',
+      '',
+      '## Last',
+      '<!-- maka-memory: id=last origin=manual status=archived -->',
+      'Last content.',
+    ].join('\n');
+
+    const first = findLocalMemoryEntryDraftRange(source, 'first');
+    assert.ok(first);
+    assert.equal(source.slice(first.start, first.end), [
+      '## First',
+      '<!-- maka-memory: id=first origin=manual status=active -->',
+      'First content.',
+      '',
+      '',
+    ].join('\n'));
+
+    const legacy = findLocalMemoryEntryDraftRange(source, 'legacy-title');
+    assert.ok(legacy);
+    assert.equal(source.slice(legacy.start, legacy.end), [
+      '## Legacy Title',
+      'Legacy content.',
+      '',
+      '',
+    ].join('\n'));
+
+    const last = findLocalMemoryEntryDraftRange(source, 'last');
+    assert.ok(last);
+    assert.equal(source.slice(last.start, last.end), [
+      '## Last',
+      '<!-- maka-memory: id=last origin=manual status=archived -->',
+      'Last content.',
+    ].join('\n'));
+    assert.equal(findLocalMemoryEntryDraftRange(source, 'missing'), null);
   });
 
   it('can archive legacy entries without metadata by inserting a visible comment', () => {

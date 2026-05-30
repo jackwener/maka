@@ -63,6 +63,7 @@ import {
   deriveProviderAuthContractFromConnection,
   appendManualLocalMemoryEntryDraft,
   defaultVoiceCaptureCaps,
+  findLocalMemoryEntryDraftRange,
   setLocalMemoryEntryStatusDraft,
   validateVoiceCaptureRequest,
   webSearchCredentialStatusFromResponse,
@@ -2476,6 +2477,19 @@ function MemorySettingsPage(props: {
     }
   }
 
+  function focusMemoryEntryInDraft(entry: LocalMemoryState['entries'][number]) {
+    const range = findLocalMemoryEntryDraftRange(draft, entry.id);
+    if (!range) {
+      toast.error('无法定位记忆', '当前草稿里找不到这条记忆；请先保存或刷新后重试。');
+      return;
+    }
+    requestAnimationFrame(() => {
+      editorRef.current?.focus();
+      editorRef.current?.setSelectionRange(range.start, range.end);
+      editorRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+  }
+
   function addManualMemoryDraftEntry() {
     const result = appendManualLocalMemoryEntryDraft(draft, {
       title: newMemoryTitle,
@@ -2672,6 +2686,7 @@ function MemorySettingsPage(props: {
               filtered={normalizedMemoryEntryQuery.length > 0}
               busy={busy || effective.status === 'incognito_blocked' || !effective.enabled}
               onCopyReference={copyMemoryEntryReference}
+              onFocusDraft={focusMemoryEntryInDraft}
               onStatusChange={updateMemoryEntryStatus}
             />
             {effective.archivedEntries.length > 0 && (
@@ -2682,6 +2697,7 @@ function MemorySettingsPage(props: {
                 archived
                 busy={busy || effective.status === 'incognito_blocked' || !effective.enabled}
                 onCopyReference={copyMemoryEntryReference}
+                onFocusDraft={focusMemoryEntryInDraft}
                 onStatusChange={updateMemoryEntryStatus}
               />
             )}
@@ -2776,6 +2792,7 @@ function MemoryEntryList(props: {
   archived?: boolean;
   busy?: boolean;
   onCopyReference?(entry: LocalMemoryState['activeEntries'][number]): void | Promise<void>;
+  onFocusDraft?(entry: LocalMemoryState['activeEntries'][number]): void | Promise<void>;
   onStatusChange?(entry: LocalMemoryState['activeEntries'][number], status: 'active' | 'archived'): void | Promise<void>;
 }) {
   return (
@@ -2809,7 +2826,7 @@ function MemoryEntryList(props: {
                 )}
               </small>
               <p>{entry.content}</p>
-              {(props.onCopyReference || props.onStatusChange) && (
+              {(props.onCopyReference || props.onFocusDraft || props.onStatusChange) && (
                 <div className="settingsMemoryEntryActions">
                   {props.onCopyReference && (
                     <button
@@ -2818,6 +2835,15 @@ function MemoryEntryList(props: {
                       onClick={() => void props.onCopyReference?.(entry)}
                     >
                       复制引用
+                    </button>
+                  )}
+                  {props.onFocusDraft && (
+                    <button
+                      type="button"
+                      className="settingsInlineTextButton"
+                      onClick={() => void props.onFocusDraft?.(entry)}
+                    >
+                      定位草稿
                     </button>
                   )}
                   {props.onStatusChange && (

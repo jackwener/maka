@@ -49,6 +49,21 @@ describe('local MEMORY.md Settings UI contract', () => {
     assert.match(src, /function memoryEntryStatusLabel/);
   });
 
+  it('can focus a memory entry in the visible MEMORY.md draft editor', async () => {
+    const src = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
+    const pageBlock = src.match(/function MemorySettingsPage\([\s\S]*?function MemoryEntryList/)?.[0] ?? '';
+    const listBlock = src.match(/function MemoryEntryList\([\s\S]*?function filterLocalMemoryEntries/)?.[0] ?? '';
+
+    assert.match(src, /findLocalMemoryEntryDraftRange/);
+    assert.match(pageBlock, /function focusMemoryEntryInDraft/);
+    assert.match(pageBlock, /findLocalMemoryEntryDraftRange\(draft, entry\.id\)/);
+    assert.match(pageBlock, /editorRef\.current\?\.setSelectionRange\(range\.start, range\.end\)/);
+    assert.match(pageBlock, /editorRef\.current\?\.scrollIntoView\(\{ block: 'center', behavior: 'smooth' \}\)/);
+    assert.match(pageBlock, /无法定位记忆/);
+    assert.match(listBlock, /onFocusDraft/);
+    assert.match(listBlock, /定位草稿/);
+  });
+
   it('filters memory entries locally across title content id origin timestamps and tags', async () => {
     const src = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
 

@@ -84,6 +84,11 @@ export type SetLocalMemoryEntryStatusResult =
   | { readonly ok: true; readonly draft: string }
   | { readonly ok: false; readonly reason: 'invalid_id' | 'not_found' | 'oversize' };
 
+export interface LocalMemoryEntryDraftRange {
+  readonly start: number;
+  readonly end: number;
+}
+
 export const LOCAL_MEMORY_MAX_BYTES = 128 * 1024;
 export const LOCAL_MEMORY_PROMPT_MAX_CHARS = 12_000;
 
@@ -216,6 +221,50 @@ export function setLocalMemoryEntryStatusDraft(
     return { ok: false, reason: 'oversize' };
   }
   return { ok: true, draft };
+}
+
+export function findLocalMemoryEntryDraftRange(input: string, entryId: string): LocalMemoryEntryDraftRange | null {
+  const id = entryId.trim();
+  if (!id) return null;
+
+  const lines = input.split(/\r?\n/);
+  const lineStarts: number[] = [];
+  let offset = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    lineStarts[index] = offset;
+    offset += (lines[index] ?? '').length;
+    if (index < lines.length - 1) {
+      offset += input[offset] === '\r' && input[offset + 1] === '\n' ? 2 : 1;
+    }
+  }
+  lineStarts[lines.length] = input.length;
+
+  let current: { title: string; headingLineIndex: number; meta?: Record<string, string> } | null = null;
+
+  const matchCurrent = (endLineIndex: number): LocalMemoryEntryDraftRange | null => {
+    if (!current) return null;
+    const currentId = current.meta?.id ?? slugId(current.title);
+    if (currentId !== id) return null;
+    return {
+      start: lineStarts[current.headingLineIndex] ?? 0,
+      end: lineStarts[endLineIndex] ?? input.length,
+    };
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    const heading = /^##\s+(.+?)\s*$/.exec(line);
+    if (heading) {
+      const matched = matchCurrent(index);
+      if (matched) return matched;
+      current = { title: heading[1] ?? '未命名记忆', headingLineIndex: index };
+      continue;
+    }
+    if (!current || current.meta) continue;
+    const meta = parseMetaComment(line);
+    if (meta) current.meta = meta;
+  }
+  return matchCurrent(lines.length);
 }
 
 function parseLocalMemoryMarkdownRaw(input: string): LocalMemoryRawParseResult {

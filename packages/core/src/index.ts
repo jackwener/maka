@@ -389,6 +389,7 @@ export {
 export type {
   LocalMemoryEntryStatus,
   LocalMemoryEntryPreview,
+  LocalMemoryEntryDraftRange,
   LocalMemoryOrigin,
   LocalMemoryParseResult,
   LocalMemorySettings,
@@ -405,6 +406,7 @@ export {
   buildLocalMemoryPromptBody,
   defaultLocalMemoryMarkdown,
   defaultLocalMemorySettings,
+  findLocalMemoryEntryDraftRange,
   normalizeLocalMemorySettings,
   parseLocalMemoryMarkdown,
   setLocalMemoryEntryStatusDraft,
