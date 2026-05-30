@@ -9727,6 +9727,11 @@ button:active {
   line-height: 1.4;
 }
 
+.settingsMemoryPromptPreviewBudget {
+  font-family: var(--font-mono);
+  color: var(--foreground-60);
+}
+
 .settingsMemoryPromptPreview pre {
   max-height: 220px;
   margin: 0;

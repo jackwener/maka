@@ -58,6 +58,7 @@ import type { BotStatus } from '@maka/runtime';
 import type { TestProxyInput } from '@maka/core/settings/network-settings';
 import {
   HEALTH_SIGNAL_LAYERS,
+  LOCAL_MEMORY_PROMPT_MAX_CHARS,
   OS_PERMISSION_IDS,
   THEME_PALETTES,
   deriveProviderAuthContractFromConnection,
@@ -2581,6 +2582,12 @@ function MemorySettingsPage(props: {
   const localMemoryPromptPreview = useMemo(() => buildLocalMemoryPromptBody(draft) ?? '', [draft]);
   const promptPreviewBlockedReason = localMemoryPromptPreviewBlockedReason(effective);
   const promptPreviewWillInject = localMemoryPromptPreview.length > 0 && !promptPreviewBlockedReason;
+  const localMemoryPromptPreviewTruncated = localMemoryPromptPreview.includes('[本地记忆已按长度截断]');
+  const localMemoryPromptPreviewBudgetLabel = localMemoryPromptPreview
+    ? localMemoryPromptPreviewTruncated
+      ? `预览已按 ${LOCAL_MEMORY_PROMPT_MAX_CHARS.toLocaleString('zh-CN')} 字符上限截断`
+      : `预览 ${localMemoryPromptPreview.length.toLocaleString('zh-CN')} / ${LOCAL_MEMORY_PROMPT_MAX_CHARS.toLocaleString('zh-CN')} 字符`
+    : `prompt 上限 ${LOCAL_MEMORY_PROMPT_MAX_CHARS.toLocaleString('zh-CN')} 字符`;
 
   async function copyLocalMemoryPromptPreview() {
     if (!localMemoryPromptPreview) return;
@@ -2688,6 +2695,7 @@ function MemorySettingsPage(props: {
           </div>
         </div>
         <small>只展示生效记忆会进入 prompt 的内容；已归档条目不会注入，疑似密钥会遮蔽。</small>
+        <small className="settingsMemoryPromptPreviewBudget">{localMemoryPromptPreviewBudgetLabel}</small>
         {localMemoryPromptPreview ? (
           <pre>{localMemoryPromptPreview}</pre>
         ) : (
