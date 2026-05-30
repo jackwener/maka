@@ -224,6 +224,8 @@ describe('OpenGatewayService', () => {
       turnId: 'turn-s2',
       message: 'overview failure with Authorization: Bearer sk-live-secret-token-value',
     }));
+    await fetchJson(`${status.baseUrl}/v1/capabilities`, 'dev-token');
+    await fetchJson(`${status.baseUrl}/v1/not-found?query=secret-query`, 'dev-token');
 
     const response = await fetchJson(`${status.baseUrl}/v1/state`, 'dev-token');
     assert.equal(response.status, 200);
@@ -239,7 +241,15 @@ describe('OpenGatewayService', () => {
     assert.equal(response.body.state.sessions.incidentSessionCount, 1);
     assert.equal(response.body.state.incidents.incidentCount, 1);
     assert.equal(response.body.state.incidents.newestIncident.sessionId, 's2');
+    assert.equal(response.body.state.requests.requestCount, 2);
+    assert.equal(response.body.state.requests.errorCount, 1);
+    assert.equal(response.body.state.requests.includesHeaders, false);
+    assert.equal(response.body.state.requests.includesQuery, false);
+    assert.equal(response.body.state.requests.includesPayloads, false);
+    assert.deepEqual(response.body.state.requests.byStatusCode, { 200: 1, 404: 1 });
+    assert.equal(response.body.state.requests.newestRequest.path, '/v1/not-found');
     assert.doesNotMatch(JSON.stringify(response.body), /sk-live-secret-token-value/);
+    assert.doesNotMatch(JSON.stringify(response.body), /secret-query|dev-token|sk-live-secret/i);
     assert.doesNotMatch(JSON.stringify(response.body), /Alpha|Beta|lastMessagePreview/);
 
     const unauthorized = await fetchJson(`${status.baseUrl}/v1/state`);

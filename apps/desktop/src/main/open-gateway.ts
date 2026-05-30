@@ -286,6 +286,7 @@ export class OpenGatewayService {
           gateway: this.getStatus(),
           sessions: await this.deps.listSessions(),
           recentEvents: this.recentEvents,
+          recentRequests: this.recentRequests,
           sendAvailable: Boolean(this.deps.sendMessage),
           generatedAt: this.now(),
         }),
@@ -708,6 +709,38 @@ interface GatewayRequestSummary {
   durationMs: number;
 }
 
+interface GatewayRequestIndexState {
+  requestCount: number;
+  errorCount: number;
+  limit: number;
+  includesHeaders: false;
+  includesQuery: false;
+  includesPayloads: false;
+  byStatusCode: Record<string, number>;
+  newestRequest?: GatewayRequestSummary;
+  oldestRequest?: GatewayRequestSummary;
+}
+
+function buildGatewayRequestIndexState(requests: readonly GatewayRequestSummary[]): GatewayRequestIndexState {
+  const byStatusCode: Record<string, number> = {};
+  let errorCount = 0;
+  for (const request of requests) {
+    byStatusCode[String(request.statusCode)] = (byStatusCode[String(request.statusCode)] ?? 0) + 1;
+    if (request.statusCode >= 400) errorCount += 1;
+  }
+  return {
+    requestCount: requests.length,
+    errorCount,
+    limit: OPEN_GATEWAY_REQUEST_RECENT_LIMIT,
+    includesHeaders: false,
+    includesQuery: false,
+    includesPayloads: false,
+    byStatusCode,
+    ...(requests[0] ? { oldestRequest: requests[0] } : {}),
+    ...(requests.at(-1) ? { newestRequest: requests.at(-1) } : {}),
+  };
+}
+
 type GatewayIncidentSummary =
   | {
       id: string;
@@ -982,12 +1015,14 @@ interface GatewayOverviewState {
   capabilities: string[];
   sessions: GatewaySessionsState;
   incidents: GatewayIncidentIndexState;
+  requests: GatewayRequestIndexState;
 }
 
 function buildGatewayOverviewState(input: {
   gateway: OpenGatewayStatus;
   sessions: SessionSummary[];
   recentEvents: ReadonlyMap<string, readonly SessionEvent[]>;
+  recentRequests: readonly GatewayRequestSummary[];
   sendAvailable: boolean;
   generatedAt: number;
 }): GatewayOverviewState {
@@ -999,6 +1034,7 @@ function buildGatewayOverviewState(input: {
     capabilities: buildGatewayCapabilities(input.sendAvailable),
     sessions: buildGatewaySessionsState(input.sessions, input.recentEvents),
     incidents: buildGatewayIncidentIndexState(input.recentEvents),
+    requests: buildGatewayRequestIndexState(input.recentRequests),
   };
 }
 
