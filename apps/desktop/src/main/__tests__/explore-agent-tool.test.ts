@@ -90,6 +90,24 @@ describe('ExploreAgent read-only worker', () => {
     });
   });
 
+  it('returns a structured failure when the session cwd is unreadable', async () => {
+    const missingRoot = join(tmpdir(), `maka-explore-missing-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    const result = await runReadOnlyExplore({
+      cwd: missingRoot,
+      objective: 'inspect missing workspace',
+      roots: ['.'],
+      queries: ['workspace'],
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.reason, 'invalid_root');
+    assert.equal(result.message, '会话工作目录不可读取。');
+    assert.equal(result.filesInspected, 0);
+    assert.equal(result.matches.length, 0);
+    assert.equal(JSON.stringify(result).includes(missingRoot), false);
+    assert.equal(typeof result.durationMs, 'number');
+  });
+
   it('skips sensitive local credential files even when they match the query', async () => {
     await withWorkspace(async (workspaceRoot) => {
       await mkdir(join(workspaceRoot, 'src'), { recursive: true });

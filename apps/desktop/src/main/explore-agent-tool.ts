@@ -207,9 +207,14 @@ export async function runReadOnlyExplore(input: {
     return failure('invalid_objective', objective, [], [], '只读探索需要一个明确的研究目标。', [], startedAt);
   }
 
-  const workspaceRoot = await realpath(input.cwd);
   const roots = normalizeRoots(input.roots);
   const queryTerms = normalizeQueries(input.queries, objective);
+  let workspaceRoot: string;
+  try {
+    workspaceRoot = await realpath(input.cwd);
+  } catch {
+    return failure('invalid_root', objective, roots, queryTerms, '会话工作目录不可读取。', [], startedAt);
+  }
   const maxFiles = clampInteger(input.maxFiles, 1, 80, DEFAULT_MAX_FILES);
   const maxMatches = clampInteger(input.maxMatches, 1, 120, DEFAULT_MAX_MATCHES);
   const discoveryBudget = Math.min(MAX_DISCOVERED_FILES, Math.max(maxFiles * 4, maxFiles));
