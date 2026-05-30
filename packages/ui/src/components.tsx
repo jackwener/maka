@@ -5477,6 +5477,7 @@ function ExploreAgentPreview(props: {
   const skippedSummary = result.sensitiveFilesSkipped && result.sensitiveFilesSkipped > 0
     ? `跳过 ${result.filesSkipped} 个（含敏感 ${result.sensitiveFilesSkipped} 个）`
     : `跳过 ${result.filesSkipped} 个`;
+  const duration = formatDuration(result.durationMs);
 
   async function copyReport() {
     if (reportText.length === 0) return;
@@ -5495,6 +5496,7 @@ function ExploreAgentPreview(props: {
         <strong>{redactSecrets(result.objective || '只读探索')}</strong>
         <small>
           {status} · 读 {result.filesInspected} 个文件 · {skippedSummary} · {formatBytes(result.bytesRead)}
+          {duration ? ` · 耗时 ${duration}` : ''}
         </small>
       </header>
       {!result.ok && (

@@ -192,6 +192,9 @@ export type ToolResultContent =
       filesSkipped: number;
       sensitiveFilesSkipped?: number;
       bytesRead: number;
+      startedAt?: number;
+      completedAt?: number;
+      durationMs?: number;
       progress: string[];
       evidence?: ReadonlyArray<{
         type: 'match' | 'candidate';

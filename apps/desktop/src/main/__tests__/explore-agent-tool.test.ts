@@ -38,6 +38,11 @@ describe('ExploreAgent read-only worker', () => {
       assert.equal(result.kind, 'explore_agent');
       assert.equal(result.mode, 'read_only');
       assert.deepEqual(result.roots, ['.']);
+      assert.equal(typeof result.startedAt, 'number');
+      assert.equal(typeof result.completedAt, 'number');
+      assert.equal(typeof result.durationMs, 'number');
+      assert.ok(result.completedAt >= result.startedAt);
+      assert.ok(result.durationMs >= 0);
       assert.ok(result.filesInspected >= 2);
       assert.ok(result.matches.some((match) => match.path === 'src/permission.ts' && match.query === 'subagent'));
       assert.ok(result.candidateFiles.some((file) => file.path === 'src/permission.ts'));
@@ -47,6 +52,7 @@ describe('ExploreAgent read-only worker', () => {
       assert.match(result.report, /证据锚点：/);
       assert.match(result.report, /src\/permission\.ts:2/);
       assert.match(result.report, /命中片段：/);
+      assert.match(result.report, /耗时 \d+(?:\.\d)?(?: ms|s|m \d+s)/);
       assert.equal(JSON.stringify(result).includes(workspaceRoot), false);
       assert.ok(result.notes.some((note) => /不写文件、不联网、不启动进程/.test(note)));
       assert.equal(result.notes.some((note) => /Read-only worker|Search budget/.test(note)), false);
@@ -317,9 +323,11 @@ describe('ExploreAgent read-only worker', () => {
     assert.match(previewBlock, /result\.progress/);
     assert.match(previewBlock, /result\.evidence/);
     assert.match(previewBlock, /result\.report/);
+    assert.match(previewBlock, /result\.durationMs/);
     assert.match(previewBlock, /探索过程/);
     assert.match(previewBlock, /证据锚点/);
     assert.match(previewBlock, /研究报告/);
+    assert.match(previewBlock, /耗时/);
     assert.match(previewBlock, /复制报告/);
     assert.match(previewBlock, /reportText\.length === 0/);
     assert.match(previewBlock, /navigator\.clipboard\.writeText\(redactSecrets\(reportText\)\)/);
