@@ -4035,7 +4035,7 @@ function Switch(props: { checked: boolean; onChange(checked: boolean): void; dis
  *   PR-REAL-3 wires the audit log, the slot fills without UI change.
  */
 const CAPABILITY_READINESS_COPY: Record<CapabilityReadinessState, { label: string; detail: string; tone: 'neutral' | 'info' | 'success' | 'warning' | 'destructive' }> = {
-  not_configured: { label: '未配置', detail: '需要先打开开关或完成配置才能启用。', tone: 'neutral' },
+  not_configured: { label: '等待配置', detail: '需要先打开开关或补齐配置才能启用。', tone: 'neutral' },
   denied: { label: '系统拒绝', detail: '所需系统权限被拒绝或当前平台不支持。', tone: 'destructive' },
   enabled: { label: '运行可用', detail: '当前快照标记为可用，具体层级见下方。', tone: 'success' },
   degraded: { label: '部分可用', detail: '已有一部分能力可用，但仍有运行态、权限或子功能需要处理。', tone: 'warning' },
