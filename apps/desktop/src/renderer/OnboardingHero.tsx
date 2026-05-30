@@ -600,7 +600,7 @@ function ReadyEmptyHero(props: {
               disabled={props.quickChatPending}
             >
               <Paperclip size={14} strokeWidth={1.75} aria-hidden="true" />
-              <span>导入文本文件</span>
+              <span>导入文件内容</span>
             </button>
           )}
           {props.onImportFolderOutline && (

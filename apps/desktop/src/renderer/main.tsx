@@ -1248,7 +1248,7 @@ function AppShell() {
   async function importTextFilePrompt(): Promise<string | undefined> {
     const result = await window.maka.context.importTextFile();
     if (!result.ok) {
-      if (result.reason !== 'cancelled') toastApi.error('导入文本失败', result.message);
+      if (result.reason !== 'cancelled') toastApi.error('导入文件失败', result.message);
       return undefined;
     }
     toastApi.success('已导入文件内容', `${result.name}${result.truncated ? ' · 已截断' : ''}`);
@@ -1264,15 +1264,15 @@ function AppShell() {
   function droppedTextFilePreflightFailureCopy(reason: TextFileImportPreflightFailureReason): string {
     switch (reason) {
       case 'missing':
-        return '没有可导入的文本文件。';
+        return '没有可导入的文件。';
       case 'too-large':
         return '文件过大；请先截取需要讨论的部分。';
       case 'too-many-files':
-        return '一次最多导入 5 个文本文件。';
+        return '一次最多导入 5 个文件。';
       case 'office-file':
         return 'Office 文档请点导入文件按钮选择；拖放或粘贴拿不到可授权的本地路径。';
       case 'unsupported-type':
-        return '只支持直接导入文本文件；Office 文档请用 Office 文档工具或对应技能处理。';
+        return '只支持拖放或粘贴文本文件；Office 文档请点导入文件按钮选择。';
     }
   }
 
@@ -1291,7 +1291,7 @@ function AppShell() {
       const preflightInputs = await buildDroppedTextFilePreflightInputs(files);
       const preflight = preflightDroppedTextFilesForPromptImport(preflightInputs);
       if (!preflight.ok) {
-        toastApi.error('导入文本失败', droppedTextFilePreflightFailureCopy(preflight.reason));
+        toastApi.error('导入文件失败', droppedTextFilePreflightFailureCopy(preflight.reason));
         return undefined;
       }
       const payloads = await Promise.all(files.map(async (file) => ({
@@ -1302,13 +1302,13 @@ function AppShell() {
       })));
       const result = await window.maka.context.importDroppedTextFiles(payloads);
       if (!result.ok) {
-        toastApi.error('导入文本失败', result.message);
+        toastApi.error('导入文件失败', result.message);
         return undefined;
       }
       toastApi.success('已导入文件内容', `${result.name}${result.truncated ? ' · 已截断' : ''}`);
       return result.prompt;
     } catch (error) {
-      toastApi.error('导入文本失败', cleanErrorMessage(error));
+      toastApi.error('导入文件失败', cleanErrorMessage(error));
       return undefined;
     }
   }

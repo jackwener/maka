@@ -4854,8 +4854,8 @@ export const Composer = forwardRef<
                 type="button"
                 disabled={props.disabled}
                 onClick={props.onImportTextFile}
-                aria-label="导入文本文件"
-                title="导入文本文件"
+                aria-label="导入文件内容"
+                title="导入文件内容"
               >
                 <Paperclip size={14} strokeWidth={1.75} aria-hidden="true" />
               </button>

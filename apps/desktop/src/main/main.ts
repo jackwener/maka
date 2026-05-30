@@ -846,11 +846,11 @@ function textFileImportFailureCopy(reason: TextFileImportFailureReason): string 
     case 'binary':
       return '这个文件不像纯文本，已取消导入。';
     case 'too-many-files':
-      return '一次最多导入 5 个文本文件。';
+      return '一次最多导入 5 个文件。';
     case 'office-file':
       return 'Office 文档请用导入文件按钮选择；拖放或粘贴拿不到可授权的本地路径。';
     case 'unsupported-type':
-      return '只支持直接导入文本文件；Office 文档请用 Office 文档工具或对应技能处理。';
+      return '只支持直接导入文本文件和 Office 文档。';
     case 'read-failed':
       return '读取文件失败。';
     case 'officecli_missing':
@@ -961,12 +961,12 @@ function registerIpc(): void {
       ];
       const result = mainWindow
         ? await dialog.showOpenDialog(mainWindow, {
-            title: '导入文本文件',
+            title: '导入文件内容',
             properties: ['openFile', 'multiSelections'],
             filters: textFileFilters,
           })
         : await dialog.showOpenDialog({
-            title: '导入文本文件',
+            title: '导入文件内容',
             properties: ['openFile', 'multiSelections'],
             filters: textFileFilters,
           });
