@@ -102,7 +102,7 @@ describe('redactSecrets', () => {
     const inputs = [
       'Connection refused',
       'Request timed out',
-      'Provider unavailable',
+      'Provider returned an error',
       'Authentication failed',
       'Permission denied for /tmp/file.txt',
     ];

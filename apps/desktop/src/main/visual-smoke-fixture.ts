@@ -713,7 +713,7 @@ async function writeConnections(workspaceRoot: string, now: number, scenario: Vi
       modelsFetchedAt: now - 4 * 3_600_000,
       lastTestStatus: 'error',
       lastTestAt: new Date(now - 8 * 60_000).toISOString(),
-      lastTestMessage: 'Provider unavailable',
+      lastTestMessage: 'Provider returned an error',
       createdAt: now - 3_200_000,
       updatedAt: now - 8 * 60_000,
     },

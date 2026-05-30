@@ -121,7 +121,7 @@ export function describeTurnErrorClass(errorClass: string | undefined): string {
   if (lower === 'network' || lower.includes('network') || lower.includes('fetch') || lower.includes('econn')) {
     return '网络错误';
   }
-  if (lower === 'provider_unavailable' || /\b5\d\d\b/.test(lower)) return '模型服务暂不可用';
+  if (lower === 'provider_unavailable' || /\b5\d\d\b/.test(lower)) return '模型服务返回错误';
   if (lower === 'tool_failed' || lower.includes('tool')) return '工具调用失败';
   if (lower === 'permission_required' || lower.includes('permission')) return '等待权限确认';
   return '未知错误';

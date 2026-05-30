@@ -233,7 +233,7 @@ describe('handleQuickChatStart — error paths (send_failed)', () => {
     { name: 'timeout', raw: 'Request timeout after 30s', expected: '请求超时' },
     { name: '429 rate limit', raw: 'HTTP 429 Too Many Requests', expected: '触发模型速率限制' },
     { name: '401 auth', raw: '401 Unauthorized: bad key', expected: '鉴权失败' },
-    { name: '5xx', raw: 'Provider returned 500 Internal Server Error', expected: '模型服务暂不可用' },
+    { name: '5xx', raw: 'Provider returned 500 Internal Server Error', expected: '模型服务返回错误' },
     { name: 'network', raw: 'ECONNREFUSED fetch failed', expected: '网络错误' },
   ]) {
     it(`send failure category ${name} → Chinese-only generalized message`, async () => {
@@ -252,7 +252,7 @@ describe('handleQuickChatStart — error paths (send_failed)', () => {
           'Request timed out',
           'Rate limit exceeded',
           'Authentication failed',
-          'Provider unavailable',
+          'Provider returned an error',
           'Network error',
           'Operation failed',
         ]) {

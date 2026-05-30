@@ -42,7 +42,7 @@ describe('connection test status persistence', () => {
     );
     assert.equal(
       connectionTestStatusPatch({ ok: false, statusCode: 503, errorMessage: '503 raw upstream body' }, now).lastTestMessage,
-      'Provider unavailable',
+      'Provider returned an error',
     );
   });
 
