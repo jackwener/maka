@@ -27,4 +27,19 @@ describe('tool and permission args redaction', () => {
     assert.match(permissionDialog, /\{formatRedactedJson\(props\.request\.args\)\}/);
     assert.doesNotMatch(permissionDialog, /JSON\.stringify\(props\.request\.args/);
   });
+
+  it('redacts permission summary previews before rendering command, path, or file content', async () => {
+    const source = await readFile(join(process.cwd(), '../../packages/ui/src/components.tsx'), 'utf8');
+    const summary = source.match(/function renderPermissionSummary[\s\S]*?function permissionValuePreview/)?.[0] ?? '';
+
+    assert.match(summary, /\{redactSecrets\(command\)\}/);
+    assert.match(summary, /\{redactSecrets\(path\)\}/);
+    assert.match(summary, /const preview = permissionTextPreview\(content, 600\);/);
+    assert.match(summary, /\{permissionTextPreview\(oldString, 400\)\}/);
+    assert.match(summary, /\{permissionTextPreview\(newString, 400\)\}/);
+    assert.doesNotMatch(summary, /\{command\}<\/pre>/);
+    assert.doesNotMatch(summary, /\{path\}<\/code>/);
+    assert.doesNotMatch(summary, /oldString\.slice/);
+    assert.doesNotMatch(summary, /newString\.slice/);
+  });
 });

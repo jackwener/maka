@@ -5366,7 +5366,7 @@ function renderPermissionSummary(request: PermissionRequestEvent): ReactNode | u
       return (
         <>
           <p className="maka-permission-line">即将运行 shell 命令：</p>
-          <pre className="maka-code maka-permission-command">{command}</pre>
+          <pre className="maka-code maka-permission-command">{redactSecrets(command)}</pre>
           {timeout !== undefined && (
             <p className="maka-permission-meta">超时 <strong>{timeout} ms</strong></p>
           )}
@@ -5379,11 +5379,11 @@ function renderPermissionSummary(request: PermissionRequestEvent): ReactNode | u
       if (!path) return undefined;
       const bytes = new TextEncoder().encode(content).length;
       const lines = content.split('\n').length;
-      const preview = content.length > 600 ? `${content.slice(0, 600)}…` : content;
+      const preview = permissionTextPreview(content, 600);
       return (
         <>
           <p className="maka-permission-line">即将写入文件：</p>
-          <p className="maka-permission-path"><code>{path}</code></p>
+          <p className="maka-permission-path"><code>{redactSecrets(path)}</code></p>
           <p className="maka-permission-meta">
             <strong>{bytes}</strong> 字节 · <strong>{lines}</strong> 行
           </p>
@@ -5399,15 +5399,15 @@ function renderPermissionSummary(request: PermissionRequestEvent): ReactNode | u
       return (
         <>
           <p className="maka-permission-line">即将修改文件：</p>
-          <p className="maka-permission-path"><code>{path}</code></p>
+          <p className="maka-permission-path"><code>{redactSecrets(path)}</code></p>
           <div className="maka-permission-diff">
             <div>
               <span className="maka-permission-diff-tag" data-side="old">删除</span>
-              <pre className="maka-code">{oldString.length > 400 ? `${oldString.slice(0, 400)}…` : oldString}</pre>
+              <pre className="maka-code">{permissionTextPreview(oldString, 400)}</pre>
             </div>
             <div>
               <span className="maka-permission-diff-tag" data-side="new">写入</span>
-              <pre className="maka-code">{newString.length > 400 ? `${newString.slice(0, 400)}…` : newString}</pre>
+              <pre className="maka-code">{permissionTextPreview(newString, 400)}</pre>
             </div>
           </div>
         </>
@@ -5447,6 +5447,11 @@ function renderPermissionSummary(request: PermissionRequestEvent): ReactNode | u
     default:
       return undefined;
   }
+}
+
+function permissionTextPreview(value: string, maxChars: number): string {
+  const safe = redactSecrets(value);
+  return safe.length > maxChars ? `${safe.slice(0, maxChars)}…` : safe;
 }
 
 function permissionValuePreview(value: unknown): string {
