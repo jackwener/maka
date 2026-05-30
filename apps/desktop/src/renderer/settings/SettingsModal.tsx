@@ -3156,7 +3156,7 @@ function OpenGatewaySettingsPage(props: {
       <SettingsRows>
         <SettingRow title="健康检查" detail="不需要 token，用于确认网关进程是否启动。" value="GET /health" />
         <SettingRow title="接口说明" detail="需要 Bearer token，返回 OpenAPI 3.1 描述，方便外部工具自动发现开放网关能力。" value="GET /v1/openapi.json" />
-        <SettingRow title="总览状态" detail="需要 Bearer token，返回网关运行态、会话状态、失败索引状态和能力清单，不含正文或预览。" value="GET /v1/state" />
+        <SettingRow title="总览状态" detail="需要 Bearer token，返回网关运行态、会话状态、请求状态、失败索引状态和能力清单，不含正文或预览。" value="GET /v1/state" />
         <SettingRow title="能力清单" detail="需要 Bearer token，返回当前开放的本机 API 能力。" value="GET /v1/capabilities" />
         <SettingRow title="会话列表" detail="需要 Bearer token，返回本地 session summary。" value="GET /v1/sessions" />
         <SettingRow title="会话状态" detail="需要 Bearer token，返回会话数量、未读数、状态分布和最近失败计数，不含标题或预览。" value="GET /v1/sessions/state" />
