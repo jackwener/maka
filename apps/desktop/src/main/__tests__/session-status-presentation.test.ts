@@ -160,7 +160,9 @@ describe('describeTurnErrorClass (PR109e-d @kenji gate #3)', () => {
 
   it('returns Chinese label for provider_unavailable / 5xx codes', () => {
     for (const cls of ['provider_unavailable', '500', '503']) {
-      assert.match(describeTurnErrorClass(cls), /服务|不可用/, `${cls} should map to provider unavailable`);
+      const text = describeTurnErrorClass(cls);
+      assert.equal(text, '模型服务返回错误', `${cls} should map to provider error copy`);
+      assert.doesNotMatch(text, /暂不可用/);
     }
   });
 

@@ -29,8 +29,8 @@ export function connectionTestStatusPatch(
 
 function generalizedConnectionErrorMessage(result: ConnectionTestResult): string {
   if (result.errorClass === 'timeout') return 'Request timed out';
-  if (result.errorClass === 'provider_unavailable') return 'Provider unavailable';
+  if (result.errorClass === 'provider_unavailable') return 'Provider returned an error';
   if (result.errorClass === 'network') return 'Network error';
-  if (result.statusCode && result.statusCode >= 500) return 'Provider unavailable';
+  if (result.statusCode && result.statusCode >= 500) return 'Provider returned an error';
   return 'Connection test failed';
 }

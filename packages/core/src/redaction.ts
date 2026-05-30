@@ -37,7 +37,7 @@ export function generalizedErrorMessage(error: unknown, fallback = 'Operation fa
   if (lower.includes('timeout')) return 'Request timed out';
   if (lower.includes('429') || lower.includes('rate')) return 'Rate limit exceeded';
   if (lower.includes('401') || lower.includes('403') || lower.includes('auth')) return 'Authentication failed';
-  if (lower.includes('5') && /\b5\d\d\b/.test(lower)) return 'Provider unavailable';
+  if (lower.includes('5') && /\b5\d\d\b/.test(lower)) return 'Provider returned an error';
   if (lower.includes('network') || lower.includes('fetch') || lower.includes('econn') || lower.includes('enotfound')) return 'Network error';
   return fallback;
 }
@@ -62,7 +62,7 @@ export function generalizedErrorMessageChinese(error: unknown, fallback = '操�
   if (lower.includes('timeout')) return '请求超时';
   if (lower.includes('429') || lower.includes('rate')) return '触发模型速率限制';
   if (lower.includes('401') || lower.includes('403') || lower.includes('auth')) return '鉴权失败';
-  if (lower.includes('5') && /\b5\d\d\b/.test(lower)) return '模型服务暂不可用';
+  if (lower.includes('5') && /\b5\d\d\b/.test(lower)) return '模型服务返回错误';
   if (lower.includes('network') || lower.includes('fetch') || lower.includes('econn') || lower.includes('enotfound')) return '网络错误';
   return fallback;
 }

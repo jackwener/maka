@@ -75,14 +75,15 @@ describe('generalizedErrorMessageChinese (PR110b)', () => {
     }
   });
 
-  test('5xx → 模型服务暂不可用', () => {
+  test('5xx → 模型服务返回错误', () => {
     for (const raw of [
       'HTTP 500 Internal Server Error',
       'Provider returned 503',
       'Bad gateway 502',
     ]) {
       const msg = generalizedErrorMessageChinese(new Error(raw));
-      assert.equal(msg, '模型服务暂不可用', `raw=${raw}`);
+      assert.equal(msg, '模型服务返回错误', `raw=${raw}`);
+      assert.notEqual(msg, '模型服务暂不可用');
     }
   });
 
@@ -127,7 +128,7 @@ describe('generalizedErrorMessageChinese (PR110b)', () => {
       'Request timed out',
       'Rate limit exceeded',
       'Authentication failed',
-      'Provider unavailable',
+      'Provider returned an error',
       'Network error',
       'Operation failed',
     ];
