@@ -217,6 +217,20 @@ describe('local MEMORY.md Settings UI contract', () => {
     assert.match(pageBlock, /memoryDraftDirty \? '草稿 ' : ''/);
   });
 
+  it('shows a clear safe-mode reason when draft entry preview is paused', async () => {
+    const src = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
+    const css = await readRepo('apps/desktop/src/renderer/styles.css');
+    const pageBlock = src.match(/function MemorySettingsPage\([\s\S]*?function MemoryEntryList/)?.[0] ?? '';
+
+    assert.match(pageBlock, /const memoryEntryPreviewBlockedReason =/);
+    assert.match(pageBlock, /memoryDraftDirty && draftMemoryEntries\.safeMode/);
+    assert.match(pageBlock, /草稿过大，条目预览已暂停/);
+    assert.match(pageBlock, /settingsMemoryEntryPreviewNotice/);
+    assert.match(pageBlock, /role="status"/);
+    assert.match(pageBlock, /草稿条目预览暂停/);
+    assert.match(css, /\.settingsMemoryEntryPreviewNotice/);
+  });
+
   it('can reload the visible MEMORY.md draft from disk to discard unsaved edits', async () => {
     const src = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
     const pageBlock = src.match(/function MemorySettingsPage\([\s\S]*?function MemoryEntryList/)?.[0] ?? '';

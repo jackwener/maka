@@ -2583,6 +2583,10 @@ function MemorySettingsPage(props: {
   const memoryDraftDirty = draft !== effective.content;
   const draftMemoryEntries = useMemo(() => parseLocalMemoryMarkdown(draft), [draft]);
   const visibleMemoryEntries = memoryDraftDirty ? draftMemoryEntries : effective;
+  const memoryEntryPreviewBlockedReason =
+    memoryDraftDirty && draftMemoryEntries.safeMode
+      ? '草稿过大，条目预览已暂停；保存前请先删减 MEMORY.md 内容。'
+      : '';
   const normalizedMemoryEntryQuery = memoryEntryQuery.trim();
   const filteredActiveEntries = useMemo(
     () => filterLocalMemoryEntries(visibleMemoryEntries.activeEntries, normalizedMemoryEntryQuery),
@@ -2704,6 +2708,13 @@ function MemorySettingsPage(props: {
           </span>
         )}
       </div>
+
+      {memoryEntryPreviewBlockedReason && (
+        <div className="settingsMemoryEntryPreviewNotice" role="status">
+          <strong>草稿条目预览暂停</strong>
+          <small>{memoryEntryPreviewBlockedReason}</small>
+        </div>
+      )}
 
       <div className="settingsMemoryPromptPreview" data-active={promptPreviewWillInject ? 'true' : 'false'}>
         <div className="settingsMemoryPromptPreviewHeader">

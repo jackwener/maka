@@ -9755,6 +9755,26 @@ button:active {
   line-height: 1.45;
 }
 
+.settingsMemoryEntryPreviewNotice {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid oklch(from var(--warning) l c h / 0.34);
+  border-radius: 8px;
+  background: oklch(from var(--warning) l c h / 0.08);
+}
+
+.settingsMemoryEntryPreviewNotice strong {
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.settingsMemoryEntryPreviewNotice small {
+  color: var(--foreground-70);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .settingsMemoryEntryGroups {
   display: grid;
   gap: 12px;
