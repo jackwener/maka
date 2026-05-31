@@ -55,7 +55,7 @@ import type {
   LocalMemoryState,
   VoicePermissionStatus,
 } from '@maka/core';
-import type { BotStatus } from '@maka/runtime';
+import type { BotStatus, WechatBridgeQrCodeResult } from '@maka/runtime';
 import type { TestProxyInput } from '@maka/core/settings/network-settings';
 import {
   HEALTH_SIGNAL_LAYERS,
@@ -360,128 +360,127 @@ function BotWeChatFields(props: {
   );
 }
 
-/**
- * PR-BOT-WECHAT-QR-MODAL-0 (WAWQAQ msg `10ec1fbe`): WeChat scan-login
- * modal. Fetches a QR from the ClawBot iLink endpoint via the main
- * process, displays the QR image, polls every 2.5s for status, and
- * persists the bot_token returned on confirmation. Mirrors the
- * reference design's modal layout.
- */
-function WeChatScanLoginModal(props: {
+function WechatQrLoginModal(props: {
   onClose(): void;
-  onConfirmed(credentials: { botToken: string; baseUrl: string; botId: string; userId: string }): Promise<void>;
+  onRefreshStatuses(): Promise<void>;
 }) {
-  const [qr, setQr] = useState<{ qrcodeUrl: string; qrToken: string } | null>(null);
-  const [status, setStatus] = useState<'fetching' | 'waiting' | 'expired' | 'confirmed' | 'error'>('fetching');
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const [result, setResult] = useState<WechatBridgeQrCodeResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const notifiedLoggedInRef = useRef(false);
   useModalA11y(dialogRef, props.onClose);
 
-  async function fetchQr() {
-    setStatus('fetching');
-    setErrorMessage(null);
-    try {
-      const result = await window.maka.settings.bots.wechat.fetchQrcode();
-      if (!result.ok) {
-        setStatus('error');
-        setErrorMessage(result.error.message);
-        return;
-      }
-      setQr(result.data);
-      setStatus('waiting');
-    } catch (error) {
-      setStatus('error');
-      setErrorMessage(error instanceof Error ? error.message : String(error));
-    }
-  }
-
   useEffect(() => {
-    void fetchQr();
-  }, []);
-
-  useEffect(() => {
-    if (status !== 'waiting' || !qr?.qrToken) return;
-    let cancelled = false;
-    const interval = window.setInterval(async () => {
-      if (cancelled) return;
-      try {
-        const result = await window.maka.settings.bots.wechat.pollQrcodeStatus(qr.qrToken);
-        if (cancelled) return;
-        if (!result.ok) {
-          setStatus('error');
-          setErrorMessage(result.error.message);
-          return;
+    let active = true;
+    setLoading(true);
+    void window.maka.settings.bots.wechatQrCode()
+      .then((next) => {
+        if (!active) return;
+        setResult(next);
+        if (next.ok && next.loggedIn && !notifiedLoggedInRef.current) {
+          notifiedLoggedInRef.current = true;
+          void props.onRefreshStatuses();
         }
-        if (result.data.status === 'confirmed') {
-          setStatus('confirmed');
-          await props.onConfirmed(result.data.credentials);
-        } else if (result.data.status === 'expired') {
-          setStatus('expired');
-        }
-      } catch (error) {
-        if (cancelled) return;
-        setStatus('error');
-        setErrorMessage(error instanceof Error ? error.message : String(error));
-      }
-    }, 2500);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setResult({
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+          hint: '读取本机 wechat-bridge 二维码失败，请确认 bridge 已启动。',
+        });
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
     return () => {
-      cancelled = true;
-      window.clearInterval(interval);
+      active = false;
     };
-  }, [status, qr?.qrToken]);
+  }, [reloadNonce]);
 
-  const statusCopy = (() => {
-    switch (status) {
-      case 'fetching': return '正在获取二维码…';
-      case 'waiting': return '请使用 iOS / Android 微信 8.0.70+ 扫描二维码';
-      case 'expired': return '二维码已过期，请刷新';
-      case 'confirmed': return '已扫码登录';
-      case 'error': return errorMessage ?? '扫码登录失败';
-    }
-  })();
+  useEffect(() => {
+    if (!result?.ok || result.loggedIn || result.expired) return undefined;
+    const interval = window.setInterval(() => {
+      setReloadNonce((current) => current + 1);
+    }, 3_000);
+    return () => window.clearInterval(interval);
+  }, [result]);
+
+  const qrDataUrl = result?.ok ? result.qrcode : null;
+  const expired = result?.ok ? result.expired : false;
+  const loggedIn = result?.ok ? result.loggedIn : false;
+  const error = result && !result.ok ? result : null;
 
   return (
-    <div className="settingsModalBackdrop" role="presentation" onClick={props.onClose}>
+    <div
+      className="settingsWechatQrBackdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) props.onClose();
+      }}
+    >
       <div
         ref={dialogRef}
-        className="settingsBotScanLoginModal"
+        className="settingsWechatQrModal"
         role="dialog"
         aria-modal="true"
-        aria-label="微信扫码登录"
-        onClick={(event) => event.stopPropagation()}
+        aria-labelledby="settingsWechatQrTitle"
       >
-        <header className="settingsBotScanLoginHeader">
-          <h3>微信扫码登录</h3>
-          <button type="button" className="settingsCloseButton" aria-label="关闭" onClick={props.onClose}>
-            <X strokeWidth={1.75} aria-hidden="true" />
+        <div className="settingsWechatQrHeader">
+          <div>
+            <h3 id="settingsWechatQrTitle">微信扫码登录</h3>
+            <p>使用手机微信扫描二维码，并在手机上确认登录本机 wechat-bridge。</p>
+          </div>
+          <button
+            type="button"
+            className="settingsWechatQrClose"
+            aria-label="关闭微信扫码登录"
+            onClick={props.onClose}
+          >
+            <X size={17} />
           </button>
-        </header>
-        <div className="settingsBotScanLoginBody">
-          {qr?.qrcodeUrl && (status === 'waiting' || status === 'confirmed') ? (
-            <img
-              className="settingsBotScanLoginQr"
-              src={qr.qrcodeUrl}
-              alt="微信扫码登录二维码"
-            />
+        </div>
+
+        <div className="settingsWechatQrBody">
+          {loading ? (
+            <div className="settingsWechatQrState" data-tone="loading">
+              正在生成二维码…
+            </div>
+          ) : loggedIn ? (
+            <div className="settingsWechatQrState" data-tone="success">
+              微信已登录，返回后可以测试连接或重启监听。
+            </div>
+          ) : expired ? (
+            <div className="settingsWechatQrState" data-tone="warning">
+              二维码已过期
+              <button type="button" className="settingsWechatQrSecondary" onClick={() => setReloadNonce((current) => current + 1)}>
+                刷新二维码
+              </button>
+            </div>
+          ) : qrDataUrl ? (
+            <>
+              <div className="settingsWechatQrFrame">
+                <img src={qrDataUrl} alt="微信扫码登录二维码" />
+              </div>
+              <p className="settingsWechatQrCaption">等待扫码确认… 窗口会每 3 秒刷新登录状态。</p>
+            </>
+          ) : error ? (
+            <div className="settingsWechatQrState" data-tone="error" role="alert">
+              <strong>{error.error}</strong>
+              <span>{error.hint}</span>
+              <button type="button" className="settingsWechatQrSecondary" onClick={() => setReloadNonce((current) => current + 1)}>
+                重试
+              </button>
+            </div>
           ) : (
-            <div className="settingsBotScanLoginQrPlaceholder" aria-hidden="true">
-              {status === 'fetching' ? '…' : status === 'expired' ? '⟳' : '!'}
+            <div className="settingsWechatQrState" data-tone="loading">
+              bridge 正在生成二维码
+              <button type="button" className="settingsWechatQrSecondary" onClick={() => setReloadNonce((current) => current + 1)}>
+                重新获取
+              </button>
             </div>
           )}
-          <p className="settingsBotScanLoginStatus" data-status={status}>{statusCopy}</p>
-          <p className="settingsHelpText">
-            扫码登录通过 ClawBot iLink 接入个人微信。Maka 不保存中间状态；扫描确认后 bot_token 会保存到 设置 → 机器人对话 → 微信。
-          </p>
-        </div>
-        <div className="settingsBotScanLoginActions">
-          {(status === 'expired' || status === 'error') && (
-            <button className="settingsBotAction" type="button" onClick={() => void fetchQr()}>
-              刷新二维码
-            </button>
-          )}
-          <button className="settingsBotAction" type="button" onClick={props.onClose}>
-            {status === 'confirmed' ? '关闭' : '取消'}
-          </button>
         </div>
       </div>
     </div>
@@ -3878,7 +3877,7 @@ function BotChatSettingsPage(props: {
   const [selected, setSelected] = useState<BotProvider>('telegram');
   const [testing, setTesting] = useState(false);
   const [restarting, setRestarting] = useState(false);
-  const [scanLoginOpen, setScanLoginOpen] = useState(false);
+  const [wechatQrOpen, setWechatQrOpen] = useState(false);
   const [statuses, setStatuses] = useState<Record<BotProvider, BotStatus> | null>(null);
   const channel = props.settings.botChat.channels[selected];
   const toast = useToast();
@@ -3990,6 +3989,12 @@ function BotChatSettingsPage(props: {
     } finally {
       setRestarting(false);
     }
+  }
+
+  async function refreshBotStatuses() {
+    await props.onReload();
+    const nextStatuses = await window.maka.settings.bots.listStatuses();
+    setStatuses(nextStatuses);
   }
 
   const support = BOT_LABELS[selected].support;
@@ -4246,35 +4251,16 @@ function BotChatSettingsPage(props: {
           </div>
         )}
 
-        {/* PR-BOT-WECHAT-SCAN-LOGIN-0 (WAWQAQ msg `2fa6ada6` screenshots):
-            actions follow the reference design exactly.
-            - WeChat: 扫码登录 + 测试连接 stacked vertically as outlined
-              pills (扫码登录 hands off to local wechat-bridge so the
-              user can scan the QR code there).
-            - Everything else: 测试并连接 single outlined pill, OR
-              (when listener already running) 测试连接 + 重启监听. */}
-        {scanLoginOpen && (
-          <WeChatScanLoginModal
-            onClose={() => setScanLoginOpen(false)}
-            onConfirmed={async (credentials) => {
-              await updateChannel({
-                token: credentials.botToken,
-                webhookUrl: credentials.baseUrl,
-                botUserId: credentials.botId,
-              });
-              await props.onReload();
-              setScanLoginOpen(false);
-              toast.success('微信已扫码登录', credentials.botId ? `Bot ID ${credentials.botId}` : '凭据已保存');
-            }}
-          />
-        )}
+        {/* WeChat keeps scan login as a first-class action, separate from
+            connection testing, because QR generation and listener readiness
+            are different states. */}
         <div className="settingsBotActionStack">
           {selected === 'wechat' ? (
             <>
               <button
                 className="settingsBotAction"
                 type="button"
-                onClick={() => setScanLoginOpen(true)}
+                onClick={() => setWechatQrOpen(true)}
               >
                 扫码登录
               </button>
@@ -4307,6 +4293,12 @@ function BotChatSettingsPage(props: {
             </button>
           )}
         </div>
+        {wechatQrOpen && (
+          <WechatQrLoginModal
+            onClose={() => setWechatQrOpen(false)}
+            onRefreshStatuses={refreshBotStatuses}
+          />
+        )}
       </section>
     </div>
   );
