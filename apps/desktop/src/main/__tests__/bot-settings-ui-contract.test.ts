@@ -78,6 +78,7 @@ describe('Bot settings UI contract', () => {
     assert.match(scanLogin, /get_bot_qrcode\?bot_type=3/, 'Main scan-login wrapper must use the Alma-compatible iLink QR endpoint');
     assert.match(scanLogin, /get_qrcode_status\?qrcode=/, 'Main scan-login wrapper must use the Alma-compatible iLink status endpoint');
     assert.match(scanLogin, /X-WECHAT-UIN/, 'Main scan-login wrapper must send the required WeChat UIN header');
+    assert.match(main, /from '\.\/wechat-scan-login\.js'/, 'Electron ESM main import must include the emitted .js extension');
     assert.match(main, /settings:bots:wechat:fetchQrcode/, 'main process must expose direct WeChat QR fetch');
     assert.match(main, /settings:bots:wechat:pollQrcodeStatus/, 'main process must expose direct WeChat QR status polling');
     assert.match(main, /settings:bots:wechatQrCode/, 'main process must expose the WeChat QR IPC');
