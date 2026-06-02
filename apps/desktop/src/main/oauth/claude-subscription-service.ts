@@ -568,14 +568,23 @@ export class ClaudeSubscriptionService {
 
   private async loadTokens(): Promise<PersistedTokens | null> {
     if (this.cachedTokens) return this.cachedTokens;
+    let buffer: Buffer;
     try {
-      const buffer = await fs.readFile(this.tokenFilePath);
-      if (!safeStorage.isEncryptionAvailable()) return null;
+      buffer = await fs.readFile(this.tokenFilePath);
+    } catch {
+      return null;
+    }
+    if (!safeStorage.isEncryptionAvailable()) return null;
+    try {
       const decoded = safeStorage.decryptString(buffer);
       const parsed = JSON.parse(decoded) as PersistedTokens;
       this.cachedTokens = parsed;
       return parsed;
     } catch {
+      // Token file exists but is unreadable (keychain rolled, file
+      // corrupted, JSON shape drifted). Delete it so the next
+      // login attempt doesn't observe a stuck-corrupt state.
+      try { await fs.unlink(this.tokenFilePath); } catch { /* best-effort */ }
       return null;
     }
   }

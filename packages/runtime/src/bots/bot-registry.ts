@@ -105,6 +105,18 @@ export class BotRegistry extends EventEmitter {
       const update = (existing as { updateSettings?: (next: BotChannelSettings) => { needsRestart: boolean } }).updateSettings;
       if (update && !update.call(existing, settings).needsRestart) return;
       await existing.stop().catch(() => {});
+      // Drop our 'message' / 'statusChange' listeners on the old
+      // bridge before dereferencing it. Some bridges (Discord
+      // gateway, WeChat poll) hold async tasks that can still emit
+      // after `stop()` returns; without removeAllListeners those
+      // emissions would race-call onIncomingMessage / onStatusChange
+      // against a bridge the registry already considers gone.
+      try {
+        (existing as BotBridge & EventEmitter).removeAllListeners('message');
+        (existing as BotBridge & EventEmitter).removeAllListeners('statusChange');
+      } catch {
+        // best-effort — non-EventEmitter bridges don't have listeners to clear.
+      }
     }
     this.statuses.delete(platform);
 
