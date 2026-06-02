@@ -83,10 +83,22 @@ export class WechatBridge extends BaseBotAdapter implements SendCapable {
     this.reason = undefined;
     this.readiness = 'credentials_valid';
     this.emitStatusChange();
+    // Fire-and-forget streaming loops. Both methods own their own
+    // try/catch around the inner request loop, but a synchronous
+    // throw during setup (e.g. AbortController constructor failing
+    // in a constrained Node runtime) would otherwise surface as an
+    // UnhandledPromiseRejection. The `.catch` keeps the bridge
+    // marked degraded instead of crashing the main process.
+    const fail = (err: unknown) => {
+      this.running = false;
+      this.reason = err instanceof Error ? err.message : 'stream-failed';
+      this.readiness = 'degraded';
+      this.emitStatusChange();
+    };
     if (isWechatIlinkChannel(this.settings)) {
-      void this.streamIlinkMessages('');
+      void this.streamIlinkMessages('').catch(fail);
     } else {
-      void this.streamLiveMessages(Math.floor(Date.now() / 1000));
+      void this.streamLiveMessages(Math.floor(Date.now() / 1000)).catch(fail);
     }
   }
 

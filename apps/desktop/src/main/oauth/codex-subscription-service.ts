@@ -429,6 +429,11 @@ export class CodexSubscriptionService {
       server.on('error', (err) => {
         reject(err);
       });
+      // Reject sockets that connect but never finish a request
+      // within 10s, so a stuck browser tab can't pin the port.
+      server.setTimeout(10_000, (socket) => {
+        try { socket.destroy(); } catch { /* best-effort */ }
+      });
       server.listen(CODEX_CALLBACK_PORT, CODEX_CALLBACK_HOST, () => {
         resolve(server);
       });
@@ -441,6 +446,12 @@ export class CodexSubscriptionService {
     this.pending.delete(authRequestId);
     if (pending.server) {
       try {
+        // Drop in-flight sockets first — `close()` alone waits for
+        // existing connections to drain, and a browser tab that
+        // hangs onto the callback request will pin port 1455 until
+        // OS socket timeout. closeAllConnections is Node 18.2+; the
+        // optional-chain guards older Electron runtimes.
+        pending.server.closeAllConnections?.();
         pending.server.close();
       } catch {
         // best-effort
@@ -529,14 +540,23 @@ export class CodexSubscriptionService {
 
   private async loadTokens(): Promise<PersistedTokens | null> {
     if (this.cachedTokens) return this.cachedTokens;
+    let buffer: Buffer;
     try {
-      const buffer = await fs.readFile(this.tokenFilePath);
-      if (!safeStorage.isEncryptionAvailable()) return null;
+      buffer = await fs.readFile(this.tokenFilePath);
+    } catch {
+      return null;
+    }
+    if (!safeStorage.isEncryptionAvailable()) return null;
+    try {
       const decoded = safeStorage.decryptString(buffer);
       const parsed = JSON.parse(decoded) as PersistedTokens;
       this.cachedTokens = parsed;
       return parsed;
     } catch {
+      // Token file exists but is unreadable (keychain rolled, file
+      // corrupted, JSON shape drifted). Delete it so the next login
+      // flow doesn't observe a stuck-corrupt state. Best-effort.
+      try { await fs.unlink(this.tokenFilePath); } catch { /* best-effort */ }
       return null;
     }
   }
