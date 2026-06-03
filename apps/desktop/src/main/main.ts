@@ -358,6 +358,36 @@ async function resolveConnectionSecret(slug: string): Promise<string | null> {
   return credentialStore.getSecret(slug, 'api_key');
 }
 
+function normalizeCreateConnectionInput(input: CreateConnectionInput): CreateConnectionInput {
+  const defaults = PROVIDER_DEFAULTS[input.providerType];
+  if (defaults.authKind === 'oauth_token') {
+    return { ...input, baseUrl: defaults.baseUrl };
+  }
+  if (input.baseUrl === undefined) return input;
+  const result = normalizeConnectionBaseUrl(input.baseUrl);
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+  return { ...input, baseUrl: result.value };
+}
+
+async function normalizeUpdateConnectionInput(
+  slug: string,
+  patch: UpdateConnectionInput,
+): Promise<UpdateConnectionInput> {
+  const existing = await connectionStore.get(slug);
+  const providerType = existing?.providerType;
+  if (providerType && PROVIDER_DEFAULTS[providerType].authKind === 'oauth_token') {
+    return { ...patch, baseUrl: PROVIDER_DEFAULTS[providerType].baseUrl };
+  }
+  if (patch.baseUrl === undefined) return patch;
+  const result = normalizeConnectionBaseUrl(patch.baseUrl);
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+  return { ...patch, baseUrl: result.value };
+}
+
 const planReminderStore = createPlanReminderStore(workspaceRoot);
 const localMemory = new LocalMemoryService({
   workspaceRoot,
@@ -2010,21 +2040,11 @@ function registerIpc(): void {
     // Construct a NEW `normalizedInput` rather than mutating
     // `input` — avoids any chance of later handler logic or
     // reference aliasing seeing the raw renderer payload.
-    let normalizedInput: CreateConnectionInput = input;
-    if (input.baseUrl !== undefined) {
-      const result = normalizeConnectionBaseUrl(input.baseUrl);
-      if (!result.ok) {
-        throw new Error(result.error);
-      }
-      // For create, a trimmed-to-empty value (`''`) means "no
-      // override; use provider default". The store's existing
-      // ternary (`...(input.baseUrl ? { baseUrl: input.baseUrl } : {})`)
-      // already treats falsy as omit, so passing `''` is safe and
-      // semantically equivalent to omitting. Pass the trimmed
-      // canonical value either way so the store only ever sees
-      // safe text.
-      normalizedInput = { ...input, baseUrl: result.value };
-    }
+    //
+    // OAuth subscription connections are stricter than API-key
+    // connections: their access token is provider-bound, so the
+    // renderer must never be able to redirect it to a custom baseUrl.
+    const normalizedInput = normalizeCreateConnectionInput(input);
     const connection = await connectionStore.create(normalizedInput);
     if (normalizedInput.apiKey) {
       await credentialStore.setSecret(connection.slug, 'api_key', normalizedInput.apiKey);
@@ -2045,14 +2065,11 @@ function registerIpc(): void {
     // clears as an explicit override removal. Preserve that —
     // don't convert to `undefined` (which would silently swallow
     // the clear intent as "don't touch"). @kenji msg 6b638e08.
-    let normalizedPatch: UpdateConnectionInput = patch;
-    if (patch.baseUrl !== undefined) {
-      const result = normalizeConnectionBaseUrl(patch.baseUrl);
-      if (!result.ok) {
-        throw new Error(result.error);
-      }
-      normalizedPatch = { ...patch, baseUrl: result.value };
-    }
+    //
+    // Same OAuth-boundary rule as create: if the current/new provider
+    // uses an OAuth token, force the canonical provider endpoint and
+    // ignore renderer-provided baseUrl text entirely.
+    const normalizedPatch = await normalizeUpdateConnectionInput(slug, patch);
     const connection = await connectionStore.update(slug, normalizedPatch);
     if (normalizedPatch.apiKey !== undefined) {
       if (normalizedPatch.apiKey) await credentialStore.setSecret(slug, 'api_key', normalizedPatch.apiKey);

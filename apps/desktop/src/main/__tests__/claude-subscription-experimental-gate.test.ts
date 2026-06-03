@@ -337,6 +337,30 @@ describe('Claude OAuth model connection bridge', () => {
     assert.match(src, /getApiKey:\s*\(slug:\s*string\)\s*=>\s*resolveConnectionSecret\(slug\)/, 'chat send readiness must use OAuth tokens through resolveConnectionSecret');
   });
 
+  it('model connection IPC does not accept custom baseUrl overrides for OAuth-token providers', async () => {
+    const src = await readFile(MAIN_SOURCE, 'utf8');
+    assert.match(
+      src,
+      /function normalizeCreateConnectionInput\(input:\s*CreateConnectionInput\):\s*CreateConnectionInput[\s\S]*defaults\.authKind === 'oauth_token'[\s\S]*baseUrl:\s*defaults\.baseUrl/,
+      'create must force OAuth connections back to their provider default baseUrl',
+    );
+    assert.match(
+      src,
+      /async function normalizeUpdateConnectionInput\([\s\S]*Promise<UpdateConnectionInput>[\s\S]*PROVIDER_DEFAULTS\[providerType\]\.authKind === 'oauth_token'[\s\S]*baseUrl:\s*PROVIDER_DEFAULTS\[providerType\]\.baseUrl/,
+      'update must force existing OAuth connections back to their provider default baseUrl',
+    );
+    assert.match(
+      src,
+      /const normalizedInput = normalizeCreateConnectionInput\(input\)/,
+      'connections:create must use the provider-aware baseUrl normalizer',
+    );
+    assert.match(
+      src,
+      /const normalizedPatch = await normalizeUpdateConnectionInput\(slug,\s*patch\)/,
+      'connections:update must use the provider-aware baseUrl normalizer',
+    );
+  });
+
   it('main syncs successful Codex OAuth login into the model connection list', async () => {
     const src = await readFile(MAIN_SOURCE, 'utf8');
     assert.match(

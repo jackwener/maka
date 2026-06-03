@@ -128,6 +128,37 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
     );
   });
 
+  it('OAuth model connection detail treats Base URL as fixed provider metadata, not an editable endpoint', async () => {
+    const src = await readFile(PROVIDERS_PANEL_SOURCE, 'utf8');
+    const detail = src.match(/function ConnectionDetail[\s\S]*?function ModelTable/)?.[0] ?? '';
+
+    assert.match(
+      detail,
+      /const hasFixedOAuthBaseUrl = needsOAuth && Boolean\(defaults\.baseUrl\)/,
+      'ConnectionDetail must detect fixed OAuth provider endpoints',
+    );
+    assert.match(
+      detail,
+      /baseUrl:\s*hasFixedOAuthBaseUrl\s*\?\s*defaults\.baseUrl\s*:\s*baseUrl \|\| undefined/,
+      'saving an OAuth connection must submit the provider default endpoint, not renderer-edited text',
+    );
+    assert.match(
+      detail,
+      /value=\{hasFixedOAuthBaseUrl \? defaults\.baseUrl : baseUrl\}/,
+      'OAuth Base URL input must display the canonical provider endpoint',
+    );
+    assert.match(
+      detail,
+      /readOnly=\{hasFixedOAuthBaseUrl\}/,
+      'OAuth Base URL must be read-only in the provider detail sheet',
+    );
+    assert.match(
+      detail,
+      /aria-readonly=\{hasFixedOAuthBaseUrl \? 'true' : undefined\}/,
+      'the fixed OAuth Base URL state must be exposed to assistive tech',
+    );
+  });
+
   it('claude opens a modal from the equal-size card instead of rendering a full inline card above the grid', async () => {
     const src = await readFile(PROVIDERS_PANEL_SOURCE, 'utf8');
     const sectionMatch = src.match(/function ModelOAuthSection[\s\S]*?function ClaudeSubscriptionModal/);

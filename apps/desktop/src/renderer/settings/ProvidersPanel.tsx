@@ -1080,16 +1080,17 @@ function ConnectionDetail(props: {
       : fallbackModels.map((id) => ({ id }));
   const needsApiKey = defaults.authKind === 'api_key';
   const needsOAuth = defaults.authKind === 'oauth_token';
+  const hasFixedOAuthBaseUrl = needsOAuth && Boolean(defaults.baseUrl);
   const requiresCredential = defaults.authKind !== 'none';
   const credentialTroubleshootingCopy = needsOAuth
-    ? 'OAuth 登录 / Base URL / 代理设置'
+    ? 'OAuth 登录 / 代理设置'
     : 'API key / Base URL / 代理设置';
 
   async function save() {
     setBusy(true);
     try {
       await props.bridge.update(connection.slug, {
-        baseUrl: baseUrl || undefined,
+        baseUrl: hasFixedOAuthBaseUrl ? defaults.baseUrl : baseUrl || undefined,
         defaultModel,
         ...(apiKey ? { apiKey } : {}),
       });
@@ -1193,11 +1194,13 @@ function ConnectionDetail(props: {
         <input value={connection.slug} disabled />
       </label>
       <label>
-        <span>Base URL</span>
+        <span>Base URL {hasFixedOAuthBaseUrl ? '（OAuth 固定）' : ''}</span>
         <input
-          value={baseUrl}
+          value={hasFixedOAuthBaseUrl ? defaults.baseUrl : baseUrl}
           onChange={(event) => setBaseUrl(event.currentTarget.value)}
           placeholder={defaults.baseUrl}
+          readOnly={hasFixedOAuthBaseUrl}
+          aria-readonly={hasFixedOAuthBaseUrl ? 'true' : undefined}
         />
       </label>
       {needsApiKey && (
