@@ -241,6 +241,10 @@ function botReadinessCopyForSupport(support: 'runtime' | 'credentials' | 'planne
   return BOT_READINESS_COPY[readiness] ?? BOT_READINESS_COPY.scaffolded;
 }
 
+function canEnableBotChannel(readiness: BotReadinessState): boolean {
+  return readiness === 'credentials_valid' || readiness === 'operational' || readiness === 'degraded';
+}
+
 /**
  * PR-BOT-SETTINGS-UI-0 (WAWQAQ msg `51c7b4ff`): brand monogram badge
  * with a small status dot at bottom-right. Compact in the platform
@@ -3893,6 +3897,13 @@ function BotChatSettingsPage(props: {
     ? channel.readiness
     : selectedStatus?.readiness ?? channel.readiness;
   const copy = botReadinessCopyForSupport(support, readiness);
+  const enableSwitchDisabled = support === 'planned' || (!channel.enabled && !canEnableBotChannel(readiness));
+  const enableSwitchHint = support === 'planned'
+    ? '该平台未开放，暂不能启用。'
+    : !channel.enabled && !canEnableBotChannel(readiness)
+      ? '先测试并连接后才能启用。'
+      : undefined;
+  const enableSwitchHintId = `settings-bot-enable-hint-${selected}`;
 
   return (
     <div className="settingsBotLayout">
@@ -3962,12 +3973,18 @@ function BotChatSettingsPage(props: {
                 </>
               )}
             </small>
+            {enableSwitchHint && (
+              <small id={enableSwitchHintId} className="settingsBotEnableHint">
+                {enableSwitchHint}
+              </small>
+            )}
           </div>
           <Switch
             ariaLabel={`启用${BOT_LABELS[selected].label}机器人`}
+            ariaDescribedBy={enableSwitchHint ? enableSwitchHintId : undefined}
             checked={channel.enabled}
             onChange={(enabled) => updateChannel({ enabled })}
-            disabled={support === 'planned'}
+            disabled={enableSwitchDisabled}
           />
         </div>
 
@@ -4563,13 +4580,14 @@ function Segmented<T extends string>(props: { value: T; options: Array<[T, strin
   );
 }
 
-function Switch(props: { ariaLabel: string; checked: boolean; onChange(checked: boolean): void; disabled?: boolean }) {
+function Switch(props: { ariaLabel: string; checked: boolean; onChange(checked: boolean): void; disabled?: boolean; ariaDescribedBy?: string }) {
   return (
     <button
       className="settingsSwitch"
       type="button"
       role="switch"
       aria-label={props.ariaLabel}
+      aria-describedby={props.ariaDescribedBy}
       aria-checked={props.checked}
       data-checked={props.checked}
       disabled={props.disabled}

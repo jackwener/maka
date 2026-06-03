@@ -6096,6 +6096,12 @@ button:active {
   line-height: 1.5;
 }
 
+.settingsBotEnableHint {
+  display: block;
+  margin-top: 4px;
+  color: var(--warning-text, var(--foreground-70));
+}
+
 .settingsBotConfigDocLink {
   color: var(--bot-brand-color, var(--accent));
   text-decoration: none;

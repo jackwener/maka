@@ -41,9 +41,19 @@ describe('Bot settings UI contract', () => {
 
   it('keeps runtime channel onboarding as test-then-enable-then-restart', async () => {
     const settings = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
+    const styles = await readRepo('apps/desktop/src/renderer/styles.css');
     const testAndConnectBlock = settings.match(/async function testAndConnect\(\)[\s\S]*?\n\s*async function restartChannel/)?.[0] ?? '';
     const actionRowBlock = settings.match(/<div className="settingsBotActionStack">[\s\S]*?<\/div>/)?.[0] ?? '';
+    const switchBlock = settings.match(/<Switch\s+ariaLabel=\{`启用\$\{BOT_LABELS\[selected\]\.label\}机器人`\}[\s\S]*?\/>/)?.[0] ?? '';
 
+    assert.match(settings, /function canEnableBotChannel\(readiness: BotReadinessState\): boolean\s*\{[\s\S]*credentials_valid[\s\S]*operational[\s\S]*degraded[\s\S]*\}/, 'Only validated or already-runtime-capable bot states can be enabled directly');
+    assert.match(settings, /const enableSwitchDisabled = support === 'planned' \|\| \(!channel\.enabled && !canEnableBotChannel\(readiness\)\)/, 'Unchecked bot channels must keep the enable switch locked until credentials are tested');
+    assert.match(settings, /先测试并连接后才能启用。/, 'Locked runtime bot channels must explain the test-first path');
+    assert.match(settings, /const enableSwitchHintId = `settings-bot-enable-hint-\$\{selected\}`/, 'Enable-lock hint must have a stable aria-describedby id');
+    assert.match(settings, /<small id=\{enableSwitchHintId\} className="settingsBotEnableHint">/, 'Enable-lock hint must be rendered near the switch');
+    assert.match(styles, /\.settingsBotEnableHint\s*\{[\s\S]*display:\s*block/, 'Enable-lock hint needs a stable visible style');
+    assert.match(switchBlock, /ariaDescribedBy=\{enableSwitchHint \? enableSwitchHintId : undefined\}/, 'Disabled enable switch must point assistive tech at the reason');
+    assert.match(switchBlock, /disabled=\{enableSwitchDisabled\}/, 'Bot enable switch must use the guarded disabled state');
     assert.match(testAndConnectBlock, /testBotChannel\(selected\)/, 'Combined action must validate credentials before enabling');
     assert.match(testAndConnectBlock, /if \(!testOk \|\| support !== 'runtime'\) return;/, 'Combined action must stop after a failed credential test');
     assert.match(testAndConnectBlock, /updateChannel\(\{ enabled: true \}\)/, 'Combined action must enable a runtime channel only after validation');
