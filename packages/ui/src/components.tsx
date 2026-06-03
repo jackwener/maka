@@ -5002,7 +5002,7 @@ export const Composer = forwardRef<
                 {copy.streamingHintPrefix} <kbd>Esc</kbd> {copy.streamingHintInterrupt}
               </span>
             ) : (
-              <><kbd>Enter</kbd> {copy.enterHint.send} · <kbd>Shift</kbd>+<kbd>Enter</kbd> {copy.enterHint.newline}</>
+              <span className="maka-composer-shortcut-hint" aria-hidden="true"><kbd>Enter</kbd> {copy.enterHint.send} · <kbd>Shift</kbd>+<kbd>Enter</kbd> {copy.enterHint.newline}</span>
             )}
           </span>
           <div>

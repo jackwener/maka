@@ -44,6 +44,26 @@ describe('localized main shell contract', () => {
     assert.match(commandPalette, /权限 · 只读[\s\S]*权限 · 确认[\s\S]*权限 · 执行/);
   });
 
+  it('keeps the idle Composer shortcut hint visual-only in the accessibility tree', async () => {
+    const components = await readFile(resolve(process.cwd(), '..', '..', 'packages', 'ui', 'src', 'components.tsx'), 'utf8');
+
+    assert.match(
+      components,
+      /className="maka-composer-shortcut-hint" aria-hidden="true"/,
+      'the idle Enter / Shift+Enter visual shortcut hint should not be announced as scattered text nodes',
+    );
+    assert.match(
+      components,
+      /copy\.awaitingPermission/,
+      'permission waiting status must stay visible to assistive technology',
+    );
+    assert.match(
+      components,
+      /copy\.sending/,
+      'sending status must stay visible to assistive technology',
+    );
+  });
+
   it('clears drag-active composer state when the drag leaves the window', async () => {
     const components = await readFile(resolve(process.cwd(), '..', '..', 'packages', 'ui', 'src', 'components.tsx'), 'utf8');
     const composerBlock = components.match(/export const Composer[\s\S]*?if \(props\.hidden\) return null;/)?.[0] ?? '';
