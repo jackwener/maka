@@ -978,7 +978,12 @@ function ConnectionDetail(props: {
     modelSource === 'fetched' || models.length > 0
       ? models
       : fallbackModels.map((id) => ({ id }));
-  const needsSecret = defaults.authKind !== 'none';
+  const needsApiKey = defaults.authKind === 'api_key';
+  const needsOAuth = defaults.authKind === 'oauth_token';
+  const requiresCredential = defaults.authKind !== 'none';
+  const credentialTroubleshootingCopy = needsOAuth
+    ? 'OAuth 登录 / Base URL / 代理设置'
+    : 'API key / Base URL / 代理设置';
 
   async function save() {
     setBusy(true);
@@ -990,7 +995,7 @@ function ConnectionDetail(props: {
       });
       const wroteNewKey = apiKey.length > 0;
       setApiKey('');
-      const nextHasSecret = needsSecret ? await props.bridge.hasSecret(connection.slug) : true;
+      const nextHasSecret = requiresCredential ? await props.bridge.hasSecret(connection.slug) : true;
       setHasSecret(nextHasSecret);
       await props.onChanged();
       // Auto-fetch live model list as soon as the secret is in place. Without
@@ -998,7 +1003,7 @@ function ConnectionDetail(props: {
       // dropdown only contains the static fallback list (e.g. Z.ai → just
       // glm-4.7 / 4.6 / 4.5), which looks like Maka doesn't support newer
       // models. Auto-fetch on save closes that gap.
-      if (nextHasSecret && (wroteNewKey || models.length === 0)) {
+      if (nextHasSecret && (wroteNewKey || (!needsApiKey && models.length === 0))) {
         void refreshModels({ silent: true });
       }
     } finally {
@@ -1053,7 +1058,7 @@ function ConnectionDetail(props: {
       if (models.length === 0) setModelSource('fallback');
       toast.error(
         `拉取模型失败 · ${connection.name}`,
-        `${message} · 当前继续显示静态列表，请确认 API key / Base URL / 代理设置后重试。`,
+        `${message} · 当前继续显示静态列表，请确认 ${credentialTroubleshootingCopy} 后重试。`,
       );
     } finally {
       setFetchingModels(false);
@@ -1095,7 +1100,7 @@ function ConnectionDetail(props: {
           placeholder={defaults.baseUrl}
         />
       </label>
-      {needsSecret && (
+      {needsApiKey && (
         <label>
           <span>API key {hasSecret ? '（已设置，粘贴新值可替换）' : ''}</span>
           <PasswordInput
@@ -1106,6 +1111,16 @@ function ConnectionDetail(props: {
           />
         </label>
       )}
+      {needsOAuth && (
+        <div className="providerUnavailableNotice" data-auth-kind="oauth">
+          <strong>{hasSecret ? 'OAuth 已登录' : '等待 OAuth 登录'}</strong>
+          <span>
+            {hasSecret
+              ? '该模型连接使用主进程保存的 OAuth access token，不在这里显示或编辑令牌。'
+              : '请到上方 OAuth 分类完成登录；登录成功后会自动出现在已启用模型里。'}
+          </span>
+        </div>
+      )}
       <ModelTable
         modelChoices={modelChoices}
         defaultModel={defaultModel}
@@ -1113,7 +1128,7 @@ function ConnectionDetail(props: {
         modelSource={modelSource}
         modelsFetchedAt={connection.modelsFetchedAt}
         fallbackCount={fallbackModels.length}
-        canRefresh={!fetchingModels && !(needsSecret && !hasSecret)}
+        canRefresh={!fetchingModels && !(requiresCredential && !hasSecret)}
         fetchingModels={fetchingModels}
         onRefresh={() => void refreshModels()}
       />
@@ -1126,7 +1141,7 @@ function ConnectionDetail(props: {
         <button className="maka-button" data-variant="primary" type="button" disabled={busy} onClick={save}>
           {busy ? '保存中…' : '保存修改'}
         </button>
-        <button className="maka-button" type="button" disabled={testing || (needsSecret && !hasSecret)} onClick={runTest}>
+        <button className="maka-button" type="button" disabled={testing || (requiresCredential && !hasSecret)} onClick={runTest}>
           {testing ? '测试中…' : '测试连接'}
         </button>
         {!props.isDefault && <button className="maka-button" type="button" onClick={setAsDefault}>设为默认</button>}
@@ -1686,4 +1701,3 @@ function presentSubscriptionState(state: SubscriptionAccountState): Subscription
       return { label: '未知状态', tone: 'muted', detail: '' };
   }
 }
-

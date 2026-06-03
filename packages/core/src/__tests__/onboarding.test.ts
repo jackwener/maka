@@ -342,11 +342,27 @@ describe('deriveOnboardingState invariants', () => {
     assert.equal(result2.kind, 'needs_connection_credentials');
   });
 
-  it('OAuth subscription connections are not onboarding-ready before the send path lands', () => {
+  it('Claude OAuth subscription connections become onboarding-ready after login', () => {
     const conn = realConnection({
       slug: 'claude-subscription',
       providerType: 'claude-subscription',
       defaultModel: 'claude-sonnet-4-5-20250929',
+    });
+    const ready = isConnectionReady({ connection: conn, hasSecret: true });
+    assert.equal(ready.ready, true);
+    const result = derive({
+      connections: [conn],
+      defaultSlug: 'claude-subscription',
+      secrets: { 'claude-subscription': true },
+    });
+    assert.equal(result.kind, 'ready_empty');
+  });
+
+  it('non-Claude OAuth subscription connections are not onboarding-ready before their send path lands', () => {
+    const conn = realConnection({
+      slug: 'codex-subscription',
+      providerType: 'codex-subscription',
+      defaultModel: 'gpt-5-codex',
     });
     const notReady = isConnectionReady({ connection: conn, hasSecret: true });
     assert.equal(notReady.ready, false);
@@ -355,8 +371,8 @@ describe('deriveOnboardingState invariants', () => {
     }
     const result = derive({
       connections: [conn],
-      defaultSlug: 'claude-subscription',
-      secrets: { 'claude-subscription': true },
+      defaultSlug: 'codex-subscription',
+      secrets: { 'codex-subscription': true },
     });
     assert.deepEqual(result, { kind: 'blocked', reason: 'all_connections_unhealthy' });
   });

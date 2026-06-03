@@ -138,7 +138,7 @@ import {
 import type { BotIncomingMessage, ToolArtifactRecorderInput } from '@maka/runtime';
 import { testProxyConnection } from '@maka/runtime/network/proxy-test';
 import { fetchWeChatQrcode, pollWeChatQrcodeStatus } from './wechat-scan-login.js';
-import { PROVIDER_DEFAULTS } from '@maka/core/llm-connections';
+import { PROVIDER_DEFAULTS, type LlmConnection } from '@maka/core/llm-connections';
 import { createArtifactStore, createConnectionStore, createPlanReminderStore, createSessionStore, createSettingsStore, createTelemetryRepo, resolveArtifactPath } from '@maka/storage';
 import {
   ensureSessionCanSendOrRebind,
@@ -239,6 +239,68 @@ const cursorSubscription = new CursorSubscriptionService({
 const antigravitySubscription = new AntigravitySubscriptionService({
   userDataDir: app.getPath('userData'),
 });
+
+const CLAUDE_SUBSCRIPTION_CONNECTION_SLUG = 'claude-subscription';
+
+function isClaudeSubscriptionAuthenticatedState(
+  state: Awaited<ReturnType<ClaudeSubscriptionService['getAccountState']>>,
+): boolean {
+  return state.runtimeState === 'authenticated' ||
+    state.runtimeState === 'refreshing' ||
+    state.runtimeState === 'quota_unavailable' ||
+    state.runtimeState === 'provider_rejected';
+}
+
+async function syncClaudeSubscriptionConnection(): Promise<LlmConnection | null> {
+  if (!isSubscriptionExperimentalEnabled()) return null;
+  const state = await claudeSubscription.getAccountState();
+  const existing = await connectionStore.get(CLAUDE_SUBSCRIPTION_CONNECTION_SLUG);
+  if (!isClaudeSubscriptionAuthenticatedState(state)) {
+    if (existing && (state.runtimeState === 'refresh_failed' || state.runtimeState === 'not_logged_in')) {
+      return connectionStore.update(existing.slug, {
+        enabled: false,
+        lastTestStatus: 'needs_reauth',
+        lastTestAt: new Date().toISOString(),
+        lastTestMessage: state.errorMessage ?? (state.runtimeState === 'not_logged_in'
+          ? 'Claude OAuth 未登录。'
+          : 'Claude OAuth 需要重新登录。'),
+      });
+    }
+    return existing;
+  }
+
+  const defaults = PROVIDER_DEFAULTS['claude-subscription'];
+  const fallbackModels = defaults.fallbackModels.map((id) => ({ id }));
+  const displayName = state.profile?.email
+    ? `Claude OAuth · ${state.profile.email}`
+    : 'Claude OAuth';
+  const now = Date.now();
+  const connection: LlmConnection = {
+    slug: CLAUDE_SUBSCRIPTION_CONNECTION_SLUG,
+    name: existing?.name ?? displayName,
+    providerType: 'claude-subscription',
+    baseUrl: defaults.baseUrl,
+    defaultModel: existing?.defaultModel || defaults.fallbackModels[0] || '',
+    enabled: true,
+    models: existing?.models?.length ? existing.models : fallbackModels,
+    modelSource: existing?.modelSource ?? 'fallback',
+    lastTestStatus: 'verified',
+    lastTestAt: new Date(now).toISOString(),
+    lastTestMessage: 'Claude OAuth 已登录。',
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+  return connectionStore.save(connection);
+}
+
+async function resolveConnectionSecret(slug: string): Promise<string | null> {
+  const connection = await connectionStore.get(slug);
+  if (connection?.providerType === 'claude-subscription') {
+    return claudeSubscription.getAccessTokenInternal();
+  }
+  return credentialStore.getSecret(slug, 'api_key');
+}
+
 const planReminderStore = createPlanReminderStore(workspaceRoot);
 const localMemory = new LocalMemoryService({
   workspaceRoot,
@@ -1415,7 +1477,12 @@ function registerIpc(): void {
       if (typeof authRequestId !== 'string') {
         return { ok: false as const, reason: 'authorization_pending' as const, message: '授权会话不存在。' };
       }
-      return claudeSubscription.completeAuthorization(authRequestId, pasted);
+      const result = await claudeSubscription.completeAuthorization(authRequestId, pasted);
+      if (result.ok) {
+        await syncClaudeSubscriptionConnection();
+        emitConnectionListChanged();
+      }
+      return result;
     },
   );
   ipcMain.handle(
@@ -1438,7 +1505,11 @@ function registerIpc(): void {
         runtimeState: 'not_logged_in' as const,
       };
     }
-    return claudeSubscription.getAccountState();
+    const state = await claudeSubscription.getAccountState();
+    if (isClaudeSubscriptionAuthenticatedState(state)) {
+      await syncClaudeSubscriptionConnection();
+    }
+    return state;
   });
   ipcMain.handle('claude-subscription:refresh-quota', async () => {
     if (!isSubscriptionExperimentalEnabled()) return experimentalDisabledResponse;
@@ -1446,13 +1517,29 @@ function registerIpc(): void {
   });
   ipcMain.handle('claude-subscription:refresh-tokens', async () => {
     if (!isSubscriptionExperimentalEnabled()) return experimentalDisabledResponse;
-    return claudeSubscription.refreshTokens();
+    const result = await claudeSubscription.refreshTokens();
+    if (result.ok) {
+      await syncClaudeSubscriptionConnection();
+      emitConnectionListChanged();
+    }
+    return result;
   });
   ipcMain.handle('claude-subscription:logout', async () => {
     // Logout is always allowed — even if experimental is off,
     // a user might want to clear a stale token file from a
     // previous opt-in. local-clear is harmless.
-    return claudeSubscription.logout();
+    const result = await claudeSubscription.logout();
+    const existing = await connectionStore.get(CLAUDE_SUBSCRIPTION_CONNECTION_SLUG);
+    if (existing) {
+      await connectionStore.update(existing.slug, {
+        enabled: false,
+        lastTestStatus: 'needs_reauth',
+        lastTestAt: new Date().toISOString(),
+        lastTestMessage: 'Claude OAuth 已退出登录。',
+      });
+      emitConnectionListChanged();
+    }
+    return result;
   });
   /**
    * Read-only signal so the renderer's Settings card can decide
@@ -1816,7 +1903,10 @@ function registerIpc(): void {
     emitSessionsChanged('deleted', sessionId);
   });
 
-  ipcMain.handle('connections:list', () => connectionStore.list());
+  ipcMain.handle('connections:list', async () => {
+    await syncClaudeSubscriptionConnection();
+    return connectionStore.list();
+  });
   ipcMain.handle('connections:getDefault', () => connectionStore.getDefault());
   ipcMain.handle('connections:setDefault', async (_event, slug: string | null) => {
     if (slug && !(await connectionStore.get(slug))) {
@@ -1897,9 +1987,15 @@ function registerIpc(): void {
   ipcMain.handle('connections:test', async (_event, slug: string, opts?: { model?: string }) => {
     const connection = await connectionStore.get(slug);
     if (!connection) return { ok: false, errorMessage: `No such connection: ${slug}` };
-    const apiKey = await credentialStore.getSecret(slug, 'api_key');
+    const apiKey = await resolveConnectionSecret(slug);
     if (PROVIDER_DEFAULTS[connection.providerType].authKind !== 'none' && !apiKey) {
-      return { ok: false, errorMessage: 'No API key set for this connection', errorClass: 'auth' };
+      return {
+        ok: false,
+        errorMessage: PROVIDER_DEFAULTS[connection.providerType].authKind === 'oauth_token'
+          ? 'No OAuth login stored for this connection'
+          : 'No API key set for this connection',
+        errorClass: 'auth',
+      };
     }
     const result = await testConnection(connection, apiKey ?? '', opts?.model);
     await connectionStore.update(slug, connectionTestStatusPatch(result));
@@ -1909,9 +2005,11 @@ function registerIpc(): void {
   ipcMain.handle('connections:fetchModels', async (_event, slug: string) => {
     const connection = await connectionStore.get(slug);
     if (!connection) throw new Error(`No such connection: ${slug}`);
-    const apiKey = await credentialStore.getSecret(slug, 'api_key');
+    const apiKey = await resolveConnectionSecret(slug);
     if (PROVIDER_DEFAULTS[connection.providerType].authKind !== 'none' && !apiKey) {
-      throw new Error('No API key set for this connection');
+      throw new Error(PROVIDER_DEFAULTS[connection.providerType].authKind === 'oauth_token'
+        ? 'No OAuth login stored for this connection'
+        : 'No API key set for this connection');
     }
     try {
       const fetchedAt = Date.now();
@@ -1932,7 +2030,7 @@ function registerIpc(): void {
     }
   });
   ipcMain.handle('connections:hasSecret', async (_event, slug: string) =>
-    Boolean(await credentialStore.getSecret(slug, 'api_key')),
+    Boolean(await resolveConnectionSecret(slug)),
   );
 
   // PR110b: Onboarding snapshot + milestone IPCs. Renderer polls via
@@ -2567,7 +2665,7 @@ async function ensureSessionCanSend(sessionId: string): Promise<void> {
 
 const readyConnectionDeps = {
   getConnection: (slug: string) => connectionStore.get(slug),
-  getApiKey: (slug: string) => credentialStore.getSecret(slug, 'api_key'),
+  getApiKey: (slug: string) => resolveConnectionSecret(slug),
 };
 
 function getReadyConnection(slug: string | null | undefined, model?: string) {

@@ -4,6 +4,7 @@ import {
   type LlmConnection,
   type SessionHeader,
 } from '@maka/core';
+import { PROVIDER_DEFAULTS } from '@maka/core/llm-connections';
 
 export const NO_REAL_CONNECTION_CODE = 'NO_REAL_CONNECTION';
 
@@ -98,6 +99,9 @@ function messageForReason(
     case 'connection_disabled':
       return `模型连接 "${connection.name}" 已禁用。请到 设置 · 模型 启用或选择其他默认模型。`;
     case 'missing_api_key':
+      if (PROVIDER_DEFAULTS[connection.providerType].authKind === 'oauth_token') {
+        return `模型连接 "${connection.name}" 等待完成 OAuth 登录。请到 设置 · 模型 重新登录后再聊天。`;
+      }
       return `模型连接 "${connection.name}" 等待填写 API key。请到 设置 · 模型 补齐密钥后再聊天。`;
     case 'missing_model':
       return `模型连接 "${connection.name}" 没有可用模型。请到 设置 · 模型 选择一个默认模型。`;
