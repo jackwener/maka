@@ -104,8 +104,8 @@ export function ProvidersPanel({ bridge }: { bridge: ConnectionsBridge }) {
     setSelectedSlug(null);
   }
 
-function chipTitle(connection: LlmConnection): string {
-    if (!connection.enabled) return `${connection.name} · 已禁用`;
+  function chipStatusText(connection: LlmConnection): string {
+    if (!connection.enabled) return '已禁用';
     switch (connection.lastTestStatus) {
       case 'verified':
         // PR-UI-AUDIT-1 (@kenji msg 7a16aa0b): `verified` is a
@@ -115,14 +115,24 @@ function chipTitle(connection: LlmConnection): string {
         // "已验证可用" conflated validation with operational
         // readiness — fixed to credential-only language. Matches
         // the doc warning at SettingsModal `验证通过 ≠ 运行可用`.
-        return `${connection.name} · 凭据已验证`;
+        return '凭据已验证';
       case 'needs_reauth':
-        return `${connection.name} · 需要重新登录`;
+        return '需要重新登录';
       case 'error':
-        return `${connection.name} · 上次连接失败`;
+        return '上次连接失败';
       default:
-        return `${connection.name} · 等待验证`;
+        return '等待验证';
     }
+  }
+
+  function chipTitle(connection: LlmConnection): string {
+    return `${connection.name} · ${chipStatusText(connection)}`;
+  }
+
+  function chipAriaLabel(connection: LlmConnection): string {
+    const provider = providerDisplay(connection.providerType).name;
+    const defaultSuffix = connection.slug === defaultSlug ? '，默认连接' : '';
+    return `已启用模型：${connection.name}，供应商：${provider}${defaultSuffix}，${chipStatusText(connection)}`;
   }
 
   const configuredByType = (type: ProviderType) =>
@@ -165,6 +175,7 @@ function chipTitle(connection: LlmConnection): string {
                 data-default={connection.slug === defaultSlug}
                 data-test-status={connection.lastTestStatus ?? 'untested'}
                 data-disabled={connection.enabled ? undefined : 'true'}
+                aria-label={chipAriaLabel(connection)}
                 onClick={() => {
                   setSelectedSlug(connection.slug);
                   setAddingType(null);

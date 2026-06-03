@@ -111,6 +111,36 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
     assert.doesNotMatch(reloadBlock, /current\s*\?\?\s*list\[0\]\?\.slug/, 'reload must not auto-select the first provider');
   });
 
+  it('enabled model chips expose a concise aria-label instead of concatenated duplicate visible text', async () => {
+    const src = await readFile(PROVIDERS_PANEL_SOURCE, 'utf8');
+
+    assert.match(
+      src,
+      /function chipAriaLabel\(connection: LlmConnection\): string/,
+      'enabled model chips need a dedicated accessible name',
+    );
+    assert.match(
+      src,
+      /function chipStatusText\(connection: LlmConnection\): string/,
+      'status copy must be a dedicated helper, not parsed out of the chip title',
+    );
+    assert.match(
+      src,
+      /已启用模型：\$\{connection\.name\}，供应商：\$\{provider\}/,
+      'enabled model chip aria-label must describe the model and provider explicitly',
+    );
+    assert.match(
+      src,
+      /aria-label=\{chipAriaLabel\(connection\)\}/,
+      'enabled model chip buttons must use the dedicated accessible name',
+    );
+    assert.doesNotMatch(
+      src,
+      /chipStatusLabel\(connection\)\.split\(' · '\)/,
+      'connection names can contain " · ", so status text must not be recovered by splitting the title',
+    );
+  });
+
   it('exposes exactly four equal OAuth cards: claude, codex, antigravity, cursor', async () => {
     // WAWQAQ msg 8bb7e186: Claude must not be a huge standalone
     // inline card while the other OAuth providers are compact
