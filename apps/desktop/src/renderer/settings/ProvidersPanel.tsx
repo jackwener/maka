@@ -359,19 +359,23 @@ function ProviderCatalogCard(props: { type: ProviderType; count: number; onSelec
 }
 
 function providerDisabledStatus(type: ProviderType): 'unavailable' | 'experimental' {
-  return type === 'claude-subscription' ? 'experimental' : 'unavailable';
+  return isWiredOAuthProvider(type) ? 'experimental' : 'unavailable';
 }
 
 function providerDisabledTitle(type: ProviderType): string {
-  if (type === 'claude-subscription') {
-    return '内部实验：账号认证已隔离，默认关闭；当前请使用 API key 连接聊天模型。';
+  if (isWiredOAuthProvider(type)) {
+    return '请在 OAuth 分类完成账号登录；登录成功后会自动出现在已启用模型。';
   }
-  return '账号登录不作为模型连接；当前请使用同一家厂商的 API key。';
+  return '该账号登录暂未接入聊天发送；当前请使用同一家厂商的 API key。';
 }
 
 function providerDisabledAriaLabel(type: ProviderType, name: string): string {
-  if (type === 'claude-subscription') return `${name}（内部实验，默认关闭）`;
-  return `${name}（账号登录不作为模型连接）`;
+  if (isWiredOAuthProvider(type)) return `${name}（请从 OAuth 分类登录）`;
+  return `${name}（账号登录暂未接入聊天发送）`;
+}
+
+function isWiredOAuthProvider(type: ProviderType): boolean {
+  return type === 'claude-subscription' || type === 'codex-subscription';
 }
 
 export function ProviderLogo(props: { type: ProviderType; compact?: boolean }) {
@@ -940,6 +944,7 @@ function AddProviderForm(props: {
 
   const requiresBaseUrl = !defaults.baseUrl;
   const isExperimental = defaults.status === 'phase3-experimental';
+  const isWiredOAuth = isWiredOAuthProvider(props.providerType);
 
   async function submit() {
     setError(null);
@@ -948,9 +953,9 @@ function AddProviderForm(props: {
     if (props.existingSlugs.includes(slug)) return setError('Slug 已存在');
     if (requiresBaseUrl && !baseUrl.trim()) return setError('这个供应商需要填写 Base URL');
     if (isExperimental) {
-      return setError(props.providerType === 'claude-subscription'
-        ? 'Claude 订阅账号是内部实验，默认关闭；当前请使用 API key 连接聊天模型。'
-        : '该账号登录不作为模型连接；请先使用同一家厂商的 API key。');
+      return setError(isWiredOAuth
+        ? '请到 OAuth 分类完成账号登录；登录成功后会自动创建模型连接。'
+        : '该账号登录暂未接入聊天发送；请先使用同一家厂商的 API key。');
     }
     setBusy(true);
     try {
@@ -973,19 +978,19 @@ function AddProviderForm(props: {
     <div className="providerEditor">
       <header>
         <div>
-          <h3>{isExperimental && props.providerType === 'claude-subscription'
-            ? 'Claude 订阅账号为内部实验'
-            : isExperimental ? '账号登录不作为模型连接' : `添加 ${display.name}`}</h3>
+          <h3>{isExperimental && isWiredOAuth
+            ? `${display.name} 通过 OAuth 登录`
+            : isExperimental ? '账号登录暂未接入聊天发送' : `添加 ${display.name}`}</h3>
           <p>{display.description}</p>
         </div>
         <span className="settingsBadge">{categoryLabel(defaults.category)}</span>
       </header>
       {isExperimental && (
         <div className="providerUnavailableNotice">
-          <strong>{props.providerType === 'claude-subscription' ? '内部实验' : '账号登录'}</strong>
-          <span>{props.providerType === 'claude-subscription'
-            ? '账号认证路径已隔离在实验开关后；默认隐藏。当前请使用 Anthropic API key 连接聊天模型。'
-            : '这类账号登录不会出现在模型连接入口。当前请先使用同一家厂商的 API key。'}</span>
+          <strong>{isWiredOAuth ? '使用 OAuth 分类登录' : '账号登录暂未接入'}</strong>
+          <span>{isWiredOAuth
+            ? '不要在这里手动添加；请回到 OAuth 分类完成登录，Maka 会自动创建并刷新模型连接。'
+            : '这类账号登录暂未接入聊天发送。当前请先使用同一家厂商的 API key。'}</span>
         </div>
       )}
       <label>
@@ -1454,11 +1459,11 @@ export function providerDisplay(type: ProviderType): { name: string; description
     case 'openai-compatible':
       return { name: 'OpenAI Compatible', description: '中转站、代理服务或自部署网关。', badge: 'Custom' };
     case 'claude-subscription':
-      return { name: 'Claude Subscription', description: 'Claude Pro / Max 订阅账号认证为内部实验；默认隐藏。' };
+      return { name: 'Claude Subscription', description: 'Claude Pro / Max 订阅账号登录；登录后自动成为可用模型连接。' };
     case 'codex-subscription':
-      return { name: 'Codex Subscription', description: 'ChatGPT / Codex 账号登录不作为模型连接。' };
+      return { name: 'Codex Subscription', description: 'ChatGPT / Codex 账号登录；登录后自动成为可用模型连接。' };
     case 'gemini-cli':
-      return { name: 'Gemini CLI', description: 'Google 账号登录不作为模型连接。' };
+      return { name: 'Gemini CLI', description: 'Google 账号登录暂未接入聊天发送。' };
   }
 }
 

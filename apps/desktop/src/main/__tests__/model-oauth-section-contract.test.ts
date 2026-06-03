@@ -90,6 +90,30 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
     assert.doesNotMatch(body, /'planned'/, 'no card may still claim "planned" status');
   });
 
+  it('wired OAuth provider copy does not say account login is separate from model connections', async () => {
+    const src = await readFile(PROVIDERS_PANEL_SOURCE, 'utf8');
+    assert.doesNotMatch(
+      src,
+      /账号登录不作为模型连接|这类账号登录不会出现在模型连接入口|当前请使用 API key 连接聊天模型|默认隐藏/,
+      'Claude/Codex OAuth copy must reflect that successful login creates a usable model connection',
+    );
+    assert.match(
+      src,
+      /Claude Pro \/ Max 订阅账号登录；登录后自动成为可用模型连接/,
+      'Claude provider display copy must point to the wired OAuth model connection path',
+    );
+    assert.match(
+      src,
+      /ChatGPT \/ Codex 账号登录；登录后自动成为可用模型连接/,
+      'Codex provider display copy must point to the wired OAuth model connection path',
+    );
+    assert.match(
+      src,
+      /Google 账号登录暂未接入聊天发送/,
+      'unwired OAuth providers must still fail closed without claiming they are wired',
+    );
+  });
+
   it('claude opens a modal from the equal-size card instead of rendering a full inline card above the grid', async () => {
     const src = await readFile(PROVIDERS_PANEL_SOURCE, 'utf8');
     const sectionMatch = src.match(/function ModelOAuthSection[\s\S]*?function ClaudeSubscriptionModal/);
