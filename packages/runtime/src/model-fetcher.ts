@@ -8,6 +8,9 @@ import { generalizedErrorMessage } from '@maka/core/redaction';
 import { proxiedFetch } from './bots/proxied-fetch.js';
 
 const MODEL_FETCH_TIMEOUT_MS = 10_000;
+const CLAUDE_SUBSCRIPTION_BETA =
+  'oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,claude-code-20250219';
+const CLAUDE_SUBSCRIPTION_USER_AGENT = 'claude-cli/2.1.88 (external, cli)';
 
 export async function fetchProviderModels(
   connection: LlmConnection,
@@ -36,7 +39,7 @@ async function fetchProviderModelsStrict(
   switch (PROVIDER_DEFAULTS[connection.providerType].protocol) {
     case 'anthropic': {
       const r = await proxiedFetch(`${stripTrailing(baseUrl)}/v1/models`, {
-        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        headers: anthropicModelHeaders(connection, apiKey),
         timeoutMs: MODEL_FETCH_TIMEOUT_MS,
       });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -68,6 +71,23 @@ async function fetchProviderModelsStrict(
       });
     }
   }
+}
+
+function anthropicModelHeaders(connection: LlmConnection, apiKey: string): Record<string, string> {
+  if (connection.providerType === 'claude-subscription') {
+    return {
+      Authorization: `Bearer ${apiKey}`,
+      'User-Agent': CLAUDE_SUBSCRIPTION_USER_AGENT,
+      'anthropic-beta': CLAUDE_SUBSCRIPTION_BETA,
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'x-app': 'cli',
+      'anthropic-version': '2023-06-01',
+    };
+  }
+  return {
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+  };
 }
 
 function stripTrailing(u: string): string {

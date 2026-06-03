@@ -7,6 +7,9 @@ import {
 import { proxiedFetch } from './bots/proxied-fetch.js';
 
 const CONNECTION_TEST_TIMEOUT_MS = 15_000;
+const CLAUDE_SUBSCRIPTION_BETA =
+  'oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,claude-code-20250219';
+const CLAUDE_SUBSCRIPTION_USER_AGENT = 'claude-cli/2.1.88 (external, cli)';
 
 export async function testConnection(
   connection: LlmConnection,
@@ -29,7 +32,7 @@ export async function testConnection(
   try {
     switch (PROVIDER_DEFAULTS[connection.providerType].protocol) {
       case 'anthropic':
-        return await probeAnthropic(baseUrl, secret, testModel, t0);
+        return await probeAnthropic(connection, baseUrl, secret, testModel, t0);
       case 'openai':
         return await probeOpenAI(baseUrl, secret, testModel, t0);
       case 'google':
@@ -47,18 +50,30 @@ export async function testConnection(
 }
 
 async function probeAnthropic(
+  connection: LlmConnection,
   baseUrl: string,
-  apiKey: string,
+  secret: string,
   model: string,
   t0: number,
 ): Promise<ConnectionTestResult> {
+  const headers: Record<string, string> = connection.providerType === 'claude-subscription'
+    ? {
+        Authorization: `Bearer ${secret}`,
+        'User-Agent': CLAUDE_SUBSCRIPTION_USER_AGENT,
+        'anthropic-beta': CLAUDE_SUBSCRIPTION_BETA,
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'x-app': 'cli',
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      }
+    : {
+        'x-api-key': secret,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      };
   const r = await proxiedFetch(`${stripTrailing(baseUrl)}/v1/messages`, {
     method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       model,
       max_tokens: 16,

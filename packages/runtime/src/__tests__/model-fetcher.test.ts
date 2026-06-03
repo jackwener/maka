@@ -97,6 +97,42 @@ describe('fetchProviderModels', () => {
     assert.deepEqual(models, [{ id: 'custom-live-model' }]);
   });
 
+  test('Claude subscription model fetch uses OAuth bearer headers, not x-api-key', async () => {
+    let observedAuth = '';
+    let observedApiKey = '';
+    let observedBeta = '';
+    let observedApp = '';
+    const server = await startJsonServer((request, response) => {
+      observedAuth = request.headers.authorization ?? '';
+      observedApiKey = (request.headers['x-api-key'] as string | undefined) ?? '';
+      observedBeta = (request.headers['anthropic-beta'] as string | undefined) ?? '';
+      observedApp = (request.headers['x-app'] as string | undefined) ?? '';
+      assert.equal(request.url, '/v1/models');
+      respondJson(response, 200, {
+        data: [
+          { id: 'claude-sonnet-4-5-20250929' },
+        ],
+      });
+    });
+
+    const models = await fetchProviderModels({
+      slug: 'claude-subscription',
+      name: 'Claude OAuth',
+      providerType: 'claude-subscription',
+      baseUrl: server.url,
+      defaultModel: 'claude-sonnet-4-5-20250929',
+      enabled: true,
+      createdAt: 1,
+      updatedAt: 1,
+    }, 'oauth-access-token');
+
+    assert.equal(observedAuth, 'Bearer oauth-access-token');
+    assert.equal(observedApiKey, '');
+    assert.match(observedBeta, /oauth-2025-04-20/);
+    assert.equal(observedApp, 'cli');
+    assert.deepEqual(models, [{ id: 'claude-sonnet-4-5-20250929' }]);
+  });
+
   test('successful empty provider responses stay fetched-empty instead of falling back', async () => {
     const server = await startJsonServer((_request, response) => {
       respondJson(response, 200, { data: [] });

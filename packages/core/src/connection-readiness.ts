@@ -11,8 +11,8 @@
  * The single helper here is the only place these criteria live:
  *   - real backend (not `fake`)
  *   - `enabled === true`
- *   - provider auth path is already send-wired (OAuth subscriptions
- *     stay blocked until their runtime send path lands)
+ *   - provider auth path is send-wired (Claude subscription is wired;
+ *     other OAuth providers stay blocked until their runtime path lands)
  *   - has usable secret OR provider's `authKind === 'none'`
  *   - effective model exists (caller's `requestedModel` if provided,
  *     otherwise `connection.defaultModel`)
@@ -80,7 +80,7 @@ export interface IsConnectionReadyInput {
  * Order:
  *   1. backend is `fake` → `fake_backend`
  *   2. `enabled === false` → `connection_disabled`
- *   3. `authKind === 'oauth_token'` → `oauth_subscription_not_wired`
+ *   3. unsupported OAuth provider → `oauth_subscription_not_wired`
  *   4. `authKind !== 'none' && !hasSecret` → `missing_api_key`
  *   5. effective model is empty/missing → `missing_model`
  *   6. `connection.models` is enumerated but empty → `empty_model_list`
@@ -98,7 +98,7 @@ export function isConnectionReady(input: IsConnectionReadyInput): IsConnectionRe
     return { ready: false, reason: 'connection_disabled' };
   }
   const authKind = PROVIDER_DEFAULTS[connection.providerType].authKind;
-  if (authKind === 'oauth_token') {
+  if (authKind === 'oauth_token' && connection.providerType !== 'claude-subscription') {
     return { ready: false, reason: 'oauth_subscription_not_wired' };
   }
   if (authKind !== 'none' && !hasSecret) {

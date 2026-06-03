@@ -298,3 +298,50 @@ describe('Claude OAuth authorize URL compatibility', () => {
     );
   });
 });
+
+describe('Claude OAuth model connection bridge', () => {
+  it('main syncs successful Claude OAuth login into the model connection list', async () => {
+    const src = await readFile(MAIN_SOURCE, 'utf8');
+    assert.match(
+      src,
+      /async function syncClaudeSubscriptionConnection\(\)/,
+      'main.ts must have a single sync helper that turns Claude OAuth account state into a model connection',
+    );
+    assert.match(
+      src,
+      /slug:\s*CLAUDE_SUBSCRIPTION_CONNECTION_SLUG[\s\S]*providerType:\s*'claude-subscription'[\s\S]*enabled:\s*true[\s\S]*lastTestStatus:\s*'verified'/,
+      'sync helper must upsert an enabled claude-subscription connection after login',
+    );
+
+    const completeIdx = src.indexOf("claude-subscription:complete-authorization");
+    assert.notEqual(completeIdx, -1, 'complete-authorization handler must exist');
+    const completeRegion = src.slice(completeIdx, completeIdx + 1200);
+    assert.match(completeRegion, /if\s*\(\s*result\.ok\s*\)\s*\{[\s\S]*await syncClaudeSubscriptionConnection\(\);[\s\S]*emitConnectionListChanged\(\);/, 'successful OAuth completion must sync the connection and notify renderer');
+
+    const listIdx = src.indexOf("connections:list");
+    assert.notEqual(listIdx, -1, 'connections:list handler must exist');
+    const listRegion = src.slice(listIdx, listIdx + 500);
+    assert.match(listRegion, /await syncClaudeSubscriptionConnection\(\);[\s\S]*return connectionStore\.list\(\)/, 'connection list reads must materialize the logged-in Claude OAuth connection');
+  });
+
+  it('model connection IPC resolves Claude OAuth token from the subscription service, not credentialStore api_key', async () => {
+    const src = await readFile(MAIN_SOURCE, 'utf8');
+    assert.match(
+      src,
+      /async function resolveConnectionSecret\(slug:\s*string\)[\s\S]*providerType === 'claude-subscription'[\s\S]*claudeSubscription\.getAccessTokenInternal\(\)/,
+      'resolveConnectionSecret must map claude-subscription to its stored OAuth access token',
+    );
+    assert.match(src, /connections:test[\s\S]*const apiKey = await resolveConnectionSecret\(slug\)/, 'connections:test must use resolveConnectionSecret');
+    assert.match(src, /connections:fetchModels[\s\S]*const apiKey = await resolveConnectionSecret\(slug\)/, 'connections:fetchModels must use resolveConnectionSecret');
+    assert.match(src, /connections:hasSecret[\s\S]*Boolean\(await resolveConnectionSecret\(slug\)\)/, 'connections:hasSecret must report OAuth login presence for claude-subscription');
+    assert.match(src, /getApiKey:\s*\(slug:\s*string\)\s*=>\s*resolveConnectionSecret\(slug\)/, 'chat send readiness must use OAuth tokens through resolveConnectionSecret');
+  });
+
+  it('ProvidersPanel treats OAuth model connections as login state, not editable API keys', async () => {
+    const src = await readFile(PROVIDERS_PANEL_SOURCE, 'utf8');
+    assert.match(src, /const needsApiKey = defaults\.authKind === 'api_key'/, 'ConnectionDetail must distinguish API key providers');
+    assert.match(src, /const needsOAuth = defaults\.authKind === 'oauth_token'/, 'ConnectionDetail must distinguish OAuth providers');
+    assert.match(src, /\{needsApiKey && \([\s\S]*<PasswordInput/, 'PasswordInput must only render for API-key connections');
+    assert.match(src, /\{needsOAuth && \([\s\S]*OAuth 已登录[\s\S]*等待 OAuth 登录/, 'OAuth connections must render login-state copy instead of a token input');
+  });
+});

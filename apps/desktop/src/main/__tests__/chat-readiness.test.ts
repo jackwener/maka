@@ -118,17 +118,35 @@ describe('chat readiness guard', () => {
     assert.equal(real.model, 'claude-3-5-sonnet-20241022');
   });
 
-  test('blocks OAuth subscription providers until the subscription send path is wired', async () => {
+  test('allows Claude OAuth once its subscription send path is wired', async () => {
+    const ready = await requireReadyConnection(
+      'claude-subscription',
+      deps({
+        connection: connection({
+          slug: 'claude-subscription',
+          name: 'Claude OAuth',
+          providerType: 'claude-subscription',
+          defaultModel: 'claude-sonnet-4-5-20250929',
+        }),
+        apiKey: 'oauth-access-token',
+      }),
+    );
+    assert.equal(ready.connection.slug, 'claude-subscription');
+    assert.equal(ready.apiKey, 'oauth-access-token');
+    assert.equal(ready.model, 'claude-sonnet-4-5-20250929');
+  });
+
+  test('blocks OAuth subscription providers that do not have a runtime send path yet', async () => {
     await assertRejectsReadiness(
-      'claude subscription send path not wired',
+      'codex subscription send path not wired',
       () => requireReadyConnection(
-        'claude-subscription',
+        'codex-subscription',
         deps({
           connection: connection({
-            slug: 'claude-subscription',
-            name: 'Claude Subscription',
-            providerType: 'claude-subscription',
-            defaultModel: 'claude-sonnet-4-5-20250929',
+            slug: 'codex-subscription',
+            name: 'Codex Subscription',
+            providerType: 'codex-subscription',
+            defaultModel: 'gpt-5-codex',
           }),
           apiKey: 'legacy-oauth-secret',
         }),
@@ -211,6 +229,30 @@ describe('chat readiness guard', () => {
         const message = (error as Error).message;
         assert.match(message, /等待填写 API key/);
         assert.doesNotMatch(message, /缺少 API key/);
+        assert.equal(errorReason(error), 'missing_api_key');
+        return true;
+      },
+    );
+  });
+
+  test('Claude OAuth missing token copy asks the user to login, not paste an API key', async () => {
+    await assert.rejects(
+      () => requireReadyConnection(
+        'claude-subscription',
+        deps({
+          connection: connection({
+            slug: 'claude-subscription',
+            name: 'Claude OAuth',
+            providerType: 'claude-subscription',
+            defaultModel: 'claude-sonnet-4-5-20250929',
+          }),
+          apiKey: null,
+        }),
+      ),
+      (error) => {
+        const message = (error as Error).message;
+        assert.match(message, /等待完成 OAuth 登录/);
+        assert.doesNotMatch(message, /等待填写 API key/);
         assert.equal(errorReason(error), 'missing_api_key');
         return true;
       },

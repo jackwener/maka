@@ -13,6 +13,9 @@ export interface ModelFactoryInput {
 
 const ANTHROPIC_BETA =
   'interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14';
+const CLAUDE_SUBSCRIPTION_BETA =
+  'oauth-2025-04-20,interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,prompt-caching-scope-2026-01-05,claude-code-20250219';
+const CLAUDE_SUBSCRIPTION_USER_AGENT = 'claude-cli/2.1.88 (external, cli)';
 
 export function getAIModel(input: ModelFactoryInput): LanguageModelV3 {
   const { connection, apiKey, modelId } = input;
@@ -28,6 +31,17 @@ export function getAIModel(input: ModelFactoryInput): LanguageModelV3 {
       }).chat(modelId);
 
     case 'claude-subscription':
+      return createAnthropic({
+        authToken: apiKey,
+        baseURL,
+        headers: {
+          'anthropic-beta': CLAUDE_SUBSCRIPTION_BETA,
+          'User-Agent': CLAUDE_SUBSCRIPTION_USER_AGENT,
+          'anthropic-dangerous-direct-browser-access': 'true',
+          'x-app': 'cli',
+        },
+      }).chat(modelId);
+
     case 'codex-subscription':
     case 'gemini-cli':
       throw new Error(`${connection.providerType} is experimental and not wired yet`);
