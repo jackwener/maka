@@ -8,6 +8,7 @@ import {
 
 export const PROVIDER_AUTH_SETUP_MODES = [
   'api_key',
+  'oauth',
   'oauth_preview',
   'none',
 ] as const;
@@ -62,6 +63,11 @@ export interface ProviderAuthContract {
   };
 }
 
+const WIRED_OAUTH_PROVIDERS = new Set<ProviderType>([
+  'claude-subscription',
+  'codex-subscription',
+]);
+
 export function deriveProviderAuthContract(input: ProviderAuthContractInput): ProviderAuthContract {
   const defaults = PROVIDER_DEFAULTS[input.providerType];
   const enabled = input.enabled ?? true;
@@ -71,7 +77,7 @@ export function deriveProviderAuthContract(input: ProviderAuthContractInput): Pr
   if (!enabled) {
     return {
       providerType: input.providerType,
-      setupMode: setupModeForAuthKind(defaults.authKind),
+      setupMode: setupModeForProvider(input.providerType),
       state: 'disabled',
       validationStatus: input.lastTestStatus ?? (defaults.authKind === 'none' ? 'not_required' : 'not_run'),
       requiresSecret: defaults.authKind !== 'none',
@@ -85,6 +91,27 @@ export function deriveProviderAuthContract(input: ProviderAuthContractInput): Pr
   }
 
   if (defaults.authKind === 'oauth_token') {
+    if (WIRED_OAUTH_PROVIDERS.has(input.providerType)) {
+      const validationStatus = input.lastTestStatus ?? 'not_run';
+      const state: ProviderAuthState = authStateFromSecretAndTest(hasSecret, input.lastTestStatus);
+      return {
+        providerType: input.providerType,
+        setupMode: 'oauth',
+        state,
+        validationStatus,
+        requiresSecret: true,
+        sendMayUseWithoutSecret: false,
+        actionAvailability: {
+          ...actionAvailability,
+          test_credentials: hasSecret ? 'available' : 'hidden',
+          fetch_models: hasSecret ? 'available' : 'hidden',
+          start_oauth: hasSecret ? 'hidden' : 'available',
+          refresh_oauth: hasSecret ? 'available' : 'hidden',
+          revoke_auth: hasSecret ? 'available' : 'hidden',
+        },
+        copy: copyForOAuth(defaults.label, state),
+      };
+    }
     return {
       providerType: input.providerType,
       setupMode: 'oauth_preview',
@@ -189,6 +216,12 @@ function setupModeForAuthKind(authKind: ConnectionAuth['kind']): ProviderAuthSet
   return 'api_key';
 }
 
+function setupModeForProvider(providerType: ProviderType): ProviderAuthSetupMode {
+  const authKind = PROVIDER_DEFAULTS[providerType].authKind;
+  if (authKind === 'oauth_token' && WIRED_OAUTH_PROVIDERS.has(providerType)) return 'oauth';
+  return setupModeForAuthKind(authKind);
+}
+
 function copyForApiKey(label: string, state: ProviderAuthState): ProviderAuthContract['copy'] {
   switch (state) {
     case 'not_configured':
@@ -221,6 +254,42 @@ function copyForApiKey(label: string, state: ProviderAuthState): ProviderAuthCon
       return {
         label,
         detail: '当前状态不走 API key 凭据流程。',
+      };
+  }
+}
+
+function copyForOAuth(label: string, state: ProviderAuthState): ProviderAuthContract['copy'] {
+  switch (state) {
+    case 'not_configured':
+      return {
+        label: `${label} 等待 OAuth 登录`,
+        detail: '完成账号登录后才能测试连接、拉取模型列表或用于聊天发送。',
+      };
+    case 'validated':
+      return {
+        label: `${label} OAuth 已验证`,
+        detail: '这只代表账号 token 和端点验证通过，不代表 agent 发送、流式、中断路径已经运行可用。',
+      };
+    case 'needs_reauth':
+      return {
+        label: `${label} 需要重新登录`,
+        detail: '上次 OAuth 测试显示鉴权失败；请回到模型设置重新登录后再测试。',
+      };
+    case 'error':
+      return {
+        label: `${label} OAuth 测试失败`,
+        detail: '上次测试未通过；详情必须使用概括后的错误信息，不展示 provider 原始响应或 token。',
+      };
+    case 'configured':
+      return {
+        label: `${label} OAuth 已登录`,
+        detail: '账号 token 已保存，等待验证；测试通过前不要把它展示成运行可用。',
+      };
+    case 'disabled':
+    case 'preview_only':
+      return {
+        label,
+        detail: '当前状态不走 OAuth 账号流程。',
       };
   }
 }

@@ -32,9 +32,41 @@ describe('Account auth UI contract mapping', () => {
       },
     },
     {
-      name: 'OAuth preview actions render as non-executable controlled previews, never buttons',
+      name: 'wired OAuth actions render as model-settings guidance, not preview placeholders',
       run() {
-        const actions = deriveAccountAuthActions(contract({ providerType: 'claude-subscription' }));
+        const actions = deriveAccountAuthActions(
+          contract({ providerType: 'claude-subscription', hasSecret: true, lastTestStatus: 'verified' }),
+        );
+        const state = presentAccountAuthState(
+          contract({ providerType: 'claude-subscription', hasSecret: true, lastTestStatus: 'verified' }),
+        );
+        assert.equal(state.stateLabel, 'OAuth 已验证');
+        assert.match(state.label, /OAuth 已验证/);
+        assert.deepEqual(actions.map((action) => action.action), [
+          'test_credentials',
+          'fetch_models',
+          'refresh_oauth',
+          'revoke_auth',
+        ]);
+        for (const action of actions) {
+          if (action.action === 'test_credentials') {
+            assert.equal(action.kind, 'button');
+            assert.equal(action.executable, true);
+            assert.equal(action.label, '测试 OAuth');
+            continue;
+          }
+          assert.equal(action.kind, 'guidance');
+          assert.equal(action.executable, false);
+          assert.match(action.label, /模型设置/);
+          assert.doesNotMatch(action.label, /Roadmap|路线图|即将|TODO/i);
+          assert.doesNotMatch(action.detail, /Roadmap|路线图|即将|TODO/i);
+        }
+      },
+    },
+    {
+      name: 'unwired OAuth preview actions stay non-executable controlled previews',
+      run() {
+        const actions = deriveAccountAuthActions(contract({ providerType: 'gemini-cli' }));
         assert.equal(actions.length, 3);
         assert.deepEqual(actions.map((action) => action.action), [
           'start_oauth',

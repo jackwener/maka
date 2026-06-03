@@ -49,7 +49,9 @@ export function presentAccountAuthState(
   contract: ProviderAuthContract,
 ): AccountAuthStatePresentation {
   return {
-    stateLabel: AUTH_STATE_LABEL[contract.state],
+    stateLabel: contract.setupMode === 'oauth' && contract.state === 'validated'
+      ? 'OAuth 已验证'
+      : AUTH_STATE_LABEL[contract.state],
     label: contract.copy.label,
     detail: contract.copy.detail,
     tone: AUTH_STATE_TONE[contract.state],
@@ -92,8 +94,10 @@ function availableAction(
         action,
         kind: 'button',
         executable: true,
-        label: '测试凭据',
-        detail: '只验证凭据和端点，不代表运行通路已完成健康检查。',
+        label: contract.setupMode === 'oauth' ? '测试 OAuth' : '测试凭据',
+        detail: contract.setupMode === 'oauth'
+          ? '只验证账号 token 和端点，不代表运行通路已完成健康检查。'
+          : '只验证凭据和端点，不代表运行通路已完成健康检查。',
         tone: 'info',
       };
     case 'save_secret':
@@ -119,13 +123,28 @@ function availableAction(
         action,
         kind: 'guidance',
         executable: false,
-        label: '在模型设置中替换或移除凭据',
+        label: contract.setupMode === 'oauth' ? '在模型设置中退出登录' : '在模型设置中替换或移除凭据',
         detail: '当前页面不直接写入 credential store。',
         tone: 'neutral',
       };
     case 'start_oauth':
+      return {
+        action,
+        kind: 'guidance',
+        executable: false,
+        label: '在模型设置中登录 OAuth',
+        detail: 'OAuth 登录入口位于 设置 · 模型 · OAuth。',
+        tone: 'neutral',
+      };
     case 'refresh_oauth':
-      return previewAction(action);
+      return {
+        action,
+        kind: 'guidance',
+        executable: false,
+        label: '在模型设置中刷新登录',
+        detail: 'OAuth 账号状态刷新位于 设置 · 模型 · OAuth。',
+        tone: 'neutral',
+      };
   }
 }
 

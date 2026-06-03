@@ -72,9 +72,48 @@ describe('ProviderAuth contract', () => {
     expect(JSON.stringify(error.copy).includes('sk-')).toBe(false);
   });
 
-  test('OAuth subscription providers are preview-only and do not expose live actions', () => {
+  test('wired OAuth subscription providers expose real validation actions after login', () => {
     const contract = deriveProviderAuthContract({
       providerType: 'claude-subscription',
+      hasSecret: true,
+      lastTestStatus: 'verified',
+    });
+
+    expect(contract.setupMode).toBe('oauth');
+    expect(contract.state).toBe('validated');
+    expect(contract.validationStatus).toBe('verified');
+    expect(contract.requiresSecret).toBe(true);
+    expect(contract.sendMayUseWithoutSecret).toBe(false);
+    expect(contract.actionAvailability.save_secret).toBe('hidden');
+    expect(contract.actionAvailability.test_credentials).toBe('available');
+    expect(contract.actionAvailability.fetch_models).toBe('available');
+    expect(contract.actionAvailability.start_oauth).toBe('hidden');
+    expect(contract.actionAvailability.refresh_oauth).toBe('available');
+    expect(contract.actionAvailability.revoke_auth).toBe('available');
+    expect(contract.copy.label).toContain('OAuth 已验证');
+    expect(contract.copy.detail).toContain('账号 token 和端点验证通过');
+    expect(contract.copy.detail.includes('API key 连接仍是聊天模型的可用路径')).toBe(false);
+  });
+
+  test('wired OAuth subscription providers route missing login to the OAuth setup path', () => {
+    const contract = deriveProviderAuthContract({
+      providerType: 'codex-subscription',
+      hasSecret: false,
+    });
+
+    expect(contract.setupMode).toBe('oauth');
+    expect(contract.state).toBe('not_configured');
+    expect(contract.validationStatus).toBe('not_run');
+    expect(contract.actionAvailability.start_oauth).toBe('available');
+    expect(contract.actionAvailability.test_credentials).toBe('hidden');
+    expect(contract.actionAvailability.fetch_models).toBe('hidden');
+    expect(contract.copy.label).toContain('等待 OAuth 登录');
+    expect(contract.copy.detail).toContain('用于聊天发送');
+  });
+
+  test('unwired OAuth providers stay preview-only and do not expose live actions', () => {
+    const contract = deriveProviderAuthContract({
+      providerType: 'gemini-cli',
       hasSecret: true,
       lastTestStatus: 'verified',
     });
@@ -134,7 +173,7 @@ describe('ProviderAuth contract', () => {
       lastTestStatus: 'verified',
     });
 
-    expect(contract.setupMode).toBe('oauth_preview');
+    expect(contract.setupMode).toBe('oauth');
     expect(contract.state).toBe('disabled');
     expect(contract.validationStatus).toBe('verified');
     expect(Object.values(contract.actionAvailability).every((value) => value === 'hidden')).toBe(true);
