@@ -130,6 +130,19 @@ describe('localized main shell contract', () => {
     );
   });
 
+  it('keeps the resizable session-list width as integer pixels for readable splitter values', async () => {
+    const main = await readFile(join(process.cwd(), 'src', 'renderer', 'main.tsx'), 'utf8');
+    const resizeBlock = main.slice(main.indexOf('function startColumnResize'), main.indexOf('function onResizeHandleKeyDown'));
+    const keyBlock = main.slice(main.indexOf('function onResizeHandleKeyDown'), main.indexOf('const hasModalOpen'));
+    const readBlock = main.slice(main.indexOf('function readSessionListWidth'), main.indexOf('function isNoRealConnectionError'));
+
+    assert.match(main, /function clampSessionListWidth\(value: number\): number \{\s*return Math\.round\(clamp\(value, 240, 420\)\);\s*\}/m);
+    assert.match(resizeBlock, /setSessionListWidth\(clampSessionListWidth\(start \+ delta\)\)/);
+    assert.match(keyBlock, /setSessionListWidth\(clampSessionListWidth\(next\)\)/);
+    assert.match(readBlock, /return clampSessionListWidth\(stored\);/);
+    assert.match(main, /aria-valuenow=\{sessionListWidth\}/, 'splitter aria-valuenow should receive the normalized integer state');
+  });
+
   it('keeps English skill metadata out of the visible skills list copy', async () => {
     const components = await readFile(resolve(process.cwd(), '..', '..', 'packages', 'ui', 'src', 'components.tsx'), 'utf8');
     const skillPanel = components.match(/function SkillLibraryPanel[\s\S]*?function formatSkillLibraryDescription/)?.[0] ?? '';
