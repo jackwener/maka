@@ -218,4 +218,42 @@ describe('permission response IPC boundary', () => {
       /event\.reason === 'message-appended'[\s\S]{0,80}?(?:event\.sessionId|changedSessionId) === activeIdRef\.current[\s\S]*?refreshMessages\((?:event\.sessionId|changedSessionId)\)/,
     );
   });
+
+  it('keeps newly created sessions selected across immediate refreshSessions() calls', async () => {
+    const rendererPath = fileURLToPath(new URL('../../../src/renderer/main.tsx', import.meta.url));
+    const renderer = await readFile(rendererPath, 'utf8');
+    const setActiveId = renderer.match(/function setActiveId\(next: string \| undefined\): void \{[\s\S]*?\n  \}/);
+    const refreshSessions = renderer.match(/async function refreshSessions\(\) \{[\s\S]*?\n  \}/);
+
+    assert.ok(setActiveId, 'renderer must route active session changes through a ref-synchronized setter');
+    assert.match(setActiveId[0], /activeIdRef\.current\s*=\s*next/);
+    assert.match(setActiveId[0], /setActiveIdState\(next\)/);
+    assert.ok(refreshSessions, 'refreshSessions() must exist');
+    assert.match(
+      refreshSessions[0],
+      /if \(!activeIdRef\.current && next\[0\] && next\[0\]\.lastMessageAt\) setActiveId\(next\[0\]\.id\)/,
+      'refreshSessions() must read activeIdRef, not stale activeId from the render that scheduled the refresh',
+    );
+    assert.doesNotMatch(
+      refreshSessions[0],
+      /if \(!activeId && next\[0\]/,
+      'stale activeId closure can re-select an old session after creating a new chat and immediately sending',
+    );
+    const quickChatHandler = renderer.match(
+      /async function handleQuickChatSubmit\(prompt: string, mode\?: QuickChatMode\): Promise<void> \{[\s\S]*?\n  \}/,
+    );
+    assert.ok(quickChatHandler, 'handleQuickChatSubmit() must exist');
+    const quickChat = quickChatHandler[0].match(/if \(result\.ok\) \{[\s\S]*?if \(!prompt\.trim\(\)\) \{/);
+    assert.ok(quickChat, 'quick chat success branch must exist');
+    assert.match(
+      quickChat[0],
+      /setActiveId\(result\.sessionId\)[\s\S]*?await refreshSessions\(\)/,
+      'quick chat must select the new session before refreshing the list so onboarding cannot bounce to an older chat',
+    );
+    assert.doesNotMatch(
+      quickChat[0],
+      /await refreshSessions\(\)[\s\S]*?setActiveId\(result\.sessionId\)/,
+      'refreshing before selecting the quick-chat session can briefly select an older session',
+    );
+  });
 });

@@ -126,7 +126,7 @@ function App() {
 function AppShell() {
   const toastApi = useToast();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [activeId, setActiveId] = useState<string | undefined>();
+  const [activeId, setActiveIdState] = useState<string | undefined>();
   const [navSelection, setNavSelection] = useState<NavSelection>(() => readNavSelection());
   const [messages, setMessages] = useState<StoredMessage[]>([]);
   // PR-UI-Cx fixup v2 (@kenji msg 3c01e901 Blocker 2): combined
@@ -613,6 +613,11 @@ function AppShell() {
     sessions.length === 0 && onboardingState !== undefined && onboardingState.kind !== 'ready_with_history';
   const [sessionListWidth, setSessionListWidth] = useState(() => readSessionListWidth());
 
+  function setActiveId(next: string | undefined): void {
+    activeIdRef.current = next;
+    setActiveIdState(next);
+  }
+
   useEffect(() => {
     activeIdRef.current = activeId;
   }, [activeId]);
@@ -852,7 +857,7 @@ function AppShell() {
   async function refreshSessions() {
     const next = await window.maka.sessions.list();
     setSessions(next);
-    if (!activeId && next[0] && next[0].lastMessageAt) setActiveId(next[0].id);
+    if (!activeIdRef.current && next[0] && next[0].lastMessageAt) setActiveId(next[0].id);
   }
 
   async function applyVisualSmokeFixture() {
@@ -1731,9 +1736,10 @@ function AppShell() {
    *
    * The discriminated-union result is handled here so the hero stays
    * presentational:
-   *   - `{ ok: true; sessionId }` → setActiveId. The OnboardingHero
-   *     unmounts automatically as soon as sessions.length > 0
-   *     (which fires after the refresh).
+   *   - `{ ok: true; sessionId }` → setActiveId before refreshing the
+   *     session list. This keeps first-run / quick chat on the newly
+   *     created session even when refreshSessions() completes before
+   *     React commits the state update.
    *   - `{ ok: false; reason: 'setup_required' }` → the onboarding
    *     snapshot will be invalidated by the subsequent sessions/
    *     connections event, but call `refresh()` defensively so the
@@ -1748,8 +1754,8 @@ function AppShell() {
     try {
       const result = await window.maka.quickChat.start({ prompt, mode });
       if (result.ok) {
-        await refreshSessions();
         setActiveId(result.sessionId);
+        await refreshSessions();
         // If the prompt was non-empty, the main process has already
         // started the send via the existing send path. If empty, we
         // just opened a fresh session; focus the composer so the
