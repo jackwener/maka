@@ -1234,12 +1234,14 @@ function ConnectionDetail(props: {
 
   async function save() {
     setBusy(true);
+    let saved = false;
     try {
       await props.bridge.update(connection.slug, {
         baseUrl: hasFixedOAuthBaseUrl ? defaults.baseUrl : baseUrl || undefined,
         defaultModel,
         ...(apiKey ? { apiKey } : {}),
       });
+      saved = true;
       const wroteNewKey = apiKey.length > 0;
       setApiKey('');
       const nextHasSecret = requiresCredential ? await props.bridge.hasSecret(connection.slug) : true;
@@ -1253,6 +1255,11 @@ function ConnectionDetail(props: {
       if (nextHasSecret && (wroteNewKey || (!needsApiKey && models.length === 0))) {
         void refreshModels({ silent: true });
       }
+    } catch (error) {
+      toast.error(
+        saved ? '刷新模型连接失败' : '保存模型连接失败',
+        error instanceof Error ? error.message : String(error),
+      );
     } finally {
       setBusy(false);
     }
@@ -1328,8 +1335,20 @@ function ConnectionDetail(props: {
 
   async function remove() {
     if (!confirm(`删除供应商 "${connection.name}"？`)) return;
-    await props.bridge.delete(connection.slug);
-    await props.onDeleted();
+    setBusy(true);
+    let deleted = false;
+    try {
+      await props.bridge.delete(connection.slug);
+      deleted = true;
+      await props.onDeleted();
+    } catch (error) {
+      toast.error(
+        deleted ? '刷新模型列表失败' : '删除模型连接失败',
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -1403,7 +1422,7 @@ function ConnectionDetail(props: {
           {testing ? '测试中…' : '测试连接'}
         </button>
         {!props.isDefault && connection.enabled && <button className="maka-button" type="button" onClick={setAsDefault}>设为默认</button>}
-        <button className="maka-button" data-variant="destructive" type="button" onClick={remove}>删除</button>
+        <button className="maka-button" data-variant="destructive" type="button" disabled={busy} onClick={remove}>删除</button>
       </div>
     </div>
   );
