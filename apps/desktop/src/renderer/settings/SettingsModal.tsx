@@ -2674,7 +2674,14 @@ function MemorySettingsPage(props: {
       return;
     }
     const backupLabel = `${localMemoryBackupKindLabel(backup.kind)} · ${localMemoryBackupSummary(backup)} · ${new Date(backup.updatedAt).toLocaleString()}`;
-    if (!confirm(`恢复上一版会先备份当前 MEMORY.md，再用最近一次备份覆盖当前文件。\n\n将恢复：${backupLabel}\n\n确认恢复吗？`)) return;
+    const ok = await toast.confirm({
+      title: '恢复上一版 MEMORY.md？',
+      description: `会先备份当前 MEMORY.md，再用最近一次备份覆盖当前文件。将恢复：${backupLabel}`,
+      confirmLabel: '恢复',
+      cancelLabel: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       const result = await window.maka.memory.restoreLatestBackup();
@@ -2695,7 +2702,14 @@ function MemorySettingsPage(props: {
 
   async function restoreBackupCandidate(backup: NonNullable<LocalMemoryState['latestBackup']>) {
     const backupLabel = `${localMemoryBackupKindLabel(backup.kind)} · ${localMemoryBackupSummary(backup)} · ${new Date(backup.updatedAt).toLocaleString()}`;
-    if (!confirm(`恢复这个备份候选会先备份当前 MEMORY.md，再用选中的备份覆盖当前文件。\n\n将恢复：${backupLabel}\n\n确认恢复吗？`)) return;
+    const ok = await toast.confirm({
+      title: '恢复这个 MEMORY.md 备份？',
+      description: `会先备份当前 MEMORY.md，再用选中的备份覆盖当前文件。将恢复：${backupLabel}`,
+      confirmLabel: '恢复',
+      cancelLabel: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       const result = await window.maka.memory.restoreBackup(backup.kind);
@@ -4101,7 +4115,14 @@ function BotChatSettingsPage(props: {
   }
 
   async function disconnectWechatLogin() {
-    if (!confirm('断开微信登录会清除本机保存的扫码登录凭据，确认吗？')) return;
+    const ok = await toast.confirm({
+      title: '断开微信登录？',
+      description: '将清除本机保存的扫码登录凭据，之后需要重新扫码才能继续使用微信机器人。',
+      confirmLabel: '断开登录',
+      cancelLabel: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
     const isIlink = channel.webhookUrl?.trim().startsWith('https://ilinkai.weixin.qq.com') ?? false;
     const saved = await updateChannel({
       token: '',

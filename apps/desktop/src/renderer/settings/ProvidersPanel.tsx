@@ -802,7 +802,14 @@ function SubscriptionLoginModal(props: { serviceId: BrowserOAuthServiceId; onClo
   }
 
   async function logout() {
-    if (!confirm(`退出登录将删除本地保存的${display.name}凭据，确认吗？`)) return;
+    const ok = await toast.confirm({
+      title: `退出 ${display.name} 登录？`,
+      description: '将删除本机保存的订阅凭据，之后需要重新登录才能继续使用这些 OAuth 模型。',
+      confirmLabel: '退出登录',
+      cancelLabel: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
     setPendingAction(true);
     try {
       const result = await bridge.logout();
@@ -1384,7 +1391,14 @@ function ConnectionDetail(props: {
   }
 
   async function remove() {
-    if (!confirm(`删除供应商 "${connection.name}"？`)) return;
+    const ok = await toast.confirm({
+      title: `删除供应商 ${connection.name}？`,
+      description: '将从已启用模型连接中移除这个供应商配置；如需再次使用，需要重新添加凭据。',
+      confirmLabel: '删除',
+      cancelLabel: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
     setBusy(true);
     let deleted = false;
     try {
@@ -1909,7 +1923,14 @@ function ClaudeSubscriptionCard() {
   }
 
   async function logout() {
-    if (!confirm('退出登录将删除本地保存的订阅凭据，确认吗？')) return;
+    const ok = await toast.confirm({
+      title: '退出 Claude Code 登录？',
+      description: '将删除本机保存的订阅凭据，之后需要重新登录才能继续使用 Claude OAuth 模型。',
+      confirmLabel: '退出登录',
+      cancelLabel: '取消',
+      destructive: true,
+    });
+    if (!ok) return;
     setPendingAction(true);
     try {
       const result = await window.maka.claudeSubscription.logout();

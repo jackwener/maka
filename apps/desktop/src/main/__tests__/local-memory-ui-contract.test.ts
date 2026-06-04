@@ -372,7 +372,8 @@ describe('local MEMORY.md Settings UI contract', () => {
     assert.match(preload, /memory:restoreLatestBackup/);
     assert.match(globalTypes, /restoreLatestBackup\(\)/);
     assert.match(pageBlock, /async function restoreLatestBackup/);
-    assert.match(pageBlock, /恢复上一版会先备份当前 MEMORY\.md/);
+    assert.match(pageBlock, /title: '恢复上一版 MEMORY\.md？'/);
+    assert.match(pageBlock, /会先备份当前 MEMORY\.md，再用最近一次备份覆盖当前文件/);
     assert.match(pageBlock, /window\.maka\.memory\.restoreLatestBackup\(\)/);
     assert.match(pageBlock, /已恢复上一版 MEMORY\.md/);
     assert.match(pageBlock, /restore\.bak/);
@@ -505,7 +506,8 @@ describe('local MEMORY.md Settings UI contract', () => {
     assert.match(globalTypes, /restoreBackup\(kind: 'save' \| 'reset' \| 'restore'\)/);
     assert.match(pageBlock, /async function restoreBackupCandidate/);
     assert.match(pageBlock, /window\.maka\.memory\.restoreBackup\(backup\.kind\)/);
-    assert.match(pageBlock, /恢复这个备份候选会先备份当前 MEMORY\.md/);
+    assert.match(pageBlock, /title: '恢复这个 MEMORY\.md 备份？'/);
+    assert.match(pageBlock, /会先备份当前 MEMORY\.md，再用选中的备份覆盖当前文件/);
     assert.match(pageBlock, /restoreBackupCandidate\(backup\)/);
     assert.match(pageBlock, />\s*恢复\s*<\/button>/);
     assert.doesNotMatch(pageBlock, /restoreBackup\((backup\.path|.*path)/);
