@@ -544,23 +544,38 @@ function ModelOAuthSection(props: { onConnectionsChanged(): Promise<void> }) {
     cursor: null,
     antigravity: null,
   });
+  const [cardRefreshError, setCardRefreshError] = useState<string | null>(null);
 
   async function refreshAllCards() {
     const results = await Promise.all(
       MODEL_OAUTH_CARDS.map(async (card) => {
         try {
           const snapshot = await getSubscriptionSnapshot(card.id);
-          return [card.id, snapshot] as const;
-        } catch {
-          return [card.id, null] as const;
+          return { id: card.id, snapshot } as const;
+        } catch (error) {
+          return { id: card.id, error } as const;
         }
       }),
     );
+    const failures = results.filter((result) => 'error' in result);
     setCardStates((prev) => {
       const next = { ...prev };
-      for (const [id, snapshot] of results) next[id] = snapshot;
+      for (const result of results) {
+        if ('snapshot' in result && result.snapshot !== undefined) next[result.id] = result.snapshot;
+      }
       return next;
     });
+    if (failures.length > 0) {
+      const firstFailure = failures[0];
+      const message = firstFailure && 'error' in firstFailure
+        ? subscriptionActionErrorMessage(firstFailure.error)
+        : '登录服务暂时不可用，请检查网络后重试。';
+      setCardRefreshError(message);
+      toast.error('刷新 OAuth 登录状态失败', message);
+      return false;
+    }
+    setCardRefreshError(null);
+    return true;
   }
 
   async function refreshAfterModalClose() {
@@ -578,6 +593,11 @@ function ModelOAuthSection(props: { onConnectionsChanged(): Promise<void> }) {
 
   return (
     <div className="providerOAuthCatalog" aria-label="OAuth 登录" data-provider-category="oauth">
+      {cardRefreshError && (
+        <div className="providerOAuthError" role="alert">
+          OAuth 登录状态暂时没刷新成功，已保留上一次状态。{cardRefreshError}
+        </div>
+      )}
       <div className="providerOAuthGrid">
         {MODEL_OAUTH_CARDS.map((card) => {
           const snapshot = cardStates[card.id];
@@ -696,8 +716,11 @@ function SubscriptionLoginModal(props: { serviceId: BrowserOAuthServiceId; onClo
     try {
       const next = (await bridge.getAccountState()) as SubscriptionSnapshot;
       setState(next);
-    } catch {
-      // Surface as not_logged_in; modal stays open.
+      setErrorMessage(null);
+    } catch (error) {
+      const message = subscriptionActionErrorMessage(error);
+      toast.error('刷新登录状态失败', message);
+      setErrorMessage(message);
     }
   }
 
@@ -1747,8 +1770,11 @@ function ClaudeSubscriptionCard() {
     try {
       const next = await window.maka.claudeSubscription.getAccountState();
       setState(next);
-    } catch {
-      // ignore — surface as state.runtimeState = not_logged_in
+      setPasteError(null);
+    } catch (error) {
+      const message = subscriptionActionErrorMessage(error);
+      toast.error('刷新登录状态失败', message);
+      setPasteError(message);
     }
   };
 
@@ -1913,6 +1939,9 @@ function ClaudeSubscriptionCard() {
         </span>
       </div>
       <p className="settingsConnectionDetail">{presentation.detail}</p>
+      {pasteError && !authRequestId && (
+        <small className="settingsErrorText" role="alert">{pasteError}</small>
+      )}
 
       {state?.quota && (state.quota.fiveHour || state.quota.sevenDay) && (
         <div className="settingsQuotaSection">

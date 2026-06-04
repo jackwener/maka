@@ -7754,6 +7754,15 @@ button:active {
   overflow: auto;
   padding-right: 4px;
 }
+.providerOAuthError {
+  border: 1px solid color-mix(in srgb, var(--warning) 32%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warning) 10%, var(--background));
+  color: var(--warning-text);
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 9px 11px;
+}
 .providerOAuthGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

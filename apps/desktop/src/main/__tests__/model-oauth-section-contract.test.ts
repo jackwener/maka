@@ -444,6 +444,47 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
     );
   });
 
+  it('OAuth card refresh failures preserve the last known login state and alert the user', async () => {
+    // task #38 sweep: a transient getAccountState IPC failure must
+    // not overwrite a logged-in card snapshot with null. "Unknown"
+    // is not the same thing as "not logged in".
+    const src = await readFile(PROVIDERS_PANEL_SOURCE, 'utf8');
+    const sectionMatch = src.match(/function ModelOAuthSection[\s\S]*?function ClaudeSubscriptionModal/);
+    assert.ok(sectionMatch, 'ModelOAuthSection must exist');
+    const section = sectionMatch[0]!;
+    const refreshMatch = section.match(/async function refreshAllCards\(\)[\s\S]*?async function refreshAfterModalClose/);
+    assert.ok(refreshMatch, 'refreshAllCards must exist inside ModelOAuthSection');
+    const refresh = refreshMatch[0]!;
+
+    assert.match(
+      refresh,
+      /return \{ id: card\.id, error \} as const/,
+      'refresh failures must be represented as failures, not as null snapshots',
+    );
+    assert.match(
+      refresh,
+      /setCardStates\(\(prev\) => \{[\s\S]*const next = \{ \.\.\.prev \};[\s\S]*if \('snapshot' in result && result\.snapshot !== undefined\) next\[result\.id\] = result\.snapshot;/,
+      'failed OAuth card refreshes must preserve previous snapshots',
+    );
+    assert.doesNotMatch(
+      refresh,
+      /catch[\s\S]*return \[card\.id,\s*null\] as const/,
+      'refreshAllCards must not downgrade a failed snapshot probe to logged-out/null',
+    );
+    assert.match(
+      section,
+      /toast\.error\('刷新 OAuth 登录状态失败', message\)/,
+      'failed OAuth card refreshes must be visible instead of silently changing badges',
+    );
+    assert.match(
+      section,
+      /className="providerOAuthError" role="alert"/,
+      'the OAuth tab must expose refresh failures as an accessible inline alert',
+    );
+    const styles = await readFile(resolve(REPO_ROOT, 'apps', 'desktop', 'src', 'renderer', 'styles.css'), 'utf8');
+    assert.match(styles, /\.providerOAuthError\s*\{/, 'OAuth refresh alert must have a stable style hook');
+  });
+
   it('SettingsModal validates jumpToSettingsSection payloads against SETTINGS_NAV (PR-OAUTH-CARD-LIVE-STATE-0)', async () => {
     // Before: any truthy `detail.section` was passed to setSection,
     // so a typo or stale dispatch would silently land the user on
@@ -512,8 +553,11 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
     const claudeCard = src.match(/function ClaudeSubscriptionCard[\s\S]*?function presentSubscriptionState/)?.[0] ?? '';
 
     assert.match(helper, /登录服务暂时不可用，请检查网络后重试。/, 'OAuth thrown-error fallback must be user-facing Chinese copy');
+    assert.match(browserModal, /async function refresh\(\)[\s\S]*catch \(error\) \{[\s\S]*toast\.error\('刷新登录状态失败', message\);[\s\S]*setErrorMessage\(message\);/, 'browser OAuth state refresh must surface thrown failures');
     assert.match(browserModal, /catch \(error\) \{[\s\S]*toast\.error\('登录失败', message\);[\s\S]*setErrorMessage\(message\);/, 'browser OAuth login must toast thrown failures');
     assert.match(browserModal, /catch \(error\) \{[\s\S]*toast\.error\('退出失败', subscriptionActionErrorMessage\(error\)\);/, 'browser OAuth logout must toast thrown failures');
+    assert.match(claudeCard, /const refresh = async \(\) => \{[\s\S]*catch \(error\) \{[\s\S]*toast\.error\('刷新登录状态失败', message\);[\s\S]*setPasteError\(message\);/, 'Claude OAuth state refresh must surface thrown failures');
+    assert.match(claudeCard, /settingsErrorText" role="alert"\>\{pasteError\}/, 'Claude OAuth refresh failures must be visible in the modal body');
     assert.match(claudeCard, /catch \(error\) \{[\s\S]*toast\.error\('无法开始登录', message\);[\s\S]*setPasteError\(message\);/, 'Claude OAuth start must toast thrown failures');
     assert.match(claudeCard, /catch \(error\) \{[\s\S]*toast\.error\('授权码提交失败', message\);[\s\S]*setPasteError\(message\);/, 'Claude OAuth paste submit must toast thrown failures');
     assert.match(claudeCard, /catch \(error\) \{[\s\S]*toast\.error\('取消登录失败', subscriptionActionErrorMessage\(error\)\);/, 'Claude OAuth cancel must toast thrown failures');
