@@ -1825,6 +1825,7 @@ function nextSlug(type: ProviderType, existing: string[]): string {
  */
 function ClaudeSubscriptionCard() {
   const [experimentalEnabled, setExperimentalEnabled] = useState<boolean | null>(null);
+  const [experimentalGateError, setExperimentalGateError] = useState<string | null>(null);
   const [state, setState] = useState<SubscriptionAccountState | null>(null);
   const [pendingAction, setPendingAction] = useState(false);
   const [authRequestId, setAuthRequestId] = useState<string | null>(null);
@@ -1845,6 +1846,20 @@ function ClaudeSubscriptionCard() {
     }
   };
 
+  const refreshExperimentalGate = async () => {
+    try {
+      const flag = await window.maka.claudeSubscription.isExperimentalEnabled();
+      setExperimentalEnabled(flag);
+      setExperimentalGateError(null);
+      if (flag) void refresh();
+    } catch (error) {
+      const message = subscriptionActionErrorMessage(error);
+      setExperimentalEnabled(null);
+      setExperimentalGateError(message);
+      toast.error('读取 Claude 登录开关失败', message);
+    }
+  };
+
   useEffect(() => {
     // kenji `1da909d5` blocking concern: Anthropic does not permit
     // third-party developers to offer Claude.ai login on behalf of
@@ -1857,15 +1872,48 @@ function ClaudeSubscriptionCard() {
       .then((flag) => {
         if (cancelled) return;
         setExperimentalEnabled(flag);
+        setExperimentalGateError(null);
         if (flag) void refresh();
       })
-      .catch(() => {
-        if (!cancelled) setExperimentalEnabled(false);
+      .catch((error) => {
+        if (cancelled) return;
+        const message = subscriptionActionErrorMessage(error);
+        setExperimentalEnabled(null);
+        setExperimentalGateError(message);
+        toast.error('读取 Claude 登录开关失败', message);
       });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  if (experimentalGateError) {
+    return (
+      <div className="settingsConnectionRow" data-status="error">
+        <div className="settingsConnectionRowHead">
+          <div className="settingsConnectionRowText">
+            <div className="settingsConnectionRowName">
+              <strong>Claude 订阅 (Pro / Max)</strong>
+            </div>
+            <small>无法确认 Claude OAuth 是否可用。没有登录动作会被执行。</small>
+          </div>
+          <span className="settingsConnectionBadge" data-tone="destructive">读取失败</span>
+        </div>
+        <small className="settingsErrorText" role="alert">
+          Claude 登录开关读取失败：{experimentalGateError}
+        </small>
+        <div className="settingsConnectionActions">
+          <button
+            type="button"
+            className="maka-button"
+            onClick={() => void refreshExperimentalGate()}
+          >
+            重试
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (experimentalEnabled !== true) {
     return null;
