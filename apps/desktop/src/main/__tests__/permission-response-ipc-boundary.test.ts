@@ -339,8 +339,13 @@ describe('permission response IPC boundary', () => {
     assert.match(sendBlock, /const turnId = crypto\.randomUUID\(\)/);
     assert.match(
       newSessionBranch,
-      /setNavSelection\(\{ section: 'sessions', filter: 'chats' \}\)[\s\S]*setActiveId\(session\.id\)[\s\S]*upsertSessionSummary\(session\)[\s\S]*setMessages\(\[\]\)[\s\S]*window\.maka\.sessions\.send\(session\.id, \{ type: 'send', turnId, text \}\)[\s\S]*refreshMessagesUntilTurn\(session\.id, turnId\)[\s\S]*refreshSessions\(\)/,
-      'normal Composer first-send must switch the current view to the created session and wait for the first user turn to render',
+      /setNavSelection\(\{ section: 'sessions', filter: 'chats' \}\)[\s\S]*setActiveId\(session\.id\)[\s\S]*upsertSessionSummary\(session\)[\s\S]*showOptimisticUserMessage\(session\.id, turnId, text, \{ replaceCurrentMessages: true \}\)[\s\S]*window\.maka\.sessions\.send\(session\.id, \{ type: 'send', turnId, text \}\)[\s\S]*refreshMessagesUntilTurn\(session\.id, turnId\)[\s\S]*refreshSessions\(\)/,
+      'normal Composer first-send must switch the current view to the created session and show the user turn immediately',
+    );
+    assert.doesNotMatch(
+      newSessionBranch,
+      /setMessages\(\[\]\)/,
+      'normal Composer first-send must not leave the newly created chat blank while waiting for storage refresh',
     );
     assert.doesNotMatch(
       newSessionBranch,
@@ -349,12 +354,17 @@ describe('permission response IPC boundary', () => {
     );
     assert.match(
       existingSessionBranch,
-      /window\.maka\.sessions\.send\(sessionId, \{ type: 'send', turnId, text \}\)[\s\S]*refreshMessagesUntilTurn\(sessionId, turnId\)/,
-      'existing sessions should also wait for the persisted user turn instead of relying only on stream events',
+      /showOptimisticUserMessage\(sessionId, turnId, text\)[\s\S]*window\.maka\.sessions\.send\(sessionId, \{ type: 'send', turnId, text \}\)[\s\S]*refreshMessagesUntilTurn\(sessionId, turnId\)/,
+      'existing sessions should also show the user turn immediately before waiting for persisted storage',
+    );
+    assert.match(
+      sendBlock,
+      /catch \(error\) \{[\s\S]*removeOptimisticUserMessage\(optimisticSessionId, optimisticTurnId\)[\s\S]*toastApi\.error\('发送失败'/,
+      'send readiness failures must remove the optimistic user turn instead of leaving a fake message behind',
     );
     assert.match(
       refreshUntilTurn,
-      /readMessages\(sessionId\)[\s\S]*setMessages\(next\)[\s\S]*message\.type === 'user' && message\.turnId === turnId/,
+      /readMessages\(sessionId\)[\s\S]*hasSentUserTurn = next\.some\(\(message\) => message\.type === 'user' && message\.turnId === turnId\)[\s\S]*hasSentUserTurn && activeIdRef\.current === sessionId[\s\S]*setMessages\(next\)/,
       'the visible-message wait must be tied to the exact turnId sent by the Composer',
     );
     assert.match(
