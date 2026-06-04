@@ -1966,17 +1966,27 @@ function ThemeSettingsPage(props: {
   onDensityChange(density: UiDensity): void;
   onThemePaletteChange(palette: ThemePalette): void;
 }) {
+  const toast = useToast();
+
+  async function persistAppearance(patch: NonNullable<Parameters<typeof window.maka.settings.update>[0]['appearance']>) {
+    try {
+      await props.onUpdate({ appearance: patch });
+    } catch (error) {
+      toast.error('保存外观设置失败', settingsActionErrorMessage(error));
+    }
+  }
+
   async function setTheme(next: ThemePreference) {
     // Apply immediately for instant feedback, then persist. If persistence
     // fails the visual stays — the next app start will re-read whatever
     // landed on disk.
     props.onThemeChange(next);
-    await props.onUpdate({ appearance: { theme: next } });
+    await persistAppearance({ theme: next });
   }
 
   async function setDensity(next: UiDensity) {
     props.onDensityChange(next);
-    await props.onUpdate({ appearance: { density: next } });
+    await persistAppearance({ density: next });
   }
 
   // PR-THEME-PRODUCT-PALETTES-0 (WAWQAQ msg `4472ee95`) + PR-THEME-APPLY-
@@ -1989,7 +1999,7 @@ function ThemeSettingsPage(props: {
   const currentPalette: ThemePalette = props.themePalette;
   async function setPalette(next: ThemePalette) {
     props.onThemePaletteChange(next);
-    await props.onUpdate({ appearance: { palette: next } });
+    await persistAppearance({ palette: next });
   }
 
   return (
