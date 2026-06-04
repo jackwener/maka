@@ -10,6 +10,7 @@ export interface ModelFactoryInput {
   connection: LlmConnection;
   apiKey: string;
   modelId: string;
+  fetch?: typeof globalThis.fetch;
 }
 
 const ANTHROPIC_BETA =
@@ -19,7 +20,7 @@ const CLAUDE_SUBSCRIPTION_BETA =
 const CLAUDE_SUBSCRIPTION_USER_AGENT = 'claude-cli/2.1.88 (external, cli)';
 
 export function getAIModel(input: ModelFactoryInput): LanguageModelV3 {
-  const { connection, apiKey, modelId } = input;
+  const { connection, apiKey, modelId, fetch } = input;
   const baseURL = effectiveBaseUrl(connection);
 
   switch (connection.providerType) {
@@ -41,6 +42,7 @@ export function getAIModel(input: ModelFactoryInput): LanguageModelV3 {
       return createAnthropic({
         authToken: apiKey,
         baseURL: anthropicV1BaseUrl(baseURL),
+        fetch,
         headers: {
           'anthropic-beta': CLAUDE_SUBSCRIPTION_BETA,
           'User-Agent': CLAUDE_SUBSCRIPTION_USER_AGENT,

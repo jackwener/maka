@@ -81,6 +81,7 @@ import {
 } from './permission-response-guard.js';
 import {
   ClaudeSubscriptionService,
+  isCloakEnabled,
   isSubscriptionExperimentalEnabled,
 } from './oauth/claude-subscription-service.js';
 import {
@@ -653,6 +654,9 @@ function isInsideOrSamePath(root: string, target: string): boolean {
 
 backends.register('ai-sdk', async (ctx) => {
   const { connection, apiKey, model } = await getReadyConnection(ctx.header.llmConnectionSlug, ctx.header.model);
+  const modelFetch = connection.providerType === 'claude-subscription' && isCloakEnabled()
+    ? buildClaudeSubscriptionCloakedFetch(ctx.sessionId, model)
+    : undefined;
 
   return new AiSdkBackend({
     sessionId: ctx.sessionId,
@@ -662,7 +666,7 @@ backends.register('ai-sdk', async (ctx) => {
     apiKey: apiKey ?? '',
     modelId: model,
     permissionEngine,
-    modelFactory: getAIModel,
+    modelFactory: (input) => getAIModel({ ...input, fetch: modelFetch }),
     tools: builtinTools,
     systemPrompt: ({ cwd }) => buildSystemPrompt(ctx.header, cwd),
     recordLlmCall: (event) => recordLlmCall({ repo: telemetryRepo, lookupPricing }, event),
@@ -682,6 +686,54 @@ backends.register('ai-sdk', async (ctx) => {
     now: Date.now,
   });
 });
+
+function buildClaudeSubscriptionCloakedFetch(sessionId: string, modelId: string): typeof fetch {
+  return async (url: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const rawBody = init?.body;
+    if (typeof rawBody !== 'string') {
+      return fetch(url, init);
+    }
+
+    let parsedBody: Record<string, unknown>;
+    try {
+      const parsed = JSON.parse(rawBody) as unknown;
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return fetch(url, init);
+      }
+      parsedBody = parsed as Record<string, unknown>;
+    } catch {
+      return fetch(url, init);
+    }
+
+    const [{ buildCloakedRequest }, deviceId, accountState] = await Promise.all([
+      import('./oauth/cloaked-request.js'),
+      claudeSubscription.getOrCreateDeviceId(),
+      claudeSubscription.getAccountState(),
+    ]);
+    const upstream = await buildCloakedRequest({
+      body: parsedBody,
+      model: modelId,
+      sessionKey: sessionId,
+      streaming: parsedBody.stream === true,
+      timeoutMs: 600_000,
+      deviceId,
+      accountUuid: accountState.profile?.accountUuid ?? '',
+      sessionId,
+    });
+
+    const headers = new Headers(init?.headers);
+    for (const [key, value] of Object.entries(upstream.headers)) {
+      headers.set(key, value);
+    }
+    headers.set('content-type', 'application/json');
+
+    return fetch(url, {
+      ...init,
+      headers,
+      body: JSON.stringify(upstream.body),
+    });
+  };
+}
 
 backends.register('fake', (ctx) =>
   new FakeBackend({ sessionId: ctx.sessionId, header: ctx.header, store: ctx.store }),

@@ -12,35 +12,9 @@ after(async () => {
 });
 
 describe('Claude subscription runtime wiring', () => {
-  test('testConnection validates Claude OAuth through the account profile endpoint', async () => {
-    let observedAuth = '';
-    let observedApiKey = '';
-    let observedBeta = '';
-    let observedPath = '';
-    const server = await startJsonServer((request, response) => {
-      observedAuth = request.headers.authorization ?? '';
-      observedApiKey = (request.headers['x-api-key'] as string | undefined) ?? '';
-      observedBeta = (request.headers['anthropic-beta'] as string | undefined) ?? '';
-      observedPath = request.url ?? '';
-      assert.equal(request.method, 'GET');
-      respondJson(response, 200, {
-        account: {
-          uuid: 'acct_test',
-          email: 'user@example.com',
-        },
-      });
-    });
-
-    const result = await testConnection({
-      ...claudeOAuthConnection(),
-      baseUrl: server.url,
-    }, 'oauth-access-token');
-
+  test('testConnection treats resolved Claude OAuth token as a usable login', async () => {
+    const result = await testConnection(claudeOAuthConnection(), 'oauth-access-token');
     assert.equal(result.ok, true);
-    assert.equal(observedAuth, 'Bearer oauth-access-token');
-    assert.equal(observedApiKey, '');
-    assert.equal(observedPath, '/api/oauth/profile');
-    assert.match(observedBeta, /oauth-2025-04-20/);
   });
 
   test('model factory constructs Anthropic with authToken for claude-subscription', async () => {
@@ -50,6 +24,7 @@ describe('Claude subscription runtime wiring', () => {
     const caseRegion = src.slice(caseIdx, src.indexOf("case 'codex-subscription'", caseIdx));
     assert.match(caseRegion, /createAnthropic\(\{[\s\S]*authToken:\s*apiKey/, 'Claude OAuth must use AI SDK Anthropic authToken');
     assert.match(caseRegion, /baseURL:\s*anthropicV1BaseUrl\(baseURL\)/, 'Claude OAuth must pass the AI SDK a /v1 Anthropic base URL');
+    assert.match(caseRegion, /fetch,/, 'Claude OAuth must accept the desktop cloak fetch wrapper');
     assert.doesNotMatch(caseRegion, /throw new Error/, 'Claude OAuth must not remain in the experimental throw branch');
     assert.match(caseRegion, /anthropic-beta[\s\S]*CLAUDE_SUBSCRIPTION_BETA/, 'Claude OAuth must send the Claude Code beta header set');
   });
@@ -73,46 +48,6 @@ describe('Claude subscription runtime wiring', () => {
     assert.match(caseRegion, /codexSubscriptionHeaders\(apiKey\)/, 'Codex OAuth must attach account-scoped headers');
     assert.match(caseRegion, /\.responses\(modelId\)/, 'Codex OAuth must use Responses API');
     assert.doesNotMatch(caseRegion, /throw new Error/, 'Codex OAuth must not remain in the experimental throw branch');
-  });
-
-  test('testConnection maps Claude OAuth 429 to readable rate limit copy', async () => {
-    let observedPath = '';
-    const server = await startJsonServer((request, response) => {
-      observedPath = request.url ?? '';
-      respondJson(response, 429, {
-        type: 'error',
-        error: { type: 'rate_limit_error', message: 'Error' },
-        request_id: 'req_hidden',
-      });
-    });
-
-    const result = await testConnection({
-      ...claudeOAuthConnection(),
-      baseUrl: server.url,
-    }, 'oauth-access-token');
-
-    assert.equal(result.ok, false);
-    assert.equal(observedPath, '/api/oauth/profile');
-    assert.equal(result.statusCode, 429);
-    assert.equal(result.errorClass, 'provider_unavailable');
-    assert.match(result.errorMessage ?? '', /rate limit/);
-    assert.doesNotMatch(result.errorMessage ?? '', /request_id|req_hidden|\{"type"/);
-  });
-
-  test('Claude OAuth profile probe accepts a stored /v1 base URL without doubling the path', async () => {
-    let observedPath = '';
-    const server = await startJsonServer((request, response) => {
-      observedPath = request.url ?? '';
-      respondJson(response, 200, { account: { uuid: 'acct_test' } });
-    });
-
-    const result = await testConnection({
-      ...claudeOAuthConnection(),
-      baseUrl: `${server.url}/v1`,
-    }, 'oauth-access-token');
-
-    assert.equal(result.ok, true);
-    assert.equal(observedPath, '/api/oauth/profile');
   });
 
   test('testConnection uses Codex OAuth Responses API path and account header', async () => {

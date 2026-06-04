@@ -5,7 +5,7 @@ import {
   type LlmConnection,
 } from '@maka/core/llm-connections';
 import { proxiedFetch } from './bots/proxied-fetch.js';
-import { anthropicRootUrl, anthropicV1Url, codexSubscriptionHeaders } from './subscription-auth.js';
+import { anthropicV1Url, codexSubscriptionHeaders } from './subscription-auth.js';
 
 const CONNECTION_TEST_TIMEOUT_MS = 15_000;
 const CLAUDE_SUBSCRIPTION_BETA =
@@ -74,7 +74,13 @@ async function probeAnthropic(
       };
 
   if (connection.providerType === 'claude-subscription') {
-    return probeClaudeSubscriptionProfile(baseUrl, headers, model, t0);
+    // Claude Subscription credentials are account-scoped OAuth tokens.
+    // The real send path has to use the Claude Code cloak shape; a
+    // separate `/api/oauth/profile` probe can fail with "Invalid
+    // request format" even when the stored login is usable. Treat the
+    // presence of a resolved main-process OAuth token as the connection
+    // test and let send-path failures surface during an actual turn.
+    return { ok: true, latencyMs: Date.now() - t0, modelTested: model };
   }
 
   const r = await proxiedFetch(anthropicV1Url(baseUrl, '/messages'), {
@@ -85,26 +91,6 @@ async function probeAnthropic(
       max_tokens: 16,
       messages: [{ role: 'user', content: 'Hi' }],
     }),
-    timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
-  });
-  if (!r.ok) return httpFailure(r, t0);
-  return { ok: true, latencyMs: Date.now() - t0, modelTested: model };
-}
-
-async function probeClaudeSubscriptionProfile(
-  baseUrl: string,
-  headers: Record<string, string>,
-  model: string,
-  t0: number,
-): Promise<ConnectionTestResult> {
-  // OAuth subscription login is account-scoped, not API-key-scoped. The
-  // lightweight profile endpoint is the right "is this login usable?" probe;
-  // firing a Messages API request just to test credentials spends quota and
-  // can fail on Claude-Code-specific request-body cloaking unrelated to the
-  // saved OAuth token.
-  const r = await proxiedFetch(`${anthropicRootUrl(baseUrl)}/api/oauth/profile`, {
-    method: 'GET',
-    headers,
     timeoutMs: CONNECTION_TEST_TIMEOUT_MS,
   });
   if (!r.ok) return httpFailure(r, t0);

@@ -64,10 +64,11 @@ const CLAUDE_SCOPE = 'org:create_api_key user:profile user:inference';
 // login; the symptom was the OAuth endpoint rejecting our previous
 // `maka-desktop/0.1.0 (oauth-subscription)` UA. The cloak path is a
 // SEPARATE concern (system prefix + metadata on the SEND path) and
-// remains opt-in via `MAKA_CLAUDE_SUBSCRIPTION_CLOAK=1`. WAWQAQ
+// now defaults on for the visible OAuth model path. WAWQAQ
 // already accepted the ToS implication of the OAuth flow at all
 // (msg `fd421634`, baked into `isSubscriptionExperimentalEnabled`).
-const OAUTH_USER_AGENT = 'claude-cli/2.1.88 (external, cli)';
+export const CLAUDE_SUBSCRIPTION_PRODUCT_VERSION = '2.1.88';
+const OAUTH_USER_AGENT = `claude-cli/${CLAUDE_SUBSCRIPTION_PRODUCT_VERSION} (external, cli)`;
 
 // =============================================================
 // Token storage — encrypted via safeStorage, mode 0o600.
@@ -673,7 +674,7 @@ export class ClaudeSubscriptionService {
  * has a single anchor.
  */
 export function isCloakEnabled(): boolean {
-  return process.env.MAKA_CLAUDE_SUBSCRIPTION_CLOAK === '1';
+  return process.env.MAKA_CLAUDE_SUBSCRIPTION_CLOAK !== '0';
 }
 
 /**
@@ -693,8 +694,9 @@ export function isCloakEnabled(): boolean {
  * tighter compliance requirements).
  *
  * The cloak flag (`isCloakEnabled`) is a separate, finer-grained
- * switch inside the subscription send path that PR-OAUTH-SUBSCRIPTION-1
- * will respect; it remains opt-in.
+ * switch inside the subscription send path. It defaults ON because
+ * the visible Claude OAuth card promises a usable model after login;
+ * `MAKA_CLAUDE_SUBSCRIPTION_CLOAK=0` remains as an emergency opt-out.
  */
 export function isSubscriptionExperimentalEnabled(): boolean {
   return process.env.MAKA_CLAUDE_SUBSCRIPTION_EXPERIMENTAL !== '0';

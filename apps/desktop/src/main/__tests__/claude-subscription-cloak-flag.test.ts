@@ -32,6 +32,7 @@ const CLOAK_SOURCE = resolve(
   'oauth',
   'cloaked-request.ts',
 );
+const MAIN_SOURCE = resolve(REPO_ROOT, 'apps', 'desktop', 'src', 'main', 'main.ts');
 
 describe('cloaked request module isolation (xuan G-X4)', () => {
   it('cloak module exists at the canonical path', async () => {
@@ -65,16 +66,24 @@ describe('cloaked request module isolation (xuan G-X4)', () => {
     assert.match(src, /You are Claude Code/, 'cloak module must inject the Claude Code system prefix');
   });
 
-  it('subscription service references the env flag MAKA_CLAUDE_SUBSCRIPTION_CLOAK', async () => {
+  it('subscription service keeps the MAKA_CLAUDE_SUBSCRIPTION_CLOAK emergency opt-out', async () => {
     // The service should expose `isCloakEnabled()` (or otherwise
     // check the env var) so the send-path can decide whether to
     // dynamic-import the cloak module.
     const src = await readFile(SERVICE_SOURCE, 'utf8');
     assert.match(
       src,
-      /MAKA_CLAUDE_SUBSCRIPTION_CLOAK/,
+      /MAKA_CLAUDE_SUBSCRIPTION_CLOAK[\s\S]*!==\s*'0'/,
       'service must reference MAKA_CLAUDE_SUBSCRIPTION_CLOAK env flag (xuan G-X4 isolation)',
     );
+  });
+
+  it('main wires Claude OAuth sends through the dynamic cloak fetch wrapper by default', async () => {
+    const src = await readFile(MAIN_SOURCE, 'utf8');
+    assert.match(src, /isCloakEnabled\(\)[\s\S]*buildClaudeSubscriptionCloakedFetch\(ctx\.sessionId,\s*model\)/);
+    assert.match(src, /modelFactory:\s*\(input\)\s*=>\s*getAIModel\(\{\s*\.\.\.input,\s*fetch:\s*modelFetch\s*\}\)/);
+    assert.match(src, /import\('\.\/oauth\/cloaked-request\.js'\)/, 'cloak module must be dynamically imported from the send path');
+    assert.match(src, /buildCloakedRequest\(\{[\s\S]*deviceId[\s\S]*accountUuid[\s\S]*sessionId/, 'cloak wrapper must stamp Claude Code identity metadata');
   });
 
   it('token exchange uses the pasted OAuth state, not the verifier', async () => {
@@ -103,7 +112,7 @@ describe('cloaked request module isolation (xuan G-X4)', () => {
     const src = await readFile(SERVICE_SOURCE, 'utf8');
     assert.match(
       src,
-      /OAUTH_USER_AGENT\s*=\s*'claude-cli\/\d+\.\d+\.\d+\s+\(external,\s*cli\)'/,
+      /OAUTH_USER_AGENT\s*=\s*`claude-cli\/\$\{CLAUDE_SUBSCRIPTION_PRODUCT_VERSION\}\s+\(external,\s*cli\)`/,
       'OAuth UA constant must match claude-cli/X.Y.Z (external, cli) shape',
     );
     assert.doesNotMatch(
