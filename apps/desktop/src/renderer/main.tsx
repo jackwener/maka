@@ -995,6 +995,35 @@ function AppShell() {
     if (!activeIdRef.current && next[0] && next[0].lastMessageAt) setActiveId(next[0].id);
   }
 
+  function optimisticUserMessage(turnId: string, text: string): StoredMessage {
+    return {
+      type: 'user',
+      id: `optimistic-user-${turnId}`,
+      turnId,
+      ts: Date.now(),
+      text,
+    };
+  }
+
+  function showOptimisticUserMessage(
+    sessionId: string,
+    turnId: string,
+    text: string,
+    options: { replaceCurrentMessages?: boolean } = {},
+  ): void {
+    if (activeIdRef.current !== sessionId) return;
+    setMessages((current) => {
+      if (current.some((message) => message.type === 'user' && message.turnId === turnId)) return current;
+      const next = optimisticUserMessage(turnId, text);
+      return options.replaceCurrentMessages ? [next] : [...current, next];
+    });
+  }
+
+  function removeOptimisticUserMessage(sessionId: string, turnId: string): void {
+    if (activeIdRef.current !== sessionId) return;
+    setMessages((current) => current.filter((message) => message.id !== `optimistic-user-${turnId}`));
+  }
+
   async function applyVisualSmokeFixture() {
     const state = await window.maka.visualSmoke.getState();
     if (!state) return;
@@ -1486,6 +1515,8 @@ function AppShell() {
   }
 
   async function send(text: string): Promise<boolean> {
+    let optimisticSessionId: string | undefined;
+    let optimisticTurnId: string | undefined;
     try {
       const turnId = crypto.randomUUID();
       if (!activeId) {
@@ -1496,17 +1527,25 @@ function AppShell() {
         setNavSelection({ section: 'sessions', filter: 'chats' });
         setActiveId(session.id);
         upsertSessionSummary(session);
-        setMessages([]);
+        optimisticSessionId = session.id;
+        optimisticTurnId = turnId;
+        showOptimisticUserMessage(session.id, turnId, text, { replaceCurrentMessages: true });
         await window.maka.sessions.send(session.id, { type: 'send', turnId, text });
         await refreshMessagesUntilTurn(session.id, turnId);
         await refreshSessions();
         return true;
       }
       const sessionId = activeId;
+      optimisticSessionId = sessionId;
+      optimisticTurnId = turnId;
+      showOptimisticUserMessage(sessionId, turnId, text);
       await window.maka.sessions.send(sessionId, { type: 'send', turnId, text });
       await refreshMessagesUntilTurn(sessionId, turnId);
       return true;
     } catch (error) {
+      if (optimisticSessionId && optimisticTurnId) {
+        removeOptimisticUserMessage(optimisticSessionId, optimisticTurnId);
+      }
       if (isNoRealConnectionError(error)) {
         showModelSetupToast(cleanErrorMessage(error), noRealConnectionReasonFromError(error));
       } else {
@@ -1651,10 +1690,11 @@ function AppShell() {
     while (Date.now() <= deadline) {
       try {
         const next = await window.maka.sessions.readMessages(sessionId);
-        if (activeIdRef.current === sessionId) {
+        const hasSentUserTurn = next.some((message) => message.type === 'user' && message.turnId === turnId);
+        if (hasSentUserTurn && activeIdRef.current === sessionId) {
           setMessages(next);
         }
-        if (next.some((message) => message.type === 'user' && message.turnId === turnId)) return;
+        if (hasSentUserTurn) return;
       } catch {
         // Keep the current visible messages while the bounded retry loop
         // waits for the async send path to persist the first user message.
