@@ -226,6 +226,45 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
     );
   });
 
+  it('provider catalog cards expose explicit names and localized custom-provider copy', async () => {
+    const src = await readFile(PROVIDERS_PANEL_SOURCE, 'utf8');
+    const card = src.match(/function ProviderCatalogCard[\s\S]*?function providerDisabledStatus/)?.[0] ?? '';
+
+    assert.match(
+      src,
+      /function providerCatalogAriaLabel\(display: ReturnType<typeof providerDisplay>, count: number\): string/,
+      'provider catalog cards need a dedicated accessible name instead of concatenated badge/title/description text',
+    );
+    assert.match(
+      card,
+      /aria-label=\{providerCatalogAriaLabel\(display, props\.count\)\}/,
+      'ready provider catalog buttons must use the dedicated accessible name',
+    );
+    assert.match(
+      src,
+      /添加模型供应商：\$\{display\.name\}/,
+      'provider catalog accessible name should start from the user action and provider name',
+    );
+    assert.match(
+      src,
+      /parts\.push\(display\.description\.replace\(\/\[。\.!！？\?\]\+\$\/u, ''\)\)/,
+      'provider catalog accessible name should trim sentence punctuation before joining follow-up status parts',
+    );
+    assert.match(
+      src,
+      /if \(display\.badge\) parts\.push\(`标签：\$\{display\.badge\}`\)/,
+      'provider badges must be separated in the accessible name instead of glued to the provider name',
+    );
+    assert.match(src, /自定义 OpenAI 兼容接口/);
+    assert.match(src, /添加 OpenAI 兼容接口/);
+    assert.match(src, /OpenAI 兼容协议/);
+    assert.doesNotMatch(
+      src,
+      /OpenAI-compatible|endpoint/,
+      'model provider settings visible copy must not mix English technical fallback such as OpenAI-compatible endpoint',
+    );
+  });
+
   it('exposes exactly four equal OAuth cards: claude, codex, antigravity, cursor', async () => {
     // WAWQAQ msg 8bb7e186: Claude must not be a huge standalone
     // inline card while the other OAuth providers are compact

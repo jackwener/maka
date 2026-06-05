@@ -250,7 +250,7 @@ export function ProvidersPanel({ bridge }: { bridge: ConnectionsBridge }) {
         <div className="providerMarketHeader">
           <div>
             <h3>模型供应商</h3>
-            <p>选择 API Key 服务、本地模型、OAuth 账号登录，或自定义 OpenAI-compatible endpoint。</p>
+            <p>选择 API Key 服务、本地模型、OAuth 账号登录，或自定义 OpenAI 兼容接口。</p>
           </div>
           <button className="maka-button" type="button" onClick={() => startAdd('openai-compatible')}>
             自定义
@@ -297,11 +297,11 @@ export function ProvidersPanel({ bridge }: { bridge: ConnectionsBridge }) {
         <div className="customProviderEntry">
           <div>
             <h3>自定义供应商</h3>
-            <p>接入中转站、代理服务，或自部署的 OpenAI-compatible endpoint。</p>
+            <p>接入中转站、代理服务，或自部署的 OpenAI 兼容接口。</p>
           </div>
           {customProviders.map((type) => (
             <button key={type} type="button" onClick={() => startAdd(type)}>
-              添加 OpenAI-compatible endpoint
+              添加 OpenAI 兼容接口
             </button>
           ))}
         </div>
@@ -463,6 +463,7 @@ function ProviderCatalogCard(props: { type: ProviderType; count: number; onSelec
       data-provider={props.type}
       data-status="ready"
       type="button"
+      aria-label={providerCatalogAriaLabel(display, props.count)}
       title={title}
       onClick={props.onSelect}
     >
@@ -493,6 +494,14 @@ function providerDisabledTitle(type: ProviderType): string {
 function providerDisabledAriaLabel(type: ProviderType, name: string): string {
   if (isWiredOAuthProvider(type)) return `${name}（请从 OAuth 分类登录）`;
   return `${name}（账号登录暂未接入聊天发送）`;
+}
+
+function providerCatalogAriaLabel(display: ReturnType<typeof providerDisplay>, count: number): string {
+  const parts = [`添加模型供应商：${display.name}`];
+  if (display.badge) parts.push(`标签：${display.badge}`);
+  parts.push(display.description.replace(/[。.!！？?]+$/u, ''));
+  if (count > 0) parts.push(`已配置 ${count} 个`);
+  return parts.join('，');
 }
 
 function isWiredOAuthProvider(type: ProviderType): boolean {
@@ -558,7 +567,7 @@ const MODEL_OAUTH_CARDS: ReadonlyArray<ModelOAuthCard> = [
     id: 'cursor',
     name: 'Cursor',
     accent: '#000000',
-    description: '用 Cursor 订阅给本机 OpenAI-compatible 代理。',
+    description: '用 Cursor 订阅给本机 OpenAI 兼容代理。',
     status: 'available',
     statusLabel: '可用',
   },
@@ -1805,7 +1814,7 @@ export function providerDisplay(type: ProviderType): { name: string; description
     case 'moonshot':
       return { name: 'Moonshot', description: 'Moonshot Kimi API key 接入。', badge: 'API' };
     case 'zai-coding-plan':
-      return { name: 'Z.AI Coding Plan', description: 'GLM Coding Plan，OpenAI-compatible 协议。', badge: 'Coding' };
+      return { name: 'Z.AI Coding Plan', description: 'GLM Coding Plan，OpenAI 兼容协议。', badge: 'Coding' };
     case 'ollama':
       return { name: 'Ollama', description: '连接本机 localhost 的 Ollama 模型。', badge: 'Local' };
     case 'openai-compatible':
