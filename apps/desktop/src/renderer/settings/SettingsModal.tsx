@@ -1827,12 +1827,12 @@ function DataSettingsPage() {
       <SettingsRows>
         <SettingRow
           title="工作区路径"
-          detail="会话、设置、credentials、skills 都存在这个目录下。"
+          detail="会话、设置、凭据和 Skill 文件都存在这个目录下。"
           value={info?.workspacePath ?? (infoError ? '载入失败' : '正在加载…')}
         />
         <SettingRow
           title="存储引擎"
-          detail="JSONL 会话、settings.json、SQLite usage stats、safeStorage 加密的 API key。"
+          detail="JSONL 会话、settings.json、SQLite 使用统计、safeStorage 加密的 API key。"
           value="本地文件"
         />
       </SettingsRows>
@@ -1844,7 +1844,7 @@ function DataSettingsPage() {
           onClick={() => void openWorkspace()}
           disabled={!info}
         >
-          在 Finder / 资源管理器中打开
+          打开工作区文件夹
         </button>
         <button
           type="button"

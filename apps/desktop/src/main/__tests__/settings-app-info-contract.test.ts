@@ -55,4 +55,15 @@ describe('Settings app-info loading contract', () => {
       'Data page should render an alert with the workspace-path load failure',
     );
   });
+
+  it('keeps Data page copy Mac-polished and Chinese-first', () => {
+    const dataBlock = blockBetween('function DataSettingsPage', 'function PersonalizationSettingsPage');
+
+    assert.match(dataBlock, /打开工作区文件夹/);
+    assert.match(dataBlock, /会话、设置、凭据和 Skill 文件/);
+    assert.match(dataBlock, /SQLite 使用统计/);
+    assert.doesNotMatch(dataBlock, /资源管理器/);
+    assert.doesNotMatch(dataBlock, /credentials/);
+    assert.doesNotMatch(dataBlock, /usage stats/);
+  });
 });
