@@ -5958,10 +5958,20 @@ export function PermissionDialog(props: {
   const [now, setNow] = useState(() => Date.now());
   const dialogRef = useRef<HTMLElement>(null);
   const responsePendingRef = useRef(false);
+  const permissionMountedRef = useRef(true);
+  const activePermissionRequestIdRef = useRef(props.request.requestId);
   // No onEscape — a permission request requires an explicit allow/deny decision.
   useModalA11y(dialogRef);
 
   useEffect(() => {
+    permissionMountedRef.current = true;
+    return () => {
+      permissionMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    activePermissionRequestIdRef.current = props.request.requestId;
     setRememberForTurn(false);
     setResponsePending(false);
     responsePendingRef.current = false;
@@ -5976,6 +5986,7 @@ export function PermissionDialog(props: {
 
   async function submit(decision: PermissionResponse['decision']) {
     if (responsePendingRef.current) return;
+    const requestId = props.request.requestId;
     responsePendingRef.current = true;
     setResponsePending(true);
     try {
@@ -5987,13 +5998,15 @@ export function PermissionDialog(props: {
       // ERROR-SURFACE-0 does exactly this), we'd stay mounted with
       // `responsePending=true` and the buttons would lock up.
       await props.onRespond({
-        requestId: props.request.requestId,
+        requestId,
         decision,
         rememberForTurn: decision === 'allow' ? rememberForTurn : false,
       });
     } finally {
-      responsePendingRef.current = false;
-      setResponsePending(false);
+      if (activePermissionRequestIdRef.current === requestId) {
+        responsePendingRef.current = false;
+        if (permissionMountedRef.current) setResponsePending(false);
+      }
     }
   }
 
