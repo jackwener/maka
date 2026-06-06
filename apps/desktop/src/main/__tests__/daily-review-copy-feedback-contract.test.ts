@@ -12,9 +12,9 @@ describe('Daily Review copy feedback contract', () => {
 
     assert.match(ui, /onCopyDailyReviewMarkdown\?\(input:/);
     assert.match(ui, /onCopyMarkdown\?: \(input:/);
-    assert.match(ui, /props\.onCopyMarkdown\?\.\(\{\s*markdown:\s*md,\s*label:\s*dayLabel,\s*summary\s*\}\)/);
+    assert.match(ui, /props\.onCopyMarkdown\?\.\(\{\s*markdown:\s*md,\s*label:\s*dayLabel,\s*summary: visibleSummary\s*\}\)/);
     assert.match(ui, /const hasDailyReviewActions = Boolean\(props\.onCopyMarkdown \|\| props\.onAppendMarkdown \|\| props\.onSaveMarkdown\)/);
-    assert.match(ui, /summary && summary\.totals\.sessionCount \+ summary\.totals\.requestCount > 0 && hasDailyReviewActions/);
+    assert.match(ui, /visibleSummary && visibleSummary\.totals\.sessionCount \+ visibleSummary\.totals\.requestCount > 0 && hasDailyReviewActions/);
     assert.doesNotMatch(ui, /navigator\.clipboard\.writeText\(md\)\.catch\(\(\) => \{\}\)/);
     assert.match(main, /onCopyDailyReviewMarkdown=\{async \(\{ markdown, label, summary \}\) => \{/);
     assert.match(main, /await navigator\.clipboard\.writeText\(markdown\)/);
@@ -39,7 +39,7 @@ describe('Daily Review copy feedback contract', () => {
     const mainPaneBlock = main.match(/onAppendDailyReviewMarkdown=\{\(\{ markdown, label, summary \}\) => \{[\s\S]*?^\s*}\}/m)?.[0] ?? '';
 
     assert.match(ui, /onAppendDailyReviewMarkdown\?: \(input:/);
-    assert.match(panelBlock, /props\.onAppendMarkdown\?\.\(\{\s*markdown:\s*md,\s*label:\s*dayLabel,\s*summary\s*\}\)/);
+    assert.match(panelBlock, /props\.onAppendMarkdown\?\.\(\{\s*markdown:\s*md,\s*label:\s*dayLabel,\s*summary: visibleSummary\s*\}\)/);
     assert.match(panelBlock, /pendingDailyReviewAction === 'append' \? '追加中…' : '粘到输入框'/);
     assert.match(mainPaneBlock, /composerRef\.current\?\.appendText\(markdown\)/);
     assert.match(mainPaneBlock, /toastApi\.success\(\s*`已追加\$\{label\}回顾到输入框`/);

@@ -11058,6 +11058,28 @@ button:active {
   font-weight: 600;
 }
 
+.maka-daily-review-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid oklch(from var(--warning, var(--info)) l c h / 0.3);
+  border-radius: 8px;
+  background: oklch(from var(--warning, var(--info)) l c h / 0.08);
+  color: var(--warning-text, var(--foreground));
+  font-size: 12px;
+}
+
+.maka-daily-review-alert > span {
+  min-width: 0;
+}
+
+.maka-daily-review-alert > button {
+  flex: none;
+  font-size: 12px;
+}
+
 @media (max-width: 720px) {
   .maka-daily-review-range {
     grid-template-columns: 1fr;
