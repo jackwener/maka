@@ -117,6 +117,38 @@ describe('Plan reminder MVP contract', () => {
     assert.doesNotMatch(renderer, /onUpdatePlanReminder=\{\(id, patch\) => void updatePlanReminder\(id, patch\)\}/, 'renderer must not discard updatePlanReminder failure');
   });
 
+  it('gates plan row actions while async mutations are pending', async () => {
+    const [ui, renderer] = await Promise.all([
+      readRepo('packages/ui/src/components.tsx'),
+      readRepo('apps/desktop/src/renderer/main.tsx'),
+    ]);
+
+    const panelBlock = ui.match(/function PlanReminderPanel[\s\S]*?function comparePlanReminderForDisplay/)?.[0] ?? '';
+    assert.match(panelBlock, /const \[pendingActionKeys, setPendingActionKeys\] = useState<ReadonlySet<string>>\(\(\) => new Set\(\)\)/, 'row actions need explicit pending keys');
+    assert.match(panelBlock, /const pendingActionKeysRef = useRef<Set<string>>\(new Set\(\)\)/, 'the duplicate-click gate must update synchronously through a ref');
+    assert.match(panelBlock, /async function runPlanReminderAction\(/, 'row actions must funnel through one async gate');
+    assert.match(panelBlock, /if \(!action \|\| pendingActionKeysRef\.current\.has\(actionKey\)\) return;/, 'the gate must reject duplicate clicks for the same row action');
+    assert.match(panelBlock, /pendingWithAction\.add\(actionKey\)/, 'starting an action must publish the pending key');
+    assert.match(panelBlock, /await action\(\)/, 'the gate must wait for the renderer IPC action to finish');
+    assert.match(panelBlock, /pendingWithoutAction\.delete\(actionKey\)/, 'finishing an action must clear only its own pending key');
+    assert.match(panelBlock, /const reminderActionPending = Array\.from\(pendingActionKeys\)\.some\(\(key\) => key\.startsWith\(reminderActionPrefix\)\)/);
+    assert.match(panelBlock, /disabled=\{reminderActionPending \|\| !reminder\.enabled\}/, 'manual trigger must be disabled while the row is mutating');
+    assert.match(panelBlock, /disabled=\{reminderActionPending \|\| !reminder\.enabled \|\| reminder\.status !== 'scheduled'/, 'snooze must be disabled while the row is mutating');
+    assert.match(panelBlock, /pendingActionKeys\.has\(`\$\{reminder\.id\}:trigger`\) \? '触发中…' : '立即触发'/, 'trigger action must show local progress feedback');
+    assert.match(panelBlock, /pendingActionKeys\.has\(`\$\{reminder\.id\}:delete`\) \? '删除中…' : '删除'/, 'delete action must show local progress feedback');
+    assert.doesNotMatch(panelBlock, /onClick=\{\(\) => props\.onTriggerNow\?\.\(reminder\.id\)\}/, 'trigger must not remain fire-and-forget from the row');
+    assert.doesNotMatch(panelBlock, /onClick=\{\(\) => props\.onSnooze\?\.\(reminder\.id\)\}/, 'snooze must not remain fire-and-forget from the row');
+
+    assert.match(renderer, /onTogglePlanReminder=\{\(id, enabled\) => togglePlanReminder\(id, enabled\)\}/);
+    assert.match(renderer, /onTriggerPlanReminderNow=\{\(id\) => triggerPlanReminderNow\(id\)\}/);
+    assert.match(renderer, /onSnoozePlanReminder=\{\(id\) => snoozePlanReminder\(id\)\}/);
+    assert.match(renderer, /onClearPlanReminderRunHistory=\{\(id\) => clearPlanReminderRunHistory\(id\)\}/);
+    assert.match(renderer, /onDeletePlanReminder=\{\(id\) => deletePlanReminder\(id\)\}/);
+    assert.doesNotMatch(renderer, /onTriggerPlanReminderNow=\{\(id\) => void triggerPlanReminderNow\(id\)\}/, 'renderer must return the trigger promise to the UI pending gate');
+    assert.doesNotMatch(renderer, /onSnoozePlanReminder=\{\(id\) => void snoozePlanReminder\(id\)\}/, 'renderer must return the snooze promise to the UI pending gate');
+    assert.doesNotMatch(renderer, /onDeletePlanReminder=\{\(id\) => void deletePlanReminder\(id\)\}/, 'renderer must return the delete promise to the UI pending gate');
+  });
+
   it('scheduler records trigger outcomes and emits due events', async () => {
     const main = await readRepo('apps/desktop/src/main/main.ts');
     assert.match(main, /refreshPlanReminderTimers\(\)/, 'app startup must restore reminder timers');

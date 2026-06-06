@@ -2416,11 +2416,11 @@ function AppShell() {
             onOpenSearchModal={() => setSearchModalOpen(true)}
             onCreatePlanReminder={(input) => createPlanReminder(input)}
             onUpdatePlanReminder={(id, patch) => updatePlanReminder(id, patch)}
-            onTogglePlanReminder={(id, enabled) => void togglePlanReminder(id, enabled)}
-            onTriggerPlanReminderNow={(id) => void triggerPlanReminderNow(id)}
-            onSnoozePlanReminder={(id) => void snoozePlanReminder(id)}
-            onClearPlanReminderRunHistory={(id) => void clearPlanReminderRunHistory(id)}
-            onDeletePlanReminder={(id) => void deletePlanReminder(id)}
+            onTogglePlanReminder={(id, enabled) => togglePlanReminder(id, enabled)}
+            onTriggerPlanReminderNow={(id) => triggerPlanReminderNow(id)}
+            onSnoozePlanReminder={(id) => snoozePlanReminder(id)}
+            onClearPlanReminderRunHistory={(id) => clearPlanReminderRunHistory(id)}
+            onDeletePlanReminder={(id) => deletePlanReminder(id)}
             onCopyDailyReviewMarkdown={async ({ markdown, label, summary }) => {
               try {
                 await navigator.clipboard.writeText(markdown);
@@ -2503,11 +2503,11 @@ function AppShell() {
                 planReminders={planReminders}
                 onCreatePlanReminder={(input) => createPlanReminder(input)}
                 onUpdatePlanReminder={(id, patch) => updatePlanReminder(id, patch)}
-                onTogglePlanReminder={(id, enabled) => void togglePlanReminder(id, enabled)}
-                onTriggerPlanReminderNow={(id) => void triggerPlanReminderNow(id)}
-                onSnoozePlanReminder={(id) => void snoozePlanReminder(id)}
-                onClearPlanReminderRunHistory={(id) => void clearPlanReminderRunHistory(id)}
-                onDeletePlanReminder={(id) => void deletePlanReminder(id)}
+                onTogglePlanReminder={(id, enabled) => togglePlanReminder(id, enabled)}
+                onTriggerPlanReminderNow={(id) => triggerPlanReminderNow(id)}
+                onSnoozePlanReminder={(id) => snoozePlanReminder(id)}
+                onClearPlanReminderRunHistory={(id) => clearPlanReminderRunHistory(id)}
+                onDeletePlanReminder={(id) => deletePlanReminder(id)}
                 dailyReviewBridge={dailyReviewBridge}
                 onSelectSession={openSessionInChat}
                 onCopyDailyReviewMarkdown={async ({ markdown, label, summary }) => {

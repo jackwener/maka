@@ -352,11 +352,11 @@ export function SessionListPanel(props: {
   onOpenSearchModal?(): void;
   onCreatePlanReminder?(input: PlanReminderDraftInput): boolean | Promise<boolean> | void | Promise<void>;
   onUpdatePlanReminder?(id: string, patch: PlanReminderUpdatePatch): boolean | Promise<boolean> | void | Promise<void>;
-  onTogglePlanReminder?(id: string, enabled: boolean): void;
-  onTriggerPlanReminderNow?(id: string): void;
-  onSnoozePlanReminder?(id: string): void;
-  onClearPlanReminderRunHistory?(id: string): void;
-  onDeletePlanReminder?(id: string): void;
+  onTogglePlanReminder?(id: string, enabled: boolean): void | Promise<void>;
+  onTriggerPlanReminderNow?(id: string): void | Promise<void>;
+  onSnoozePlanReminder?(id: string): void | Promise<void>;
+  onClearPlanReminderRunHistory?(id: string): void | Promise<void>;
+  onDeletePlanReminder?(id: string): void | Promise<void>;
   onCopyDailyReviewMarkdown?(input: DailyReviewMarkdownActionInput): Promise<void> | void;
   onSaveDailyReviewMarkdown?(input: DailyReviewMarkdownActionInput): Promise<void> | void;
   /**
@@ -1173,11 +1173,11 @@ function PlanReminderPanel(props: {
   reminders: PlanReminder[];
   onCreate?(input: PlanReminderDraftInput): boolean | Promise<boolean> | void | Promise<void>;
   onUpdate?(id: string, patch: PlanReminderUpdatePatch): boolean | Promise<boolean> | void | Promise<void>;
-  onToggle?(id: string, enabled: boolean): void;
-  onTriggerNow?(id: string): void;
-  onSnooze?(id: string): void;
-  onClearRunHistory?(id: string): void;
-  onDelete?(id: string): void;
+  onToggle?(id: string, enabled: boolean): void | Promise<void>;
+  onTriggerNow?(id: string): void | Promise<void>;
+  onSnooze?(id: string): void | Promise<void>;
+  onClearRunHistory?(id: string): void | Promise<void>;
+  onDelete?(id: string): void | Promise<void>;
 }) {
   type PlanReminderListFilter = 'all' | PlanReminderStatus;
   const [title, setTitle] = useState('');
@@ -1190,6 +1190,8 @@ function PlanReminderPanel(props: {
   const [deliveryChatId, setDeliveryChatId] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitPending, setSubmitPending] = useState(false);
+  const [pendingActionKeys, setPendingActionKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const pendingActionKeysRef = useRef<Set<string>>(new Set());
   const [listFilter, setListFilter] = useState<PlanReminderListFilter>('all');
   const [listQuery, setListQuery] = useState('');
   const parsedRunAt = Date.parse(runAtLocal);
@@ -1298,6 +1300,25 @@ function PlanReminderPanel(props: {
       if (result !== false) resetForm();
     } finally {
       setSubmitPending(false);
+    }
+  }
+
+  async function runPlanReminderAction(
+    actionKey: string,
+    action: (() => void | Promise<void>) | undefined,
+  ) {
+    if (!action || pendingActionKeysRef.current.has(actionKey)) return;
+    const pendingWithAction = new Set(pendingActionKeysRef.current);
+    pendingWithAction.add(actionKey);
+    pendingActionKeysRef.current = pendingWithAction;
+    setPendingActionKeys(pendingWithAction);
+    try {
+      await action();
+    } finally {
+      const pendingWithoutAction = new Set(pendingActionKeysRef.current);
+      pendingWithoutAction.delete(actionKey);
+      pendingActionKeysRef.current = pendingWithoutAction;
+      setPendingActionKeys(pendingWithoutAction);
     }
   }
 
@@ -1491,6 +1512,8 @@ function PlanReminderPanel(props: {
               );
             }
             const reminder = row.reminder;
+            const reminderActionPrefix = `${reminder.id}:`;
+            const reminderActionPending = Array.from(pendingActionKeys).some((key) => key.startsWith(reminderActionPrefix));
             return (
             <article key={reminder.id} className="maka-plan-card" data-status={reminder.status}>
               <div className="maka-plan-card-main">
@@ -1535,7 +1558,7 @@ function PlanReminderPanel(props: {
                   type="button"
                   className="maka-plan-action"
                   onClick={() => editReminder(reminder)}
-                  disabled={reminder.status === 'completed'}
+                  disabled={reminderActionPending || reminder.status === 'completed'}
                   title="编辑提醒"
                 >
                   编辑
@@ -1544,6 +1567,7 @@ function PlanReminderPanel(props: {
                   type="button"
                   className="maka-plan-action"
                   onClick={() => duplicateReminder(reminder)}
+                  disabled={reminderActionPending}
                   title="复制为新提醒"
                 >
                   复制
@@ -1551,46 +1575,47 @@ function PlanReminderPanel(props: {
                 <button
                   type="button"
                   className="maka-plan-action"
-                  onClick={() => props.onTriggerNow?.(reminder.id)}
-                  disabled={!reminder.enabled}
+                  onClick={() => void runPlanReminderAction(`${reminder.id}:trigger`, () => props.onTriggerNow?.(reminder.id))}
+                  disabled={reminderActionPending || !reminder.enabled}
                   title="立即触发一次"
                 >
-                  立即触发
+                  {pendingActionKeys.has(`${reminder.id}:trigger`) ? '触发中…' : '立即触发'}
                 </button>
                 <button
                   type="button"
                   className="maka-plan-action"
-                  onClick={() => props.onSnooze?.(reminder.id)}
-                  disabled={!reminder.enabled || reminder.status !== 'scheduled' || typeof reminder.nextRunAt !== 'number'}
+                  onClick={() => void runPlanReminderAction(`${reminder.id}:snooze`, () => props.onSnooze?.(reminder.id))}
+                  disabled={reminderActionPending || !reminder.enabled || reminder.status !== 'scheduled' || typeof reminder.nextRunAt !== 'number'}
                   title="延后 10 分钟"
                 >
-                  延后 10 分钟
+                  {pendingActionKeys.has(`${reminder.id}:snooze`) ? '延后中…' : '延后 10 分钟'}
                 </button>
                 <button
                   type="button"
                   className="maka-plan-action"
-                  onClick={() => props.onClearRunHistory?.(reminder.id)}
-                  disabled={reminder.runs.length === 0 || reminder.status === 'completed'}
+                  onClick={() => void runPlanReminderAction(`${reminder.id}:clear-runs`, () => props.onClearRunHistory?.(reminder.id))}
+                  disabled={reminderActionPending || reminder.runs.length === 0 || reminder.status === 'completed'}
                   title="清空最近执行记录"
                 >
-                  清空记录
+                  {pendingActionKeys.has(`${reminder.id}:clear-runs`) ? '清空中…' : '清空记录'}
                 </button>
                 <button
                   type="button"
                   className="maka-plan-action"
-                  onClick={() => props.onToggle?.(reminder.id, !reminder.enabled)}
-                  disabled={reminder.status === 'completed'}
+                  onClick={() => void runPlanReminderAction(`${reminder.id}:toggle`, () => props.onToggle?.(reminder.id, !reminder.enabled))}
+                  disabled={reminderActionPending || reminder.status === 'completed'}
                   title={reminder.enabled ? '暂停提醒' : '启用提醒'}
                 >
-                  {reminder.enabled ? '暂停' : '启用'}
+                  {pendingActionKeys.has(`${reminder.id}:toggle`) ? (reminder.enabled ? '暂停中…' : '启用中…') : (reminder.enabled ? '暂停' : '启用')}
                 </button>
                 <button
                   type="button"
                   className="maka-plan-action maka-plan-action-danger"
-                  onClick={() => props.onDelete?.(reminder.id)}
+                  onClick={() => void runPlanReminderAction(`${reminder.id}:delete`, () => props.onDelete?.(reminder.id))}
+                  disabled={reminderActionPending}
                   title="删除提醒"
                 >
-                  删除
+                  {pendingActionKeys.has(`${reminder.id}:delete`) ? '删除中…' : '删除'}
                 </button>
               </div>
             </article>
@@ -2969,11 +2994,11 @@ export function ChatView(props: {
   planReminders?: PlanReminder[];
   onCreatePlanReminder?(input: PlanReminderDraftInput): boolean | Promise<boolean> | void | Promise<void>;
   onUpdatePlanReminder?(id: string, patch: PlanReminderUpdatePatch): boolean | Promise<boolean> | void | Promise<void>;
-  onTogglePlanReminder?: (id: string, enabled: boolean) => void;
-  onTriggerPlanReminderNow?: (id: string) => void;
-  onSnoozePlanReminder?: (id: string) => void;
-  onClearPlanReminderRunHistory?: (id: string) => void;
-  onDeletePlanReminder?: (id: string) => void;
+  onTogglePlanReminder?: (id: string, enabled: boolean) => void | Promise<void>;
+  onTriggerPlanReminderNow?: (id: string) => void | Promise<void>;
+  onSnoozePlanReminder?: (id: string) => void | Promise<void>;
+  onClearPlanReminderRunHistory?: (id: string) => void | Promise<void>;
+  onDeletePlanReminder?: (id: string) => void | Promise<void>;
   dailyReviewBridge?: DailyReviewBridge;
   onCopyDailyReviewMarkdown?: (input: DailyReviewMarkdownActionInput) => Promise<void> | void;
   onAppendDailyReviewMarkdown?: (input: DailyReviewMarkdownActionInput) => Promise<void> | void;
