@@ -718,7 +718,7 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
       'refreshAllCards must query each subscription snapshot',
     );
     // 3. useEffect on mount fires the initial refresh.
-    const refreshOnMount = src.match(/useEffect\(\(\) =>\s*\{\s*void refreshAllCards\(\);[\s\S]*?\},\s*\[\]\)/);
+    const refreshOnMount = src.match(/useEffect\(\(\) =>\s*\{[\s\S]*void refreshAllCards\(\);[\s\S]*?\},\s*\[\]\)/);
     assert.ok(refreshOnMount, 'ModelOAuthSection must refresh on mount');
     // 4. Modal onClose triggers a re-fetch through a helper that also
     // catches enabled-model refresh failures.
@@ -790,6 +790,39 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
     );
     const styles = await readFile(resolve(REPO_ROOT, 'apps', 'desktop', 'src', 'renderer', 'styles.css'), 'utf8');
     assert.match(styles, /\.providerOAuthError\s*\{/, 'OAuth refresh alert must have a stable style hook');
+  });
+
+  it('OAuth card refresh owns the mounted latest request before writing Settings UI feedback', async () => {
+    const src = await readFile(PROVIDERS_PANEL_SOURCE, 'utf8');
+    const sectionMatch = src.match(/function ModelOAuthSection[\s\S]*?function ClaudeSubscriptionModal/);
+    assert.ok(sectionMatch, 'ModelOAuthSection must exist');
+    const section = sectionMatch[0]!;
+
+    assert.match(
+      section,
+      /const modelOAuthMountedRef = useRef\(false\);[\s\S]*const modelOAuthRefreshTicketRef = useRef\(0\);/,
+      'ModelOAuthSection must keep mounted and latest-refresh ownership refs',
+    );
+    assert.match(
+      section,
+      /async function refreshAllCards\(\) \{[\s\S]*const ticket = modelOAuthRefreshTicketRef\.current \+ 1;[\s\S]*modelOAuthRefreshTicketRef\.current = ticket;[\s\S]*await Promise\.all[\s\S]*if \(!modelOAuthMountedRef\.current \|\| modelOAuthRefreshTicketRef\.current !== ticket\) return false;[\s\S]*setCardStates/,
+      'OAuth card refresh must drop stale or unmounted snapshot results before setState',
+    );
+    assert.match(
+      section,
+      /useEffect\(\(\) => \{[\s\S]*modelOAuthMountedRef\.current = true;[\s\S]*void refreshAllCards\(\);[\s\S]*return \(\) => \{[\s\S]*modelOAuthMountedRef\.current = false;[\s\S]*modelOAuthRefreshTicketRef\.current \+= 1;[\s\S]*\};[\s\S]*\}, \[\]\);/,
+      'OAuth card refresh must invalidate in-flight requests on unmount',
+    );
+    assert.match(
+      section,
+      /async function refreshAfterModalClose\(\) \{[\s\S]*const refreshed = await refreshAllCards\(\);[\s\S]*if \(!modelOAuthMountedRef\.current \|\| !refreshed\) return;[\s\S]*await props\.onConnectionsChanged\(\);/,
+      'modal close continuation must not refresh enabled providers after a stale OAuth card refresh',
+    );
+    assert.match(
+      section,
+      /catch \(error\) \{[\s\S]*if \(!modelOAuthMountedRef\.current\) return;[\s\S]*toast\.error\('刷新已启用模型失败', subscriptionActionErrorMessage\(error\)\)/,
+      'enabled-provider refresh failures after modal close must not toast after Settings unmount',
+    );
   });
 
   it('SettingsModal validates jumpToSettingsSection payloads against SETTINGS_NAV (PR-OAUTH-CARD-LIVE-STATE-0)', async () => {

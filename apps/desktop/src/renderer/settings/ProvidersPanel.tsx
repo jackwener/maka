@@ -589,6 +589,8 @@ const MODEL_OAUTH_CARDS: ReadonlyArray<ModelOAuthCard> = [
 function ModelOAuthSection(props: { onConnectionsChanged(): Promise<void> }) {
   const [openModal, setOpenModal] = useState<OAuthServiceId | null>(null);
   const toast = useToast();
+  const modelOAuthMountedRef = useRef(false);
+  const modelOAuthRefreshTicketRef = useRef(0);
   // PR-OAUTH-CARD-LIVE-STATE-0 (WAWQAQ msg d79fd115 follow-up):
   // before this lift the 3 button cards stayed at the static
   // "可用 / 预览" label even after the user finished the OAuth
@@ -606,6 +608,8 @@ function ModelOAuthSection(props: { onConnectionsChanged(): Promise<void> }) {
   const [cardRefreshError, setCardRefreshError] = useState<string | null>(null);
 
   async function refreshAllCards() {
+    const ticket = modelOAuthRefreshTicketRef.current + 1;
+    modelOAuthRefreshTicketRef.current = ticket;
     const results = await Promise.all(
       MODEL_OAUTH_CARDS.map(async (card) => {
         try {
@@ -616,6 +620,7 @@ function ModelOAuthSection(props: { onConnectionsChanged(): Promise<void> }) {
         }
       }),
     );
+    if (!modelOAuthMountedRef.current || modelOAuthRefreshTicketRef.current !== ticket) return false;
     const failures = results.filter((result) => 'error' in result);
     setCardStates((prev) => {
       const next = { ...prev };
@@ -638,16 +643,23 @@ function ModelOAuthSection(props: { onConnectionsChanged(): Promise<void> }) {
   }
 
   async function refreshAfterModalClose() {
-    await refreshAllCards();
+    const refreshed = await refreshAllCards();
+    if (!modelOAuthMountedRef.current || !refreshed) return;
     try {
       await props.onConnectionsChanged();
     } catch (error) {
+      if (!modelOAuthMountedRef.current) return;
       toast.error('刷新已启用模型失败', subscriptionActionErrorMessage(error));
     }
   }
 
   useEffect(() => {
+    modelOAuthMountedRef.current = true;
     void refreshAllCards();
+    return () => {
+      modelOAuthMountedRef.current = false;
+      modelOAuthRefreshTicketRef.current += 1;
+    };
   }, []);
 
   return (
