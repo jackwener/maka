@@ -6223,7 +6223,7 @@ function HealthCenterPage() {
               <h4>{copy.label}</h4>
               <small>{copy.description}</small>
             </header>
-            <ul className="settingsHealthSignalList">
+            <ul className="settingsHealthSignalList" aria-label={`${copy.label}健康信号列表`}>
               {signals.map((signal) => (
                 <HealthSignalRow key={signal.id} signal={signal} />
               ))}

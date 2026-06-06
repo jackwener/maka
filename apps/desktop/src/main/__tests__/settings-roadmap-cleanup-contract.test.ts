@@ -241,6 +241,7 @@ describe('Settings coming-soon cleanup contract', () => {
     assert.match(healthPage![0], /健康信号会阻塞发送/, 'Health Center blocker copy should use localized product wording');
     assert.match(healthPage![0], /健康信号会阻塞能力/, 'Health Center capability blocker copy should use localized product wording');
     assert.match(healthPage![0], /aria-label=\{`\$\{copy\.label\}健康信号`\}/, 'Health Center section aria labels should not mix English "signals" into Chinese UI');
+    assert.match(healthPage![0], /<ul className="settingsHealthSignalList" aria-label=\{`\$\{copy\.label\}健康信号列表`\}>/, 'Health Center signal lists must expose product-scoped accessible names');
     assert.match(healthSignalRow![0], /来源：\{HEALTH_SOURCE_LABEL\[signal\.source\]\}/, 'Health Center row should present localized source labels');
     assert.match(healthSignalRow![0], /读取：<RelativeTime/, 'Health Center row should present localized checked-time labels');
     assert.match(
