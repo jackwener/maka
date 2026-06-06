@@ -5901,7 +5901,7 @@ function CapabilityRow(props: { capability: CapabilitySnapshot }) {
       {capability.osPermissions.length > 0 && (
         <div className="settingsCapabilityOsPermissions">
           <span>所需系统权限</span>
-          <ul>
+          <ul aria-label={`${capability.label}所需系统权限列表`}>
             {capability.osPermissions.map((req) => (
               <li key={req.id}>
                 <span>{OS_PERMISSION_COPY[req.id]?.label ?? req.id}</span>
@@ -5916,7 +5916,7 @@ function CapabilityRow(props: { capability: CapabilitySnapshot }) {
       {capability.guidance.length > 0 && (
         <div className="settingsCapabilityGuidance">
           <span>处理建议</span>
-          <ul>
+          <ul aria-label={`${capability.label}处理建议列表`}>
             {capability.guidance.map((item, index) => (
               <li key={`${capability.id}-guidance-${index}`}>{item}</li>
             ))}
@@ -5952,7 +5952,7 @@ function CapabilityRow(props: { capability: CapabilitySnapshot }) {
         {capability.auditEvents.length === 0 ? (
           <small>暂无审计记录。</small>
         ) : (
-          <ul>
+          <ul aria-label={`${capability.label}审计记录列表`}>
             {capability.auditEvents.slice(-3).map((event, index) => (
               <li key={`${capability.id}-audit-${index}`}>{event}</li>
             ))}
