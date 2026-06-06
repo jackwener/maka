@@ -670,9 +670,9 @@ function AppShell() {
     turnId: string,
     actionId: TurnFooterActionMeta['id'],
   ): Promise<void> {
-    if (!activeId) return;
     if (actionId === 'copy') return; // handled in-component
-    const sessionId = activeId;
+    const sessionId = activeIdRef.current;
+    if (!sessionId) return;
     const key = pendingKeyOf(sessionId, turnId, actionId);
     // Ref-backed guard blocks same-frame double clicks before React has
     // committed the disabled state. State alone is too late here because
@@ -681,23 +681,25 @@ function AppShell() {
     try {
       if (actionId === 'retry') {
         await window.maka.sessions.retryTurn(sessionId, { sourceTurnId: turnId });
-        toastApi.info('已发起重试', '正在生成新的一轮回答');
+        if (activeIdRef.current === sessionId) toastApi.info('已发起重试', '正在生成新的一轮回答');
       } else if (actionId === 'regenerate') {
         await window.maka.sessions.regenerateTurn(sessionId, { sourceTurnId: turnId });
-        toastApi.info('已发起重新生成', '保留旧回答，生成新的并行回答');
+        if (activeIdRef.current === sessionId) toastApi.info('已发起重新生成', '保留旧回答，生成新的并行回答');
       } else if (actionId === 'branch') {
         const newSession = await window.maka.sessions.branchFromTurn(sessionId, { sourceTurnId: turnId });
-        openSessionInChat(newSession.id);
         upsertSessionSummary(newSession);
-        setMessages([]);
-        await refreshMessages(newSession.id);
+        if (activeIdRef.current === sessionId) {
+          openSessionInChat(newSession.id);
+          setMessages([]);
+          await refreshMessages(newSession.id);
+          toastApi.success('已创建分支', `新会话 ${newSession.name}`);
+        }
         await refreshSessions();
         clearPendingTurnAction(key);
-        toastApi.success('已创建分支', `新会话 ${newSession.name}`);
       }
     } catch (error) {
       clearPendingTurnAction(key);
-      toastApi.error('操作失败', cleanErrorMessage(error));
+      if (activeIdRef.current === sessionId) toastApi.error('操作失败', cleanErrorMessage(error));
     }
   }
 
