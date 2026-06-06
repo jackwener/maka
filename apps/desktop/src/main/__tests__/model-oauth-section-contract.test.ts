@@ -39,7 +39,7 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
     assert.match(tabs[0], /id:\s*'oauth'[\s\S]*label:\s*'OAuth'/, 'OAuth must be a catalog tab');
     assert.match(
       src,
-      /catalogTab === 'oauth'\s*\?\s*\(\s*<ModelOAuthSection\s+onConnectionsChanged=\{reload\}\s*\/>/,
+      /catalogTab === 'oauth'\s*\?\s*\(\s*<ModelOAuthSection\s+onConnectionsChanged=\{async \(\) => \{ await reload\(\); \}\}\s*\/>/,
       'OAuth login UI must render from the tab content branch and refresh enabled models',
     );
     const marketStart = src.indexOf('<section className="providerMarket">');
@@ -67,22 +67,43 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
 
   it('ProvidersPanel surfaces model connection reload failures instead of sticking on loading', async () => {
     const src = await readFile(PROVIDERS_PANEL_SOURCE, 'utf8');
-    const reloadMatch = src.match(/async function reload\(\) \{[\s\S]*?\n  \}/);
+    const panel = src.match(/export function ProvidersPanel[\s\S]*?const selected = useMemo/)?.[0] ?? '';
+    const reloadMatch = src.match(/async function reload\(\): Promise<boolean> \{[\s\S]*?\n  \}/);
     assert.ok(reloadMatch, 'ProvidersPanel reload() must exist');
     assert.match(
-      reloadMatch[0],
-      /try \{[\s\S]*Promise\.all\(\[[\s\S]*bridge\.list\(\),[\s\S]*bridge\.getDefault\(\),[\s\S]*\]\)[\s\S]*setLoadError\(null\)[\s\S]*setLoading\(false\)/,
-      'successful reload must clear load error and exit loading state',
+      panel,
+      /const providersPanelMountedRef = useRef\(false\);[\s\S]*const providersReloadTicketRef = useRef\(0\);/,
+      'ProvidersPanel reloads must track mounted state and latest request ownership',
     );
     assert.match(
       reloadMatch[0],
-      /catch \(error\) \{[\s\S]*providerPanelActionErrorMessage\(error\)[\s\S]*setLoadError\(message\)[\s\S]*setLoading\(false\)[\s\S]*toast\.error\('载入模型连接失败', message\)/,
-      'failed reload must not leave the provider panel in a skeleton-only state',
+      /const ticket = \+\+providersReloadTicketRef\.current;[\s\S]*Promise\.all\(\[[\s\S]*bridge\.list\(\),[\s\S]*bridge\.getDefault\(\),[\s\S]*\]\)[\s\S]*if \(!providersPanelMountedRef\.current \|\| providersReloadTicketRef\.current !== ticket\) return false;[\s\S]*setLoadError\(null\)[\s\S]*setLoading\(false\)[\s\S]*return true;/,
+      'successful reload must clear load error only for the latest mounted request',
+    );
+    assert.match(
+      reloadMatch[0],
+      /catch \(error\) \{[\s\S]*if \(!providersPanelMountedRef\.current \|\| providersReloadTicketRef\.current !== ticket\) return false;[\s\S]*providerPanelActionErrorMessage\(error\)[\s\S]*setLoadError\(message\)[\s\S]*setLoading\(false\)[\s\S]*toast\.error\('载入模型连接失败', message\)[\s\S]*return false;/,
+      'failed reload must not toast or write stale failure state after unmount or a newer reload',
+    );
+    assert.match(
+      panel,
+      /return \(\) => \{[\s\S]*providersPanelMountedRef\.current = false;[\s\S]*providersReloadTicketRef\.current \+= 1;[\s\S]*unsubscribe\?\.\(\);/,
+      'ProvidersPanel cleanup must invalidate in-flight reloads and unsubscribe from connection events',
     );
     assert.match(
       src,
       /loadError \? \([\s\S]*模型连接载入失败[\s\S]*点击重试/,
       'enabled-model strip must show a retryable load-failure state',
+    );
+    assert.match(
+      src,
+      /onCreated=\{async \(slug\) => \{[\s\S]*const reloaded = await reload\(\);[\s\S]*if \(!reloaded \|\| !providersPanelMountedRef\.current\) return;[\s\S]*setSelectedSlug\(slug\);[\s\S]*setAddingType\(null\);/,
+      'AddProviderForm completion must not select/close a stale sheet after ProvidersPanel unmounts',
+    );
+    assert.match(
+      src,
+      /onDeleted=\{async \(\) => \{[\s\S]*if \(!providersPanelMountedRef\.current\) return;[\s\S]*setSelectedSlug\(null\);[\s\S]*await reload\(\);/,
+      'Connection delete completion must not write ProvidersPanel state after unmount',
     );
   });
 

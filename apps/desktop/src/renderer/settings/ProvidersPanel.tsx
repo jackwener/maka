@@ -88,6 +88,8 @@ export function ProvidersPanel({ bridge }: { bridge: ConnectionsBridge }) {
   const [catalogTab, setCatalogTab] = useState<CatalogTab>('domestic');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const providersPanelMountedRef = useRef(false);
+  const providersReloadTicketRef = useRef(0);
   const toast = useToast();
 
   function onCatalogTabsKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
@@ -104,12 +106,14 @@ export function ProvidersPanel({ bridge }: { bridge: ConnectionsBridge }) {
     }, 0);
   }
 
-  async function reload() {
+  async function reload(): Promise<boolean> {
+    const ticket = ++providersReloadTicketRef.current;
     try {
       const [list, defaultConnection] = await Promise.all([
         bridge.list(),
         bridge.getDefault(),
       ]);
+      if (!providersPanelMountedRef.current || providersReloadTicketRef.current !== ticket) return false;
       setConnections(list);
       setDefaultSlug(defaultConnection);
       setLoadError(null);
@@ -119,20 +123,26 @@ export function ProvidersPanel({ bridge }: { bridge: ConnectionsBridge }) {
           ? current
           : null,
       );
+      return true;
     } catch (error) {
+      if (!providersPanelMountedRef.current || providersReloadTicketRef.current !== ticket) return false;
       const message = providerPanelActionErrorMessage(error);
       setLoadError(message);
       setLoading(false);
       toast.error('载入模型连接失败', message);
+      return false;
     }
   }
 
   useEffect(() => {
+    providersPanelMountedRef.current = true;
     void reload();
     const unsubscribe = bridge.subscribeEvents?.(() => {
       void reload();
     });
     return () => {
+      providersPanelMountedRef.current = false;
+      providersReloadTicketRef.current += 1;
       unsubscribe?.();
     };
   }, [bridge]);
@@ -281,7 +291,7 @@ export function ProvidersPanel({ bridge }: { bridge: ConnectionsBridge }) {
         </div>
 
         {catalogTab === 'oauth' ? (
-          <ModelOAuthSection onConnectionsChanged={reload} />
+          <ModelOAuthSection onConnectionsChanged={async () => { await reload(); }} />
         ) : (
           <div className="catalogGrid providerMarketGrid">
             {catalogProviders.map((type) => (
@@ -323,7 +333,8 @@ export function ProvidersPanel({ bridge }: { bridge: ConnectionsBridge }) {
                 existingSlugs={connections.map((connection) => connection.slug)}
                 onCancel={() => setAddingType(null)}
                 onCreated={async (slug) => {
-                  await reload();
+                  const reloaded = await reload();
+                  if (!reloaded || !providersPanelMountedRef.current) return;
                   setSelectedSlug(slug);
                   setAddingType(null);
                 }}
@@ -334,8 +345,9 @@ export function ProvidersPanel({ bridge }: { bridge: ConnectionsBridge }) {
                 bridge={bridge}
                 connection={selected}
                 isDefault={selected.slug === defaultSlug}
-                onChanged={reload}
+                onChanged={async () => { await reload(); }}
                 onDeleted={async () => {
+                  if (!providersPanelMountedRef.current) return;
                   setSelectedSlug(null);
                   await reload();
                 }}
