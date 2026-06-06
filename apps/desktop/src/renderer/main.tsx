@@ -2398,9 +2398,9 @@ function AppShell() {
                 : undefined
             }
             skills={skills}
-            onRefreshSkills={() => void refreshSkills()}
-            onCreateSkillTemplate={() => void createSkillTemplate()}
-            onOpenSkill={(skillId) => void openSkill(skillId)}
+            onRefreshSkills={() => refreshSkills()}
+            onCreateSkillTemplate={() => createSkillTemplate()}
+            onOpenSkill={(skillId) => openSkill(skillId)}
             planReminders={planReminders}
             streamingSessionIds={streamingSessionIds}
             staleSessionIds={staleSessionIds}
@@ -2497,9 +2497,9 @@ function AppShell() {
                 turnLineageBadgesByTurn={turnLineageBadgesByTurn}
                 onLineageBadgeClick={handleLineageBadgeClick}
                 skills={skills}
-                onRefreshSkills={() => void refreshSkills()}
-                onCreateSkillTemplate={() => void createSkillTemplate()}
-                onOpenSkill={(skillId) => void openSkill(skillId)}
+                onRefreshSkills={() => refreshSkills()}
+                onCreateSkillTemplate={() => createSkillTemplate()}
+                onOpenSkill={(skillId) => openSkill(skillId)}
                 planReminders={planReminders}
                 onCreatePlanReminder={(input) => createPlanReminder(input)}
                 onUpdatePlanReminder={(id, patch) => updatePlanReminder(id, patch)}

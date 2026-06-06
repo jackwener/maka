@@ -301,8 +301,8 @@ export function SessionListPanel(props: {
     onOpen(): void;
   };
   skills?: SkillEntry[];
-  onRefreshSkills?(): void;
-  onCreateSkillTemplate?(): void;
+  onRefreshSkills?(): void | Promise<void>;
+  onCreateSkillTemplate?(): void | Promise<void>;
   planReminders?: PlanReminder[];
   /**
    * Per-session-id boolean flag: true when the session has a live streaming
@@ -692,8 +692,8 @@ export interface EmptyStateProps {
   Icon: typeof Search;
   title: string;
   body: ReactNode;
-  cta?: { label: string; onClick: () => void };
-  secondaryCta?: { label: string; onClick: () => void };
+  cta?: { label: string; onClick: () => void; disabled?: boolean };
+  secondaryCta?: { label: string; onClick: () => void; disabled?: boolean };
   /** Optional extra class on the container (e.g. `maka-plan-empty`). */
   extraClassName?: string;
   /** Optional `data-empty-view` passthrough for visual-smoke selectors. */
@@ -716,6 +716,7 @@ export function EmptyState(props: EmptyStateProps) {
               className="maka-button maka-empty-state-cta"
               type="button"
               onClick={props.cta.onClick}
+              disabled={props.cta.disabled}
             >
               {props.cta.label}
             </button>
@@ -726,6 +727,7 @@ export function EmptyState(props: EmptyStateProps) {
               data-variant="ghost"
               type="button"
               onClick={props.secondaryCta.onClick}
+              disabled={props.secondaryCta.disabled}
             >
               {props.secondaryCta.label}
             </button>
@@ -748,9 +750,13 @@ function SidebarModuleHint(props: { Icon: EmptyStateProps['Icon']; title: string
 
 function SkillLibraryPanel(props: {
   skills?: SkillEntry[];
-  onRefreshSkills?(): void;
-  onCreateSkillTemplate?(): void;
-  onOpenSkill?(skillId: string): void;
+  onRefreshSkills?(): void | Promise<void>;
+  onCreateSkillTemplate?(): void | Promise<void>;
+  onOpenSkill?(skillId: string): void | Promise<void>;
+  actionBusy?: boolean;
+  refreshPending?: boolean;
+  createPending?: boolean;
+  openingSkillId?: string | null;
 }) {
   if (!props.skills || props.skills.length === 0) {
     return (
@@ -764,18 +770,27 @@ function SkillLibraryPanel(props: {
             工作区路径在 设置 · 关于 · 工作区。
           </>
         }
-        cta={props.onCreateSkillTemplate ? { label: '创建示例技能', onClick: props.onCreateSkillTemplate } : undefined}
-        secondaryCta={props.onRefreshSkills ? { label: '刷新技能', onClick: props.onRefreshSkills } : undefined}
+        cta={props.onCreateSkillTemplate ? {
+          label: props.createPending ? '创建中…' : '创建示例技能',
+          onClick: props.onCreateSkillTemplate,
+          disabled: props.actionBusy,
+        } : undefined}
+        secondaryCta={props.onRefreshSkills ? {
+          label: props.refreshPending ? '刷新中…' : '刷新技能',
+          onClick: props.onRefreshSkills,
+          disabled: props.actionBusy,
+        } : undefined}
       />
     );
   }
 
   return (
-    <ul className="maka-skill-library-list" aria-label="技能列表">
+    <ul className="maka-skill-library-list" aria-label="技能列表" aria-busy={props.actionBusy ? 'true' : undefined}>
       {props.skills.map((skill) => {
         const tools = skill.declaredTools ?? [];
         const toolsLabel = tools.length > 0 ? tools.join(', ') : '';
         const description = formatSkillLibraryDescription(skill);
+        const opening = props.openingSkillId === skill.id;
         const hoverText = tools.length > 0
           ? `打开技能文件：${skill.id}\n\n声明工具：${toolsLabel}\n权限仍按当前会话策略判断；这里不是授权。`
           : `打开技能文件：${skill.id}`;
@@ -785,6 +800,7 @@ function SkillLibraryPanel(props: {
               type="button"
               className="maka-skill-library-row"
               onClick={() => props.onOpenSkill?.(skill.id)}
+              disabled={props.actionBusy}
               title={hoverText}
             >
               <span className="maka-skill-library-name">{skill.name}</span>
@@ -793,6 +809,7 @@ function SkillLibraryPanel(props: {
               )}
               <span className="maka-skill-library-meta">
                 <span>{skill.id}</span>
+                {opening && <span>打开中…</span>}
                 {tools.length > 0 && (
                   <span className="maka-skill-tools" aria-label="声明的工具">
                     <span className="maka-skill-tools-label">工具</span>
@@ -2988,9 +3005,9 @@ export function ChatView(props: {
   turnLineageBadgesByTurn?: Record<string, TurnLineageBadge[]>;
   onLineageBadgeClick?: (targetTurnId: string) => void;
   skills?: SkillEntry[];
-  onRefreshSkills?(): void;
-  onCreateSkillTemplate?(): void;
-  onOpenSkill?(skillId: string): void;
+  onRefreshSkills?(): void | Promise<void>;
+  onCreateSkillTemplate?(): void | Promise<void>;
+  onOpenSkill?(skillId: string): void | Promise<void>;
   planReminders?: PlanReminder[];
   onCreatePlanReminder?(input: PlanReminderDraftInput): boolean | Promise<boolean> | void | Promise<void>;
   onUpdatePlanReminder?(id: string, patch: PlanReminderUpdatePatch): boolean | Promise<boolean> | void | Promise<void>;
@@ -3045,6 +3062,8 @@ export function ChatView(props: {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [pinnedToBottom, setPinnedToBottom] = useState(true);
   const [highlightedTurnId, setHighlightedTurnId] = useState<string | null>(null);
+  const [pendingSkillAction, setPendingSkillAction] = useState<string | null>(null);
+  const pendingSkillActionRef = useRef<string | null>(null);
 
   // Reset to "pinned at bottom" whenever the active session changes. Without
   // this, switching from a long history to a fresh chat would keep the
@@ -3101,7 +3120,25 @@ export function ChatView(props: {
     setPinnedToBottom(true);
   }
 
+  async function runSkillAction(
+    actionKey: string,
+    action: (() => void | Promise<void>) | undefined,
+  ) {
+    if (!action || pendingSkillActionRef.current !== null) return;
+    pendingSkillActionRef.current = actionKey;
+    setPendingSkillAction(actionKey);
+    try {
+      await action();
+    } finally {
+      if (pendingSkillActionRef.current === actionKey) {
+        pendingSkillActionRef.current = null;
+        setPendingSkillAction(null);
+      }
+    }
+  }
+
   if (props.mode === 'skills') {
+    const skillActionBusy = pendingSkillAction !== null;
     return (
       <main className="maka-main detailPane maka-module-main" aria-label="技能">
         <header className="maka-module-main-header">
@@ -3109,15 +3146,24 @@ export function ChatView(props: {
             <h2>技能</h2>
             <p>管理工作区里的 Skill 指令文件。</p>
           </div>
-          <button className="maka-button maka-button-ghost" type="button" onClick={props.onRefreshSkills} disabled={!props.onRefreshSkills}>
-            刷新
+          <button
+            className="maka-button maka-button-ghost"
+            type="button"
+            onClick={() => void runSkillAction('refresh', props.onRefreshSkills)}
+            disabled={!props.onRefreshSkills || skillActionBusy}
+          >
+            {pendingSkillAction === 'refresh' ? '刷新中…' : '刷新'}
           </button>
         </header>
         <SkillLibraryPanel
           skills={props.skills}
-          onRefreshSkills={props.onRefreshSkills}
-          onCreateSkillTemplate={props.onCreateSkillTemplate}
-          onOpenSkill={props.onOpenSkill}
+          onRefreshSkills={props.onRefreshSkills ? () => runSkillAction('refresh', props.onRefreshSkills) : undefined}
+          onCreateSkillTemplate={props.onCreateSkillTemplate ? () => runSkillAction('create', props.onCreateSkillTemplate) : undefined}
+          onOpenSkill={props.onOpenSkill ? (skillId) => runSkillAction(`open:${skillId}`, () => props.onOpenSkill?.(skillId)) : undefined}
+          actionBusy={skillActionBusy}
+          refreshPending={pendingSkillAction === 'refresh'}
+          createPending={pendingSkillAction === 'create'}
+          openingSkillId={pendingSkillAction?.startsWith('open:') ? pendingSkillAction.slice('open:'.length) : null}
         />
       </main>
     );

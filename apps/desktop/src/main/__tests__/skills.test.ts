@@ -297,20 +297,61 @@ name: Writer
     const preload = await readFile(join(repoRoot, 'apps/desktop/src/preload/preload.ts'), 'utf8');
     const main = await readFile(join(repoRoot, 'apps/desktop/src/main/main.ts'), 'utf8');
 
-    assert.match(ui, /onRefreshSkills\?\(\): void/);
-    assert.match(ui, /onCreateSkillTemplate\?\(\): void/);
-    assert.match(ui, /label:\s*'创建示例技能'/);
-    assert.match(ui, /label:\s*'刷新技能'/);
+    assert.match(ui, /onRefreshSkills\?\(\): void \| Promise<void>/);
+    assert.match(ui, /onCreateSkillTemplate\?\(\): void \| Promise<void>/);
+    assert.match(ui, /'创建示例技能'/);
+    assert.match(ui, /'刷新技能'/);
+    assert.match(ui, /'创建中…'/);
+    assert.match(ui, /'刷新中…'/);
     assert.doesNotMatch(ui, /重启 Maka 后会出现在这里/);
     assert.match(renderer, /async function refreshSkills\(\)/);
     assert.match(renderer, /async function createSkillTemplate\(\)/);
-    assert.match(renderer, /onRefreshSkills=\{\(\) => void refreshSkills\(\)\}/);
-    assert.match(renderer, /onCreateSkillTemplate=\{\(\) => void createSkillTemplate\(\)\}/);
-    assert.match(renderer, /onOpenSkill=\{\(skillId\) => void openSkill\(skillId\)\}/);
+    assert.match(renderer, /onRefreshSkills=\{\(\) => refreshSkills\(\)\}/);
+    assert.match(renderer, /onCreateSkillTemplate=\{\(\) => createSkillTemplate\(\)\}/);
+    assert.match(renderer, /onOpenSkill=\{\(skillId\) => openSkill\(skillId\)\}/);
     assert.match(preload, /createStarter\(\)/);
     assert.match(preload, /open\(id: string, target: 'file' \| 'directory' = 'file'\)/);
     assert.match(main, /ipcMain\.handle\('skills:createStarter'/);
     assert.match(main, /ipcMain\.handle\('skills:open'/);
+  });
+
+  it('gates Skills module actions while async work is pending', async () => {
+    const repoRoot = process.cwd().endsWith('apps/desktop')
+      ? join(process.cwd(), '..', '..')
+      : process.cwd();
+    const ui = await readFile(join(repoRoot, 'packages/ui/src/components.tsx'), 'utf8');
+    const renderer = await readFile(join(repoRoot, 'apps/desktop/src/renderer/main.tsx'), 'utf8');
+    const chatView = ui.match(/export function ChatView\([\s\S]*?if \(props\.mode === 'automations'\)/)?.[0] ?? '';
+    const skillPanel = ui.match(/function SkillLibraryPanel[\s\S]*?function formatSkillLibraryDescription/)?.[0] ?? '';
+    const emptyState = ui.match(/export interface EmptyStateProps[\s\S]*?function SidebarModuleHint/)?.[0] ?? '';
+
+    assert.match(chatView, /const \[pendingSkillAction, setPendingSkillAction\] = useState<string \| null>\(null\)/);
+    assert.match(chatView, /const pendingSkillActionRef = useRef<string \| null>\(null\)/);
+    assert.match(chatView, /async function runSkillAction\(/);
+    assert.match(chatView, /if \(!action \|\| pendingSkillActionRef\.current !== null\) return;/, 'Skills actions must reject duplicate clicks immediately');
+    assert.match(chatView, /pendingSkillActionRef\.current = actionKey[\s\S]*setPendingSkillAction\(actionKey\)[\s\S]*await action\(\)/, 'Skills actions must show pending state while waiting for renderer IPC');
+    assert.match(chatView, /pendingSkillActionRef\.current = null[\s\S]*setPendingSkillAction\(null\)/, 'Skills actions must clear pending state after completion');
+    assert.match(chatView, /disabled=\{!props\.onRefreshSkills \|\| skillActionBusy\}/, 'top refresh button must be disabled while any Skills action is pending');
+    assert.match(chatView, /pendingSkillAction === 'refresh' \? '刷新中…' : '刷新'/);
+    assert.match(chatView, /onCreateSkillTemplate=\{props\.onCreateSkillTemplate \? \(\) => runSkillAction\('create', props\.onCreateSkillTemplate\) : undefined\}/);
+    assert.match(chatView, /onOpenSkill=\{props\.onOpenSkill \? \(skillId\) => runSkillAction\(`open:\$\{skillId\}`, \(\) => props\.onOpenSkill\?\.\(skillId\)\) : undefined\}/);
+
+    assert.match(skillPanel, /actionBusy\?: boolean/);
+    assert.match(skillPanel, /createPending\?: boolean/);
+    assert.match(skillPanel, /openingSkillId\?: string \| null/);
+    assert.match(skillPanel, /label: props\.createPending \? '创建中…' : '创建示例技能'/);
+    assert.match(skillPanel, /label: props\.refreshPending \? '刷新中…' : '刷新技能'/);
+    assert.match(skillPanel, /disabled: props\.actionBusy/);
+    assert.match(skillPanel, /aria-busy=\{props\.actionBusy \? 'true' : undefined\}/);
+    assert.match(skillPanel, /disabled=\{props\.actionBusy\}/, 'Skill row open buttons must be disabled while a Skills action is pending');
+    assert.match(skillPanel, /opening && <span>打开中…<\/span>/);
+    assert.match(emptyState, /disabled\?: boolean/);
+    assert.match(emptyState, /disabled=\{props\.cta\.disabled\}/);
+    assert.match(emptyState, /disabled=\{props\.secondaryCta\.disabled\}/);
+
+    assert.doesNotMatch(renderer, /onRefreshSkills=\{\(\) => void refreshSkills\(\)\}/, 'renderer must return the refresh promise to the UI pending gate');
+    assert.doesNotMatch(renderer, /onCreateSkillTemplate=\{\(\) => void createSkillTemplate\(\)\}/, 'renderer must return the create promise to the UI pending gate');
+    assert.doesNotMatch(renderer, /onOpenSkill=\{\(skillId\) => void openSkill\(skillId\)\}/, 'renderer must return the open promise to the UI pending gate');
   });
 
   it('surfaces thrown Skills IPC failures as toasts', async () => {
