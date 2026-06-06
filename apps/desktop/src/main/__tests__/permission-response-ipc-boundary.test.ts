@@ -197,8 +197,15 @@ describe('permission response IPC boundary', () => {
     const components = await readFile(componentsPath, 'utf8');
     const submit = components.match(/async function submit\(decision:[\s\S]*?\n  \}/);
     assert.ok(submit, 'PermissionDialog submit() must be async');
+    assert.match(components, /const permissionMountedRef = useRef\(true\);/);
+    assert.match(components, /const activePermissionRequestIdRef = useRef\(props\.request\.requestId\);/);
+    assert.match(components, /activePermissionRequestIdRef\.current = props\.request\.requestId;/);
+    assert.match(submit[0], /const requestId = props\.request\.requestId;/);
     assert.match(submit[0], /await props\.onRespond\(/);
-    assert.match(submit[0], /\}\s*finally\s*\{[\s\S]*?responsePendingRef\.current\s*=\s*false[\s\S]*?setResponsePending\(false\)/);
+    assert.match(
+      submit[0],
+      /\}\s*finally\s*\{[\s\S]*?if \(activePermissionRequestIdRef\.current === requestId\) \{[\s\S]*?responsePendingRef\.current\s*=\s*false[\s\S]*?if \(permissionMountedRef\.current\) setResponsePending\(false\)/,
+    );
   });
 
   it('toast items carry role="alert" so screen readers announce them (PR-PERMISSION-UI-CLEANUP-0)', async () => {
