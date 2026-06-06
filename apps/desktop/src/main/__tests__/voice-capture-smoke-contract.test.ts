@@ -51,6 +51,37 @@ describe('voice capture smoke Settings contract', () => {
     assert.match(voicePage!, /data-pending=\{isBusy \? 'true' : undefined\}/, 'voice capture button must expose a stable pending hook');
   });
 
+  it('drops late voice capture UI writes after Settings is closed', async () => {
+    const src = await readFile(SETTINGS_MODAL, 'utf8');
+    const voicePage = src.match(/function VoiceModelsSettingsPage\([\s\S]*?async function readBrowserMicrophonePermission/)?.[0];
+    assert.ok(voicePage, 'voice settings page source must be discoverable');
+    assert.match(
+      voicePage!,
+      /const voicePageMountedRef = useRef\(false\);[\s\S]*voicePageMountedRef\.current = true;[\s\S]*return \(\) => \{[\s\S]*voicePageMountedRef\.current = false;[\s\S]*captureSmokeBusyRef\.current = false;/,
+      'voice capture smoke must track page ownership and release the pending owner when Settings closes',
+    );
+    assert.match(
+      voicePage!,
+      /await navigator\.mediaDevices\.getUserMedia[\s\S]*if \(!voicePageMountedRef\.current\) return;[\s\S]*setPermission\('granted'\);/,
+      'voice capture smoke must not continue writing page state after microphone permission resolves for an unmounted page',
+    );
+    assert.match(
+      voicePage!,
+      /if \(voicePageMountedRef\.current\) \{[\s\S]*setSmoke\(\{ status: 'ok'[\s\S]*toast\.success\('语音自检通过'/,
+      'voice capture success toast must only fire while the voice Settings page is still mounted',
+    );
+    assert.match(
+      voicePage!,
+      /if \(voicePageMountedRef\.current\) \{[\s\S]*setPermission\(next\);[\s\S]*toast\.error\('语音自检失败'/,
+      'voice capture failure toast must only fire while the voice Settings page is still mounted',
+    );
+    assert.match(
+      voicePage!,
+      /finally \{[\s\S]*stream\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\);[\s\S]*captureSmokeBusyRef\.current = false;[\s\S]*if \(voicePageMountedRef\.current\) \{[\s\S]*setIsBusy\(false\);/,
+      'voice capture cleanup must stop microphone tracks even after unmount but only write React state while mounted',
+    );
+  });
+
   it('uses user-facing copy and a named list for voice privacy boundaries', async () => {
     const src = await readFile(SETTINGS_MODAL, 'utf8');
     const voicePage = src.match(/function VoiceModelsSettingsPage\([\s\S]*?async function readBrowserMicrophonePermission/)?.[0];

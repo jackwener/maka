@@ -1339,8 +1339,17 @@ function VoiceModelsSettingsPage() {
   });
   const [isBusy, setIsBusy] = useState(false);
   const captureSmokeBusyRef = useRef(false);
+  const voicePageMountedRef = useRef(false);
   const toast = useToast();
   const caps = defaultVoiceCaptureCaps();
+
+  useEffect(() => {
+    voicePageMountedRef.current = true;
+    return () => {
+      voicePageMountedRef.current = false;
+      captureSmokeBusyRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1376,6 +1385,7 @@ function VoiceModelsSettingsPage() {
           sampleRate: caps.maxSampleRate,
         },
       });
+      if (!voicePageMountedRef.current) return;
       setPermission('granted');
       setSmoke({ status: 'recording', message: '正在录制 2 秒本地样本；样本只在内存里计算大小，结束后立即丢弃。' });
       const startedAt = performance.now();
@@ -1403,24 +1413,32 @@ function VoiceModelsSettingsPage() {
         channels: caps.maxChannels,
       });
       if (!validation.ok) {
-        setSmoke({ status: 'error', message: voiceValidationCopy(validation.reason) });
+        if (voicePageMountedRef.current) {
+          setSmoke({ status: 'error', message: voiceValidationCopy(validation.reason) });
+        }
         return;
       }
       const message = `录音链路可用：${formatVoiceDuration(durationMs)}，${formatVoiceBytes(audioBytes)}。样本未保存。`;
-      setSmoke({ status: 'ok', message, durationMs, audioBytes });
-      toast.success('语音自检通过', message);
+      if (voicePageMountedRef.current) {
+        setSmoke({ status: 'ok', message, durationMs, audioBytes });
+        toast.success('语音自检通过', message);
+      }
     } catch (error) {
       const next = classifyVoicePermissionError(error);
-      setPermission(next);
       const message = next === 'denied'
         ? '麦克风权限被拒绝；请在系统设置里允许 Maka 访问麦克风后重试。'
         : '录音自检失败；请确认系统权限和音频设备可用。';
-      setSmoke({ status: 'error', message });
-      toast.error('语音自检失败', message);
+      if (voicePageMountedRef.current) {
+        setPermission(next);
+        setSmoke({ status: 'error', message });
+        toast.error('语音自检失败', message);
+      }
     } finally {
       stream?.getTracks().forEach((track) => track.stop());
       captureSmokeBusyRef.current = false;
-      setIsBusy(false);
+      if (voicePageMountedRef.current) {
+        setIsBusy(false);
+      }
     }
   }
 
