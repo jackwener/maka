@@ -181,7 +181,7 @@ describe('local MEMORY.md Settings UI contract', () => {
     const memoryPage = src.match(/function MemorySettingsPage\([\s\S]*?function MemoryEntryList/)?.[0] ?? '';
 
     assert.match(memoryPage, /pendingMemoryActionKeysRef = useRef<Set<string>>\(new Set\(\)\)/);
-    assert.match(memoryPage, /async function runMemoryAction<T>\(key: string, action: \(\) => Promise<T>\)/);
+    assert.match(memoryPage, /async function runMemoryAction<T>\([\s\S]*key: string,[\s\S]*action: \(isCurrent: \(\) => boolean\) => Promise<T>,/);
     assert.match(memoryPage, /if \(pendingMemoryActionKeysRef\.current\.has\(key\)\) return undefined/);
     assert.match(memoryPage, /pendingMemoryActionKeysRef\.current\.add\(key\)/);
     assert.match(memoryPage, /pendingMemoryActionKeysRef\.current\.delete\(key\)/);
@@ -249,8 +249,17 @@ describe('local MEMORY.md Settings UI contract', () => {
     const resetBlock = memoryPage.match(/async function reset\(\)[\s\S]*?async function restoreLatestBackup/)?.[0] ?? '';
     const restoreLatestBlock = memoryPage.match(/async function restoreLatestBackup\(\)[\s\S]*?async function restoreBackupCandidate/)?.[0] ?? '';
     const restoreCandidateBlock = memoryPage.match(/async function restoreBackupCandidate[\s\S]*?async function openFile/)?.[0] ?? '';
+    const openFileBlock = memoryPage.match(/async function openFile\(\)[\s\S]*?async function openLatestBackup/)?.[0] ?? '';
+    const openLatestBlock = memoryPage.match(/async function openLatestBackup\(\)[\s\S]*?async function openBackupCandidate/)?.[0] ?? '';
+    const openCandidateBlock = memoryPage.match(/async function openBackupCandidate[\s\S]*?async function openFolder/)?.[0] ?? '';
+    const openFolderBlock = memoryPage.match(/async function openFolder\(\)[\s\S]*?async function openWorkspaceInstructionFile/)?.[0] ?? '';
+    const openInstructionBlock = memoryPage.match(/async function openWorkspaceInstructionFile[\s\S]*?async function createWorkspaceInstructionFile/)?.[0] ?? '';
     const createInstructionBlock = memoryPage.match(/async function createWorkspaceInstructionFile[\s\S]*?async function copyPath/)?.[0] ?? '';
+    const copyPathBlock = memoryPage.match(/async function copyPath\(\)[\s\S]*?async function copyBackupReference/)?.[0] ?? '';
+    const copyBackupBlock = memoryPage.match(/async function copyBackupReference[\s\S]*?async function copyLatestBackupReference/)?.[0] ?? '';
+    const copyEntryBlock = memoryPage.match(/async function copyMemoryEntryReference[\s\S]*?function focusMemoryEntryInDraft/)?.[0] ?? '';
     const updateStatusBlock = memoryPage.match(/async function updateMemoryEntryStatus[\s\S]*?\n  }\n\n  const effective =/)?.[0] ?? '';
+    const promptPreviewCopyBlock = memoryPage.match(/async function copyLocalMemoryPromptPreview\(\)[\s\S]*?return \(/)?.[0] ?? '';
     const writeActionBlock = memoryPage.match(/async function runMemoryWriteAction<T>[\s\S]*?async function runMemoryAction/)?.[0] ?? '';
     const actionBlock = memoryPage.match(/async function runMemoryAction<T>[\s\S]*?async function reload/)?.[0] ?? '';
 
@@ -297,9 +306,19 @@ describe('local MEMORY.md Settings UI contract', () => {
     assert.match(updateStatusBlock, /await runMemoryWriteAction\('entry-status', async \(isCurrent\) => \{[\s\S]*const next = await window\.maka\.memory\.save\(result\.draft\);[\s\S]*if \(!isCurrent\(\)\) return;[\s\S]*setState\(next\);/);
     assert.match(
       actionBlock,
-      /const lifecycle = memoryPageLifecycleRef\.current;[\s\S]*catch \(error\) \{[\s\S]*if \(!isMemoryPageCurrent\(lifecycle\)\) return undefined;[\s\S]*finally \{[\s\S]*pendingMemoryActionKeysRef\.current\.delete\(key\);[\s\S]*if \(isMemoryPageCurrent\(lifecycle\)\) \{[\s\S]*setPendingMemoryActions/,
+      /action: \(isCurrent: \(\) => boolean\) => Promise<T>,[\s\S]*const lifecycle = memoryPageLifecycleRef\.current;[\s\S]*return await action\(\(\) => isMemoryPageCurrent\(lifecycle\)\);[\s\S]*catch \(error\) \{[\s\S]*if \(!isMemoryPageCurrent\(lifecycle\)\) return undefined;[\s\S]*finally \{[\s\S]*pendingMemoryActionKeysRef\.current\.delete\(key\);[\s\S]*if \(isMemoryPageCurrent\(lifecycle\)\) \{[\s\S]*setPendingMemoryActions/,
       'Memory file-action wrapper must release refs but not write pending state after unmount',
     );
+    assert.match(openFileBlock, /await runMemoryAction\('memory:file:open', async \(isCurrent\) => \{[\s\S]*const result = await window\.maka\.memory\.openFile\(\);[\s\S]*if \(!isCurrent\(\)\) return;[\s\S]*if \(!result\.ok\) toast\.error/);
+    assert.match(openLatestBlock, /await runMemoryAction\('backup:latest:open', async \(isCurrent\) => \{[\s\S]*const result = await window\.maka\.memory\.openLatestBackup\(\);[\s\S]*if \(!isCurrent\(\)\) return;[\s\S]*if \(!result\.ok\) toast\.error/);
+    assert.match(openCandidateBlock, /await runMemoryAction\(`backup:\$\{backup\.kind\}:open`, async \(isCurrent\) => \{[\s\S]*const result = await window\.maka\.memory\.openBackup\(backup\.kind\);[\s\S]*if \(!isCurrent\(\)\) return;[\s\S]*if \(!result\.ok\)/);
+    assert.match(openFolderBlock, /await runMemoryAction\('memory:folder:open', async \(isCurrent\) => \{[\s\S]*const result = await window\.maka\.app\.openPath\('memory'\);[\s\S]*if \(!isCurrent\(\)\) return;[\s\S]*if \(!result\.ok\)/);
+    assert.match(openInstructionBlock, /await runMemoryAction\(`instruction:\$\{file\}:open`, async \(isCurrent\) => \{[\s\S]*const result = await window\.maka\.workspaceInstructions\.openFile\(file\);[\s\S]*if \(!isCurrent\(\)\) return;[\s\S]*if \(!result\.ok\)/);
+    assert.match(createInstructionBlock, /await runMemoryAction\(`instruction:\$\{file\}:create`, async \(isActionCurrent\) => \{[\s\S]*catch \(error\) \{[\s\S]*if \(isActionCurrent\(\)\) toast\.error\('创建项目指令失败', settingsActionErrorMessage\(error\)\);/);
+    assert.match(copyPathBlock, /await navigator\.clipboard\.writeText\(state\.path\);[\s\S]*if \(isCurrent\(\)\) toast\.success\('已复制路径', state\.path\);[\s\S]*catch \{[\s\S]*if \(isCurrent\(\)\) toast\.error\('复制失败'/);
+    assert.match(copyBackupBlock, /await navigator\.clipboard\.writeText\(reference\);[\s\S]*if \(isCurrent\(\)\) toast\.success\('已复制上一版引用'/);
+    assert.match(copyEntryBlock, /await navigator\.clipboard\.writeText\(reference\);[\s\S]*if \(isCurrent\(\)\) toast\.success\('已复制记忆引用', entry\.id\);/);
+    assert.match(promptPreviewCopyBlock, /await navigator\.clipboard\.writeText\(localMemoryPromptPreview\);[\s\S]*if \(isCurrent\(\)\) toast\.success\('已复制模型上下文预览'/);
   });
 
   it('manual add stays draft-only and routes through the core helper', async () => {

@@ -2965,13 +2965,16 @@ function MemorySettingsPage(props: {
     }
   }
 
-  async function runMemoryAction<T>(key: string, action: () => Promise<T>): Promise<T | undefined> {
+  async function runMemoryAction<T>(
+    key: string,
+    action: (isCurrent: () => boolean) => Promise<T>,
+  ): Promise<T | undefined> {
     if (pendingMemoryActionKeysRef.current.has(key)) return undefined;
     const lifecycle = memoryPageLifecycleRef.current;
     pendingMemoryActionKeysRef.current.add(key);
     setPendingMemoryActions((current) => new Set(current).add(key));
     try {
-      return await action();
+      return await action(() => isMemoryPageCurrent(lifecycle));
     } catch (error) {
       if (!isMemoryPageCurrent(lifecycle)) return undefined;
       throw error;
@@ -3172,68 +3175,73 @@ function MemorySettingsPage(props: {
   }
 
   async function openFile() {
-    await runMemoryAction('memory:file:open', async () => {
+    await runMemoryAction('memory:file:open', async (isCurrent) => {
       try {
         const result = await window.maka.memory.openFile();
+        if (!isCurrent()) return;
         if (!result.ok) toast.error('打开失败', result.message);
       } catch (error) {
-        toast.error('打开失败', settingsActionErrorMessage(error));
+        if (isCurrent()) toast.error('打开失败', settingsActionErrorMessage(error));
       }
     });
   }
 
   async function openLatestBackup() {
-    await runMemoryAction('backup:latest:open', async () => {
+    await runMemoryAction('backup:latest:open', async (isCurrent) => {
       try {
         const result = await window.maka.memory.openLatestBackup();
+        if (!isCurrent()) return;
         if (!result.ok) toast.error('打开上一版失败', result.message);
       } catch (error) {
-        toast.error('打开上一版失败', settingsActionErrorMessage(error));
+        if (isCurrent()) toast.error('打开上一版失败', settingsActionErrorMessage(error));
       }
     });
   }
 
   async function openBackupCandidate(backup: NonNullable<LocalMemoryState['latestBackup']>) {
-    await runMemoryAction(`backup:${backup.kind}:open`, async () => {
+    await runMemoryAction(`backup:${backup.kind}:open`, async (isCurrent) => {
       try {
         const result = await window.maka.memory.openBackup(backup.kind);
+        if (!isCurrent()) return;
         if (!result.ok) {
           toast.error(`打开${localMemoryBackupKindLabel(backup.kind)}失败`, result.message);
         }
       } catch (error) {
-        toast.error(`打开${localMemoryBackupKindLabel(backup.kind)}失败`, settingsActionErrorMessage(error));
+        if (isCurrent()) toast.error(`打开${localMemoryBackupKindLabel(backup.kind)}失败`, settingsActionErrorMessage(error));
       }
     });
   }
 
   async function openFolder() {
-    await runMemoryAction('memory:folder:open', async () => {
+    await runMemoryAction('memory:folder:open', async (isCurrent) => {
       try {
         const result = await window.maka.app.openPath('memory');
+        if (!isCurrent()) return;
         if (!result.ok) {
           toast.error(`打开${openPathActionLabel('memory')}失败`, openPathFailureCopy(result.reason));
         }
       } catch (error) {
-        toast.error(`打开${openPathActionLabel('memory')}失败`, settingsActionErrorMessage(error));
+        if (isCurrent()) toast.error(`打开${openPathActionLabel('memory')}失败`, settingsActionErrorMessage(error));
       }
     });
   }
 
   async function openWorkspaceInstructionFile(file: string) {
-    await runMemoryAction(`instruction:${file}:open`, async () => {
+    await runMemoryAction(`instruction:${file}:open`, async (isCurrent) => {
       try {
         const result = await window.maka.workspaceInstructions.openFile(file);
+        if (!isCurrent()) return;
         if (!result.ok) {
           toast.error('打开项目指令失败', result.message);
         }
       } catch (error) {
-        toast.error('打开项目指令失败', settingsActionErrorMessage(error));
+        if (isCurrent()) toast.error('打开项目指令失败', settingsActionErrorMessage(error));
       }
     });
   }
 
   async function createWorkspaceInstructionFile(file: string) {
-    await runMemoryAction(`instruction:${file}:create`, async () => {
+    await runMemoryAction(`instruction:${file}:create`, async (isActionCurrent) => {
       try {
         await runMemoryWriteAction('instruction-create', async (isCurrent) => {
           const result = await window.maka.workspaceInstructions.createFile(file);
@@ -3249,25 +3257,25 @@ function MemorySettingsPage(props: {
           await openWorkspaceInstructionFile(file);
         });
       } catch (error) {
-        toast.error('创建项目指令失败', settingsActionErrorMessage(error));
+        if (isActionCurrent()) toast.error('创建项目指令失败', settingsActionErrorMessage(error));
       }
     });
   }
 
   async function copyPath() {
-    await runMemoryAction('memory:path:copy', async () => {
+    await runMemoryAction('memory:path:copy', async (isCurrent) => {
       if (!state?.path) return;
       try {
         await navigator.clipboard.writeText(state.path);
-        toast.success('已复制路径', state.path);
+        if (isCurrent()) toast.success('已复制路径', state.path);
       } catch {
-        toast.error('复制失败', '剪贴板不可用或被系统拒绝。');
+        if (isCurrent()) toast.error('复制失败', '剪贴板不可用或被系统拒绝。');
       }
     });
   }
 
   async function copyBackupReference(backup: NonNullable<LocalMemoryState['latestBackup']>) {
-    await runMemoryAction(`backup:${backup.kind}:copy`, async () => {
+    await runMemoryAction(`backup:${backup.kind}:copy`, async (isCurrent) => {
       const reference = [
         `Memory backup: ${localMemoryBackupKindLabel(backup.kind)}`,
         `Path: ${backup.path}`,
@@ -3278,9 +3286,9 @@ function MemorySettingsPage(props: {
       ].join('\n');
       try {
         await navigator.clipboard.writeText(reference);
-        toast.success('已复制上一版引用', localMemoryBackupSummary(backup));
+        if (isCurrent()) toast.success('已复制上一版引用', localMemoryBackupSummary(backup));
       } catch {
-        toast.error('复制失败', '剪贴板不可用或被系统拒绝。');
+        if (isCurrent()) toast.error('复制失败', '剪贴板不可用或被系统拒绝。');
       }
     });
   }
@@ -3292,7 +3300,7 @@ function MemorySettingsPage(props: {
   }
 
   async function copyMemoryEntryReference(entry: LocalMemoryState['entries'][number]) {
-    await runMemoryAction(`entry:${entry.id}:copy`, async () => {
+    await runMemoryAction(`entry:${entry.id}:copy`, async (isCurrent) => {
       const reference = [
         `Memory entry: ${entry.title}`,
         `ID: ${entry.id}`,
@@ -3304,9 +3312,9 @@ function MemorySettingsPage(props: {
       ].filter(Boolean).join('\n');
       try {
         await navigator.clipboard.writeText(reference);
-        toast.success('已复制记忆引用', entry.id);
+        if (isCurrent()) toast.success('已复制记忆引用', entry.id);
       } catch {
-        toast.error('复制失败', '剪贴板不可用或被系统拒绝。');
+        if (isCurrent()) toast.error('复制失败', '剪贴板不可用或被系统拒绝。');
       }
     });
   }
@@ -3441,12 +3449,12 @@ function MemorySettingsPage(props: {
 
   async function copyLocalMemoryPromptPreview() {
     if (!localMemoryPromptPreview) return;
-    await runMemoryAction('memory:prompt-preview:copy', async () => {
+    await runMemoryAction('memory:prompt-preview:copy', async (isCurrent) => {
       try {
         await navigator.clipboard.writeText(localMemoryPromptPreview);
-        toast.success('已复制模型上下文预览', '使用同一条 prompt 预览和遮蔽路径。');
+        if (isCurrent()) toast.success('已复制模型上下文预览', '使用同一条 prompt 预览和遮蔽路径。');
       } catch {
-        toast.error('复制失败', '剪贴板不可用或被系统拒绝。');
+        if (isCurrent()) toast.error('复制失败', '剪贴板不可用或被系统拒绝。');
       }
     });
   }
