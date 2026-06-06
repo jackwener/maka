@@ -460,6 +460,7 @@ function AppShell() {
   const pendingTurnActionsRef = useRef<Set<string>>(new Set());
   const pendingTurnActionTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const pendingSessionRowActionsRef = useRef<Set<string>>(new Set());
+  const pendingPermissionModeChangesRef = useRef<Set<string>>(new Set());
   const pendingSessionModelChangesRef = useRef<Set<string>>(new Set());
   const pendingKeyOf = (sessionId: string, turnId: string, actionId: TurnFooterActionMeta['id']) =>
     `${sessionId}:${turnId}:${actionId}`;
@@ -1345,25 +1346,35 @@ function AppShell() {
     });
   }
   async function setPermissionMode(mode: PermissionMode) {
-    if (!activeId) return;
-    const current = sessions.find((session) => session.id === activeId);
+    const sessionId = activeIdRef.current;
+    if (!sessionId) return;
+    if (pendingPermissionModeChangesRef.current.has(sessionId)) return;
+    const current = sessionsRef.current.find((session) => session.id === sessionId);
     if (!current || current.permissionMode === mode) return;
+    pendingPermissionModeChangesRef.current.add(sessionId);
     try {
-      const next = await window.maka.sessions.setPermissionMode(activeId, mode);
+      const next = await window.maka.sessions.setPermissionMode(sessionId, mode);
       // Patch the session in-place so the chat header reflects the new mode
       // immediately without waiting for a full list refresh.
-      setSessions((prev) => prev.map((session) => (session.id === next.id ? next : session)));
+      if (activeIdRef.current === sessionId) {
+        setSessions((prev) => prev.map((session) => (session.id === next.id ? next : session)));
+      }
       const labels: Record<PermissionMode, string> = {
         explore: '只读模式',
         ask: '确认模式',
         execute: '执行模式',
       };
-      toastApi.success(`已切到 ${labels[mode]}`, modeDescriptions[mode]);
+      if (activeIdRef.current === sessionId) toastApi.success(`已切到 ${labels[mode]}`, modeDescriptions[mode]);
+      await refreshSessions();
     } catch (error) {
-      toastApi.error(
-        '切换权限模式失败',
-        generalizedErrorMessageChinese(error, '权限模式暂时无法切换，请稍后重试。'),
-      );
+      if (activeIdRef.current === sessionId) {
+        toastApi.error(
+          '切换权限模式失败',
+          generalizedErrorMessageChinese(error, '权限模式暂时无法切换，请稍后重试。'),
+        );
+      }
+    } finally {
+      pendingPermissionModeChangesRef.current.delete(sessionId);
     }
   }
 
