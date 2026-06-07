@@ -105,6 +105,37 @@ describe('Settings usage dashboard contract', () => {
     );
   });
 
+  it('names every usage stats table for assistive technology', async () => {
+    const src = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
+    const usageTable = src.match(/function UsageTable\([\s\S]*?function usageRequestKindLabel/)?.[0] ?? '';
+    const simpleStatsTable = src.match(/function SimpleStatsTable\([\s\S]*?function MetricCard/)?.[0] ?? '';
+
+    for (const label of [
+      '使用统计请求日志表',
+      '使用统计供应商统计表',
+      '使用统计模型统计表',
+      '使用统计工具统计表',
+      '使用统计定价配置表',
+    ]) {
+      assert.match(usageTable, new RegExp(`ariaLabel="${label}"`), `UsageTable must name ${label}`);
+    }
+    assert.match(
+      simpleStatsTable,
+      /function SimpleStatsTable\(props: \{ ariaLabel: string; headers: string\[\]; rows: Array<Array<ReactNode>>; empty\?: string \}\)/,
+      'SimpleStatsTable callers must provide a table-specific accessible name',
+    );
+    assert.match(
+      simpleStatsTable,
+      /<table className="settingsStatsTable" aria-label=\{props\.ariaLabel\}>/,
+      'Usage stats table must expose its caller-provided name',
+    );
+    assert.doesNotMatch(
+      simpleStatsTable,
+      /<table className="settingsStatsTable">\s*<thead>/,
+      'Usage stats tables must not regress to anonymous tables',
+    );
+  });
+
   it('keeps usage filters responsive through a local draft while saves run in the background', async () => {
     const src = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
     const usagePage = src.match(/function UsageSettingsPage\([\s\S]*?function UsageTable/);
