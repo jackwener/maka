@@ -1513,7 +1513,9 @@ function AppShell() {
       const next = await window.maka.plans.list();
       setPlanReminders(next);
     } catch (error) {
-      if (options.shouldShowError?.() ?? true) toastApi.error('刷新计划失败', cleanErrorMessage(error));
+      if (options.shouldShowError?.() ?? true) {
+        toastApi.error('刷新计划失败', planActionErrorMessage(error, '刷新计划提醒失败，请稍后重试。'));
+      }
     }
   }
 
@@ -1524,7 +1526,9 @@ function AppShell() {
       if (isAutomationsSurfaceActive()) toastApi.success('已创建计划提醒', input.title);
       return true;
     } catch (error) {
-      if (isAutomationsSurfaceActive()) toastApi.error('创建计划失败', cleanErrorMessage(error));
+      if (isAutomationsSurfaceActive()) {
+        toastApi.error('创建计划失败', planActionErrorMessage(error, '创建计划提醒失败，请稍后重试。'));
+      }
       return false;
     }
   }
@@ -1536,7 +1540,9 @@ function AppShell() {
       if (isAutomationsSurfaceActive()) toastApi.success('已保存计划提醒', patch.title);
       return true;
     } catch (error) {
-      if (isAutomationsSurfaceActive()) toastApi.error('保存计划失败', cleanErrorMessage(error));
+      if (isAutomationsSurfaceActive()) {
+        toastApi.error('保存计划失败', planActionErrorMessage(error, '保存计划提醒失败，请稍后重试。'));
+      }
       return false;
     }
   }
@@ -1547,7 +1553,9 @@ function AppShell() {
       await refreshPlanReminders({ shouldShowError: isAutomationsSurfaceActive });
       if (isAutomationsSurfaceActive()) toastApi.success(enabled ? '已启用提醒' : '已暂停提醒');
     } catch (error) {
-      if (isAutomationsSurfaceActive()) toastApi.error('更新计划失败', cleanErrorMessage(error));
+      if (isAutomationsSurfaceActive()) {
+        toastApi.error('更新计划失败', planActionErrorMessage(error, '更新计划提醒失败，请稍后重试。'));
+      }
     }
   }
 
@@ -1558,7 +1566,9 @@ function AppShell() {
       await refreshPlanReminders({ shouldShowError: isAutomationsSurfaceActive });
       if (isAutomationsSurfaceActive()) toastApi.success('已触发计划提醒', reminder?.title);
     } catch (error) {
-      if (isAutomationsSurfaceActive()) toastApi.error('触发计划失败', cleanErrorMessage(error));
+      if (isAutomationsSurfaceActive()) {
+        toastApi.error('触发计划失败', planActionErrorMessage(error, '触发计划提醒失败，请稍后重试。'));
+      }
     }
   }
 
@@ -1569,7 +1579,9 @@ function AppShell() {
       await refreshPlanReminders({ shouldShowError: isAutomationsSurfaceActive });
       if (isAutomationsSurfaceActive()) toastApi.success('已延后 10 分钟', reminder?.title);
     } catch (error) {
-      if (isAutomationsSurfaceActive()) toastApi.error('延后计划失败', cleanErrorMessage(error));
+      if (isAutomationsSurfaceActive()) {
+        toastApi.error('延后计划失败', planActionErrorMessage(error, '延后计划提醒失败，请稍后重试。'));
+      }
     }
   }
 
@@ -1588,7 +1600,9 @@ function AppShell() {
       await refreshPlanReminders({ shouldShowError: isAutomationsSurfaceActive });
       if (isAutomationsSurfaceActive()) toastApi.success('已清空执行记录', reminder?.title);
     } catch (error) {
-      if (isAutomationsSurfaceActive()) toastApi.error('清空记录失败', cleanErrorMessage(error));
+      if (isAutomationsSurfaceActive()) {
+        toastApi.error('清空记录失败', planActionErrorMessage(error, '清空计划记录失败，请稍后重试。'));
+      }
     }
   }
 
@@ -1607,7 +1621,9 @@ function AppShell() {
       await refreshPlanReminders({ shouldShowError: isAutomationsSurfaceActive });
       if (isAutomationsSurfaceActive()) toastApi.success('已删除计划提醒');
     } catch (error) {
-      if (isAutomationsSurfaceActive()) toastApi.error('删除计划失败', cleanErrorMessage(error));
+      if (isAutomationsSurfaceActive()) {
+        toastApi.error('删除计划失败', planActionErrorMessage(error, '删除计划提醒失败，请稍后重试。'));
+      }
     }
   }
 
@@ -3307,6 +3323,10 @@ function sendActionErrorMessage(error: unknown): string {
 }
 
 function skillsActionErrorMessage(error: unknown, fallback: string): string {
+  return generalizedErrorMessageChinese(error, fallback);
+}
+
+function planActionErrorMessage(error: unknown, fallback: string): string {
   return generalizedErrorMessageChinese(error, fallback);
 }
 
