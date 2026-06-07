@@ -3896,7 +3896,7 @@ function MemoryEntryList(props: {
                 </span>
                 <p>{entry.content}</p>
                 {(props.onCopyReference || props.onFocusDraft || props.onStatusChange) && (
-                  <div className="settingsMemoryEntryActions">
+                  <div className="settingsMemoryEntryActions" role="group" aria-label={`${entry.title}记忆操作`}>
                     {props.onCopyReference && (
                       <button
                         type="button"

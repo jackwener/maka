@@ -134,6 +134,8 @@ describe('local MEMORY.md Settings UI contract', () => {
     assert.match(src, /无匹配条目/);
     assert.match(src, /<div className="settingsMemoryEntryList" role="list" aria-label=\{`\$\{props\.title\}列表`\}>/);
     assert.match(src, /<article className="settingsMemoryEntryCard" role="listitem" key=\{entry\.id\}>/);
+    assert.match(src, /<div className="settingsMemoryEntryActions" role="group" aria-label=\{`\$\{entry\.title\}记忆操作`\}>/);
+    assert.doesNotMatch(src, /<div className="settingsMemoryEntryActions">\s*\{props\.onCopyReference && \(/);
   });
 
   it('keeps archived entries visually available without using hidden placeholder copy', async () => {
