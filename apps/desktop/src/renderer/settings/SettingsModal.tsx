@@ -3732,7 +3732,7 @@ function MemorySettingsPage(props: {
         </div>
       )}
 
-      <div className="settingsMemoryManualAdd" aria-label="手动添加本地记忆">
+      <div className="settingsMemoryManualAdd" role="group" aria-label="手动添加本地记忆">
         <div className="settingsMemoryManualAddHeader">
           <strong>手动添加记忆</strong>
           <small>只追加到下方草稿；保存前仍可检查和修改 Markdown。</small>
