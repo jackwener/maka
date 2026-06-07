@@ -5869,7 +5869,7 @@ function CapabilityRow(props: { capability: CapabilitySnapshot }) {
         <span className="pill" data-tone={readinessCopy.tone}>{readinessCopy.label}</span>
       </div>
       <p className="settingsCapabilityDetail">{readinessCopy.detail}</p>
-      <dl className="settingsCapabilityLayers">
+      <dl className="settingsCapabilityLayers" aria-label={`${capability.label}能力状态明细`}>
         <div>
           <dt>功能开关</dt>
           <dd data-tone={featureTone(capability.feature.state)}>
