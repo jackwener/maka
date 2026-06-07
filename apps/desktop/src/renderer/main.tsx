@@ -1354,7 +1354,7 @@ function AppShell() {
         await window.maka.sessions.setFlagged(sessionId, flagged);
         await refreshSessions();
       } catch (error) {
-        toastApi.error(flagged ? '标记会话失败' : '取消标记失败', cleanErrorMessage(error));
+        toastApi.error(flagged ? '标记会话失败' : '取消标记失败', sessionRowActionErrorMessage(error));
       }
     });
   }
@@ -1374,7 +1374,7 @@ function AppShell() {
         }
         await refreshSessions();
       } catch (error) {
-        toastApi.error('归档会话失败', cleanErrorMessage(error));
+        toastApi.error('归档会话失败', sessionRowActionErrorMessage(error));
       }
     });
   }
@@ -1384,7 +1384,7 @@ function AppShell() {
         await window.maka.sessions.unarchive(sessionId);
         await refreshSessions();
       } catch (error) {
-        toastApi.error('恢复会话失败', cleanErrorMessage(error));
+        toastApi.error('恢复会话失败', sessionRowActionErrorMessage(error));
       }
     });
   }
@@ -1394,7 +1394,7 @@ function AppShell() {
         await window.maka.sessions.rename(sessionId, name);
         await refreshSessions();
       } catch (error) {
-        toastApi.error('重命名会话失败', cleanErrorMessage(error));
+        toastApi.error('重命名会话失败', sessionRowActionErrorMessage(error));
       }
     });
   }
@@ -1481,7 +1481,7 @@ function AppShell() {
         await refreshSessions();
         toastApi.success(`已删除 ${name}`);
       } catch (error) {
-        toastApi.error('删除会话失败', cleanErrorMessage(error));
+        toastApi.error('删除会话失败', sessionRowActionErrorMessage(error));
       }
     });
   }
@@ -3282,6 +3282,10 @@ function sessionEventErrorMessage(event: Extract<SessionEvent, { type: 'error' }
 
 function turnFooterActionErrorMessage(error: unknown): string {
   return generalizedErrorMessageChinese(error, '对话操作失败，请稍后重试。');
+}
+
+function sessionRowActionErrorMessage(error: unknown): string {
+  return generalizedErrorMessageChinese(error, '会话操作失败，请稍后重试。');
 }
 
 function cleanErrorMessage(error: unknown): string {
