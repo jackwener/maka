@@ -104,6 +104,21 @@ describe('Settings app-info loading contract', () => {
     assert.doesNotMatch(dataBlock, /toast\.error\('复制失败', '剪贴板不可用'\)/);
   });
 
+  it('labels the Data page workspace action group for assistive tech', () => {
+    const dataBlock = blockBetween('function DataSettingsPage', 'function PersonalizationSettingsPage');
+
+    assert.match(
+      dataBlock,
+      /<div className="settingsActionRow" role="group" aria-label="工作区数据操作">/,
+      'Data page workspace open/copy actions must expose a shared group name',
+    );
+    assert.doesNotMatch(
+      dataBlock,
+      /<div className="settingsActionRow">\s*<button[\s\S]*?打开工作区文件夹[\s\S]*?复制路径/,
+      'Data page workspace actions must not regress to an anonymous button cluster',
+    );
+  });
+
   it('keeps About page privacy and storage copy Chinese-first and accessible', () => {
     const aboutBlock = blockBetween('function AboutSettingsPage', 'function SettingsSkeleton');
 

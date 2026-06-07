@@ -2018,7 +2018,7 @@ function DataSettingsPage() {
           value="本地文件"
         />
       </SettingsRows>
-      <div className="settingsActionRow">
+      <div className="settingsActionRow" role="group" aria-label="工作区数据操作">
         <button
           type="button"
           className="maka-button"
