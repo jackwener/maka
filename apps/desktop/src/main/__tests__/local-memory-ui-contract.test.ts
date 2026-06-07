@@ -15,6 +15,8 @@ describe('local MEMORY.md Settings UI contract', () => {
 
     assert.match(src, /<MemoryEntryList[\s\S]*title="生效记忆"[\s\S]*entries=\{filteredActiveEntries\}/);
     assert.match(src, /<MemoryEntryList[\s\S]*title="已归档记忆"[\s\S]*entries=\{filteredArchivedEntries\}[\s\S]*archived/);
+    assert.match(src, /<div className="settingsMemoryManualAdd" role="group" aria-label="手动添加本地记忆">/);
+    assert.doesNotMatch(src, /<div className="settingsMemoryManualAdd" aria-label="手动添加本地记忆">/);
     assert.match(src, /visibleMemoryEntries\.archivedEntries\.length > 0/);
     assert.ok(src.includes("entry.tags.join(' / ')"));
   });
