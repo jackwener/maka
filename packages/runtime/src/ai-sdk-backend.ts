@@ -106,6 +106,11 @@ import {
   type ToolSourceEconomyConfig,
 } from './tool-source-economy.js';
 import {
+  buildDeferredPrepareStep,
+  seedNamespacesFromRuntimeEvents,
+} from './deferred-activation.js';
+import { toolNamesForNamespaces, type DeferredToolCatalog } from './load-tool.js';
+import {
   ARCHIVED_TOOL_RESULT_REWRITE_VERSION,
   applyRuntimeEventContextBudget,
   buildPromptSegmentEstimates,
@@ -245,6 +250,14 @@ export interface AiSdkBackendInput {
   tools: MakaTool[];
   /** Optional opt-in tool source economy mode. Omitted/full mode preserves the full tool surface. */
   toolSourceEconomy?: ToolSourceEconomyConfig;
+  /**
+   * Optional deferred-tool catalog (Layer 1). When present, `exposure:'deferred'`
+   * tools are withheld from the per-turn prompt until the model loads their
+   * namespace via `load_tool`; the backend builds the per-step `prepareStep`
+   * activation, seeds it from durable prior-turn loads, and gates execution.
+   * When absent, every tool is advertised every turn (legacy behavior).
+   */
+  deferredCatalog?: DeferredToolCatalog;
 
   // ── Optional knobs (defaults shown) ────────────────────────────────────
   /** ID generator; default `crypto.randomUUID()`. */
@@ -423,9 +436,43 @@ export class AiSdkBackend implements AgentBackend {
     }
 
     // --- Build ai-sdk tools dict with permission-wrapped execute ---
+    // Tool source economy (opt-in) selects the base tool surface first; deferred
+    // activation (Layer 1) then seeds the loaded-set on top of that selection, so
+    // the two coexist: economy decides which sources are visible, deferred
+    // withholds heavy-schema families until the model calls `load_tool`.
     const toolSourceSelection = this.toolSourceEconomyRuntime.selectTools();
+    const baseTools = toolSourceSelection.tools;
     const invalidTool = buildInvalidMakaTool();
-    const canonicalTools = canonicalizeToolSet(toolSourceSelection.tools, invalidTool);
+    const deferredCatalog = this.input.deferredCatalog;
+    const seedNamespaces = deferredCatalog
+      ? seedNamespacesFromRuntimeEvents(
+          (input.runtimeContext ?? []).filter((event) => event.turnId !== turnId),
+        )
+      : undefined;
+    const seedLoadedNames = deferredCatalog
+      ? toolNamesForNamespaces(deferredCatalog, seedNamespaces ?? new Set())
+      : undefined;
+    const canonicalTools = canonicalizeToolSet(baseTools, invalidTool, seedLoadedNames);
+
+    // Per-step active snapshot the execute-boundary guard reads. `prepareStep`
+    // recomputes it before every step; the guard rejects a deferred tool absent
+    // from the current step's snapshot (handles same-step parallel load+use).
+    let prepareStep: ReturnType<typeof buildDeferredPrepareStep> | undefined;
+    if (deferredCatalog) {
+      const turnActivation = { currentStepActive: new Set<string>(canonicalTools.activeTools) };
+      this.toolRuntime.setStepActivation(() => turnActivation.currentStepActive);
+      prepareStep = buildDeferredPrepareStep({
+        tools: baseTools,
+        invalidTool,
+        catalog: deferredCatalog,
+        seedNamespaces,
+        onActiveSnapshot: (active) => {
+          turnActivation.currentStepActive = new Set(active);
+        },
+      });
+    }
+
+
     const aiSdkTools: Record<string, unknown> = {};
     for (const t of canonicalTools.providerTools) {
       aiSdkTools[t.name] = {
@@ -532,6 +579,7 @@ export class AiSdkBackend implements AgentBackend {
           },
           system: systemPrompt,
           abortSignal: this.abortController!.signal,
+          ...(prepareStep ? { prepareStep } : {}),
         });
 
         for await (const chunk of result.fullStream) {

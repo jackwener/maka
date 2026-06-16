@@ -315,7 +315,8 @@ export type { DeferredNamespaceCard, DeferredToolCatalog } from './load-tool.js'
 // deferred-activation.ts — per-step active-tool derivation for deferred loading.
 export {
   loadedNamespacesFromSteps,
+  seedNamespacesFromRuntimeEvents,
   computeActiveTools,
   buildDeferredPrepareStep,
 } from './deferred-activation.js';
-export type { StepLike, DeferredPrepareStepInput } from './deferred-activation.js';
+export type { StepLike, RuntimeEventLike, DeferredPrepareStepInput } from './deferred-activation.js';

@@ -3,8 +3,10 @@ import { describe, test } from 'node:test';
 
 import {
   loadedNamespacesFromSteps,
+  seedNamespacesFromRuntimeEvents,
   computeActiveTools,
   buildDeferredPrepareStep,
+  type RuntimeEventLike,
   type StepLike,
 } from '../deferred-activation.js';
 import type { DeferredToolCatalog } from '../load-tool.js';
@@ -48,6 +50,39 @@ describe('loadedNamespacesFromSteps', () => {
   test('undefined/empty steps yield an empty set', () => {
     assert.equal(loadedNamespacesFromSteps(undefined).size, 0);
     assert.equal(loadedNamespacesFromSteps([]).size, 0);
+  });
+});
+
+describe('seedNamespacesFromRuntimeEvents (durable cross-turn seed)', () => {
+  function callEvent(name: string, args: unknown): RuntimeEventLike {
+    return { content: { kind: 'function_call', name, args } };
+  }
+
+  test('collects namespaces from durable load_tool function_call events', () => {
+    const events: RuntimeEventLike[] = [
+      callEvent('load_tool', { namespace: 'rive' }),
+      callEvent('Read', { path: 'a' }),
+      callEvent('load_tool', JSON.stringify({ namespace: 'browser' })),
+      { content: { kind: 'function_response', name: 'load_tool', args: undefined } },
+      { content: { kind: 'text' } },
+    ];
+    assert.deepEqual([...seedNamespacesFromRuntimeEvents(events)].sort(), ['browser', 'rive']);
+  });
+
+  test('ignores non-load_tool calls, malformed args, and empty input', () => {
+    assert.equal(seedNamespacesFromRuntimeEvents([]).size, 0);
+    assert.equal(seedNamespacesFromRuntimeEvents(undefined).size, 0);
+    assert.equal(
+      seedNamespacesFromRuntimeEvents([callEvent('load_tool', 'not json'), callEvent('load_tool', {})]).size,
+      0,
+    );
+  });
+
+  test('round-trips with the in-turn derivation: a prior load seeds the same namespace', () => {
+    const seeded = seedNamespacesFromRuntimeEvents([callEvent('load_tool', { namespace: 'browser' })]);
+    const active = computeActiveTools({ tools, invalidTool: invalid, catalog, seedNamespaces: seeded }, []);
+    assert.ok(active.includes('browser_click'));
+    assert.ok(active.includes('browser_navigate'));
   });
 });
 

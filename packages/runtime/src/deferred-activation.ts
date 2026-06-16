@@ -44,6 +44,38 @@ export function loadedNamespacesFromSteps(steps: ReadonlyArray<StepLike> | undef
   return out;
 }
 
+/**
+ * The minimal shape this module needs from a durable `RuntimeEvent`: a
+ * `function_call` content carrying the tool name and args. Kept structural so
+ * the seed is decoupled from the `@maka/core` event types and trivially
+ * testable.
+ */
+export interface RuntimeEventLike {
+  content?: { kind?: string; name?: string; args?: unknown } | undefined;
+}
+
+/**
+ * Reconstruct the cross-turn loaded namespaces from the durable RuntimeEvent
+ * ledger (Slice 7, Codex Δ4). Scans committed `load_tool` calls — the same
+ * shape the in-turn derivation reads from step history — so a tool loaded in an
+ * earlier turn is re-advertised at the next turn's start. Durable by
+ * construction: it survives history compaction and session recovery because it
+ * reads the ledger, not the prompt tail. Append-only ratchet: an aborted load
+ * simply never reaches committed history, and re-loading on retry is idempotent.
+ */
+export function seedNamespacesFromRuntimeEvents(
+  events: ReadonlyArray<RuntimeEventLike> | undefined,
+): Set<string> {
+  const out = new Set<string>();
+  for (const event of events ?? []) {
+    const content = event?.content;
+    if (!content || content.kind !== 'function_call' || content.name !== LOAD_TOOL_NAME) continue;
+    const namespace = extractNamespace(content.args);
+    if (namespace) out.add(namespace);
+  }
+  return out;
+}
+
 export interface DeferredPrepareStepInput {
   /** Full registry (used to recompute the active subset). */
   tools: readonly MakaTool[];
