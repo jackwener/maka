@@ -205,10 +205,12 @@ packages are in any `package.json` as of 2026-06-18.
 ### 4.1 Where shared components live
 
 - `packages/ui/src/ui.tsx` — shadcn-style wrappers around Base UI
-  (`Button`, `Card`, `Dialog*`, `Tabs*`, `Tooltip*`, `Select*`,
-  `Separator`, `Badge`, `Input`, `Textarea`).
+  (`Button`, `Badge`, `Card`, `Checkbox`, `Dialog*`, `Input`,
+  `Select*`, `Separator`, `Tabs*`, `Textarea`, `Tooltip*`).
 - `packages/ui/src/components.tsx` — older hand-written wrappers
-  still on legacy CSS, being phased out by task #56.
+  still on legacy CSS, being phased out by task #56 / #57. As of
+  the closing batches every visible action button, form input,
+  textarea, and checkbox routes through the `ui.tsx` primitives.
 - `packages/ui/src/utils.ts` — `cn()` helper.
 
 Import via the `@maka/ui` barrel:
@@ -398,3 +400,36 @@ under task #56 continuation):
   for surfaces not yet migrated (Sidebar / SearchModal sub-elements
   / Sessions list / Onboarding hero). They'll be deleted as each
   surface moves to utility classes.
+
+## 8. 2026-06-19 closing-batch audit
+
+After task #56 + #57 wound down with multi-agent batches, the
+state of the codebase against this cheatsheet's rules:
+
+- ✅ All visible **action buttons** (renderer + `components.tsx`)
+  go through shared `UiButton` from `@maka/ui`. Raw `<button>`
+  remains only where the element is semantically a nav row, a
+  list-item row, a disclosure toggle, or an inline prose route
+  (Markdown `maka://` link).
+- ✅ All **form inputs / textareas / selects** in Settings,
+  ProvidersPanel, PlanReminderPanel, Composer, Onboarding,
+  BrowserPanel, and CommandPalette route through `@maka/ui`
+  `Input / Textarea / Select*`. The PlanReminder
+  `recurrence / delivery / platform` native selects landed last,
+  under xuan's round-4 batch.
+- ✅ **PermissionDialog checkbox** (the last raw
+  `<input type="checkbox">` in any renderer JSX) migrated to the
+  new shared `Checkbox` primitive (round-3 batch added
+  `Checkbox` to `ui.tsx`).
+- ✅ **Zero `asChild`** anywhere in `apps/desktop/src` or
+  `packages/`. All Base UI Triggers use `render={...}`.
+- ✅ Source-grep contracts (`renderer-utility-primitives-contract`,
+  `settings-form-a11y-contract`, `plan-reminder-contract`,
+  `bot-settings-ui-contract`, `model-oauth-section-contract`,
+  `renderer-error-boundary`) actively forbid regressions of the
+  migrated surfaces back to raw HTML controls.
+- ⏳ **Deferred by team consensus:** wholesale removal of the
+  legacy `.maka-button*` CSS blocks in `styles.css`. The class
+  is still added to migrated `UiButton` callers as a
+  presentation fallback; deletion happens after the last lane
+  closes.
