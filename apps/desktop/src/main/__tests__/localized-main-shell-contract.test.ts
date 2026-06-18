@@ -94,9 +94,28 @@ describe('localized main shell contract', () => {
     }
     assert.match(
       components,
-      /<button className="maka-chat-tab-plus"[\s\S]*?<Plus strokeWidth=\{1\.5\} aria-hidden="true" \/>/,
+      /<UiButton className="maka-chat-tab-plus"[\s\S]*?<Plus strokeWidth=\{1\.5\} aria-hidden="true" \/>/,
       'New-chat plus buttons already have aria-label and must not expose a redundant icon',
     );
+    for (const className of [
+      'maka-chat-tab-plus',
+      'maka-chat-header-memory-pill',
+      'maka-chat-header-alert',
+      'maka-chat-jump-bottom',
+      'maka-message-copy',
+      'maka-code-block-copy',
+      'maka-prompt-chip',
+      'maka-mode-switcher-option',
+      'maka-turn-lineage-badge',
+      'maka-session-branch-banner',
+      'maka-turn-footer-action',
+    ]) {
+      assert.doesNotMatch(
+        components,
+        new RegExp(`<button\\b[^>]*\\bclassName="${className}(?:\\s|")`),
+        `${className} should use the shared UiButton primitive instead of a raw button`,
+      );
+    }
     assert.match(
       components,
       /<UiButton className="maka-button maka-plan-submit"[\s\S]*?<Check size=\{14\} strokeWidth=\{1\.75\} aria-hidden="true" \/>[\s\S]*?<Plus size=\{14\} strokeWidth=\{1\.75\} aria-hidden="true" \/>/,

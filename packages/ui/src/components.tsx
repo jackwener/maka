@@ -3456,9 +3456,9 @@ export function ChatView(props: {
       <main className="maka-main detailPane">
         <header className="maka-chat-header">
           <ChatTab title="新建对话" />
-          <button className="maka-chat-tab-plus" type="button" aria-label="新建对话" onClick={props.onNew}>
+          <UiButton className="maka-chat-tab-plus" variant="quiet" size="icon-sm" type="button" aria-label="新建对话" onClick={props.onNew}>
             <Plus strokeWidth={1.5} aria-hidden="true" />
-          </button>
+          </UiButton>
           <span className="maka-chat-header-spacer" />
           <PermissionModeSwitcher mode="ask" disabled disabledReason="新建对话后再切换模式。" />
         </header>
@@ -3485,9 +3485,9 @@ export function ChatView(props: {
             ? props.renderProviderMark(props.activeProviderType)
             : undefined}
         />
-        <button className="maka-chat-tab-plus" type="button" aria-label="新建对话" onClick={props.onNew}>
+        <UiButton className="maka-chat-tab-plus" variant="quiet" size="icon-sm" type="button" aria-label="新建对话" onClick={props.onNew}>
           <Plus strokeWidth={1.5} aria-hidden="true" />
-        </button>
+        </UiButton>
         <span className="maka-chat-header-spacer" />
         <ChatModelSwitcher
           activeSession={props.activeSession}
@@ -3498,9 +3498,11 @@ export function ChatView(props: {
           onChange={props.onModelChange}
         />
         {props.memoryActive && (
-          <button
+          <UiButton
             type="button"
             className="maka-chat-header-memory-pill"
+            variant="quiet"
+            size="sm"
             data-active="true"
             onClick={() => props.onOpenMemorySettings?.()}
             title="本地 MEMORY.md 已加入 agent 系统提示。点击进入设置 · 记忆 管理。"
@@ -3508,7 +3510,7 @@ export function ChatView(props: {
           >
             <BookOpen size={12} strokeWidth={1.75} aria-hidden="true" />
             <span>记忆</span>
-          </button>
+          </UiButton>
         )}
         {deepResearchActive && (
           <span
@@ -3636,14 +3638,16 @@ export function ChatView(props: {
               no-op. */}
         </div>
         {!pinnedToBottom && (
-          <button
+          <UiButton
             type="button"
             className="maka-chat-jump-bottom"
+            variant="secondary"
+            size="icon-sm"
             onClick={scrollToBottom}
             aria-label="跳到最新消息"
           >
             <ArrowDown size={16} strokeWidth={2} aria-hidden="true" />
-          </button>
+          </UiButton>
         )}
       </div>
     </main>
@@ -3835,9 +3839,11 @@ function MessageCopyButton(props: { text: string; label?: string }) {
         ? '复制失败'
         : baseLabel;
   return (
-    <button
+    <UiButton
       type="button"
       className="maka-message-copy"
+      variant="quiet"
+      size="icon-sm"
       onClick={() => void copy()}
       aria-label={copyPhase ? `${actionLabel} · ${baseLabel}` : baseLabel}
       aria-busy={copyPending ? 'true' : undefined}
@@ -3849,7 +3855,7 @@ function MessageCopyButton(props: { text: string; label?: string }) {
     >
       {copied ? <Check size={14} strokeWidth={2} aria-hidden="true" /> : <Copy size={14} strokeWidth={1.75} aria-hidden="true" />}
       {props.label && <span>{copyPhase === 'pending' ? '复制中…' : copyPhase === 'failed' ? '复制失败' : copied ? '已复制' : props.label}</span>}
-    </button>
+    </UiButton>
   );
 }
 
@@ -4025,9 +4031,11 @@ function CodeBlock({ children, ...rest }: { children?: ReactNode }) {
     <div className="maka-code-block">
       <div className="maka-code-block-header">
         <span className="maka-code-block-lang">{lang ?? 'code'}</span>
-        <button
+        <UiButton
           type="button"
           className="maka-code-block-copy"
+          variant="quiet"
+          size="icon-sm"
           onClick={() => void copy()}
           aria-label={copyPhase === 'pending' ? '复制代码中' : copyPhase === 'copied' ? '已复制代码' : copyPhase === 'failed' ? '复制代码失败' : '复制代码'}
           aria-busy={copyPending ? 'true' : undefined}
@@ -4039,7 +4047,7 @@ function CodeBlock({ children, ...rest }: { children?: ReactNode }) {
           {copied
             ? <Check size={12} strokeWidth={2} aria-hidden="true" />
             : <Copy size={12} strokeWidth={1.75} aria-hidden="true" />}
-        </button>
+        </UiButton>
       </div>
       <pre {...rest}>{children}</pre>
     </div>
@@ -4220,14 +4228,15 @@ function EmptyChatHero(props: { onPromptSuggestion?(prompt: string): void; userL
         <ul className="maka-prompt-suggestions" aria-label={copy.promptListLabel}>
           {suggestions.map((suggestion) => (
             <li key={suggestion.label}>
-              <button
+              <UiButton
                 type="button"
-                className="maka-prompt-chip"
+                className="maka-prompt-chip h-auto"
+                variant="quiet"
                 onClick={() => props.onPromptSuggestion?.(suggestion.prompt)}
               >
                 <span className="maka-prompt-chip-label">{suggestion.label}</span>
                 <span className="maka-prompt-chip-hint">{suggestion.prompt.split('\n')[0]?.slice(0, 60)}…</span>
-              </button>
+              </UiButton>
             </li>
           ))}
         </ul>
@@ -4305,14 +4314,15 @@ function DeepResearchEmptyHero(props: { onPromptSuggestion?(prompt: string): voi
         <ul className="maka-prompt-suggestions" aria-label="深度研究起手式">
           {DEEP_RESEARCH_STARTER_PROMPTS.map((suggestion) => (
             <li key={suggestion.label}>
-              <button
+              <UiButton
                 type="button"
-                className="maka-prompt-chip"
+                className="maka-prompt-chip h-auto"
+                variant="quiet"
                 onClick={() => props.onPromptSuggestion?.(suggestion.prompt)}
               >
                 <span className="maka-prompt-chip-label">{suggestion.label}</span>
                 <span className="maka-prompt-chip-hint">{suggestion.prompt.slice(0, 60)}…</span>
-              </button>
+              </UiButton>
             </li>
           ))}
         </ul>
@@ -4329,19 +4339,33 @@ function DeepResearchEmptyHero(props: { onPromptSuggestion?(prompt: string): voi
  */
 function ChatHeaderAlertBadge(props: { alert: ChatHeaderAlert }) {
   const { tone, label, tooltip, onClick } = props.alert;
-  const Tag = onClick ? 'button' : 'span';
+  if (onClick) {
+    return (
+      <UiButton
+        className="maka-chat-header-alert"
+        variant="quiet"
+        size="sm"
+        data-tone={tone}
+        type="button"
+        onClick={onClick}
+        aria-label={tooltip ?? label}
+        title={tooltip}
+      >
+        <AlertTriangle size={12} strokeWidth={2} aria-hidden="true" />
+        <span>{label}</span>
+      </UiButton>
+    );
+  }
   return (
-    <Tag
+    <span
       className="maka-chat-header-alert"
       data-tone={tone}
-      type={onClick ? 'button' : undefined}
-      onClick={onClick}
       aria-label={tooltip ?? label}
       title={tooltip}
     >
       <AlertTriangle size={12} strokeWidth={2} aria-hidden="true" />
       <span>{label}</span>
-    </Tag>
+    </span>
   );
 }
 
@@ -4402,7 +4426,7 @@ function PermissionModeSwitcher(props: {
         const meta = PERMISSION_MODE_META[mode];
         const isActive = mode === props.mode;
         return (
-          <button
+          <UiButton
             key={mode}
             type="button"
             role="radio"
@@ -4412,6 +4436,8 @@ function PermissionModeSwitcher(props: {
             data-mode={mode}
             data-tone={meta.tone}
             className="maka-mode-switcher-option"
+            variant="quiet"
+            size="sm"
             onClick={() => {
               if (!props.pending && !props.disabled && props.onChange && mode !== props.mode) {
                 props.onChange(mode);
@@ -4420,7 +4446,7 @@ function PermissionModeSwitcher(props: {
             title={meta.hint}
           >
             {meta.label}
-          </button>
+          </UiButton>
         );
       })}
     </div>
@@ -4641,17 +4667,19 @@ function TurnView(props: {
       {forwardBadges.length > 0 && (
         <div className="maka-turn-lineage-row" aria-label="本轮回答的来源">
           {forwardBadges.map((badge) => (
-            <button
+            <UiButton
               key={badge.id}
               type="button"
               className="maka-turn-lineage-badge"
+              variant="quiet"
+              size="sm"
               data-direction="forward"
               title={badge.tooltip ?? badge.label}
               onClick={() => props.onLineageBadgeClick?.(badge.targetTurnId)}
             >
               <GitBranch size={11} strokeWidth={2} aria-hidden="true" />
               <span>{badge.label}</span>
-            </button>
+            </UiButton>
           ))}
         </div>
       )}
@@ -4737,17 +4765,19 @@ function TurnView(props: {
           {reverseBadges.length > 0 && (
             <div className="maka-turn-lineage-row maka-turn-lineage-row-reverse" aria-label="本轮回答的衍生">
               {reverseBadges.map((badge) => (
-                <button
+                <UiButton
                   key={badge.id}
                   type="button"
                   className="maka-turn-lineage-badge"
+                  variant="quiet"
+                  size="sm"
                   data-direction="reverse"
                   title={badge.tooltip ?? badge.label}
                   onClick={() => props.onLineageBadgeClick?.(badge.targetTurnId)}
                 >
                   <GitBranch size={11} strokeWidth={2} aria-hidden="true" />
                   <span>{badge.label}</span>
-                </button>
+                </UiButton>
               ))}
             </div>
           )}
@@ -4796,9 +4826,11 @@ function SessionBranchBanner(props: {
 }) {
   const { banner } = props;
   return (
-    <button
+    <UiButton
       type="button"
       className="maka-session-branch-banner"
+      variant="quiet"
+      size="sm"
       data-from-aborted={banner.fromAbortedTurn || undefined}
       onClick={() => props.onClick?.(banner.parentSessionId)}
       aria-label={banner.fromAbortedTurn
@@ -4811,7 +4843,7 @@ function SessionBranchBanner(props: {
           ? `从中断前分支自 ${banner.parentSessionName}`
           : `分自 ${banner.parentSessionName}`}
       </span>
-    </button>
+    </UiButton>
   );
 }
 
@@ -4982,10 +5014,12 @@ function TurnFooterActions(props: {
         const isActionPending = isPending || copyIsPending;
         const priority = isActionPending ? 'primary' : STATUS_FOOTER_PRIORITY[action.id];
         return (
-          <button
+          <UiButton
             key={action.id}
             type="button"
             className="maka-turn-footer-action"
+            variant={priority === 'primary' ? 'secondary' : 'quiet'}
+            size="sm"
             data-action={action.id}
             data-priority={priority}
             data-pending={isActionPending || undefined}
@@ -4998,7 +5032,7 @@ function TurnFooterActions(props: {
           >
             {isCopyAction && copyPhase === 'copied' ? <Check size={12} strokeWidth={2} aria-hidden="true" /> : STATUS_FOOTER_ICON[action.id]}
             <span>{isCopyAction ? copyFeedbackLabel : action.label}</span>
-          </button>
+          </UiButton>
         );
       })}
     </div>
