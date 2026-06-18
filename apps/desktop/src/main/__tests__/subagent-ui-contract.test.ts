@@ -25,6 +25,7 @@ describe('subagent UI contract', () => {
     assert.match(markup, /data-kind="subagent"/);
     assert.match(markup, /Research Agent/);
     assert.match(markup, /已完成/);
+    assert.match(markup, /只读/);
     assert.match(markup, /耗时/);
     assert.match(markup, /Mapped the runtime path\./);
     assert.match(markup, /产物/);
@@ -34,7 +35,6 @@ describe('subagent UI contract', () => {
     assert.doesNotMatch(markup, /run-secret-456/);
     assert.doesNotMatch(markup, /artifact-secret-1/);
     assert.doesNotMatch(markup, /artifact-secret-2/);
-    assert.doesNotMatch(markup, /权限/);
     assert.doesNotMatch(markup, />explore</);
     assert.doesNotMatch(markup, /事件/);
     assert.doesNotMatch(markup, /42 个事件/);

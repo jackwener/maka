@@ -6692,6 +6692,7 @@ function SubagentPreview(props: {
   const artifactCount = result.artifactIds.length;
   const meta = [
     status,
+    presentSubagentPermission(result.permissionMode),
     duration ? `耗时 ${duration}` : '',
   ].filter(Boolean).join(' · ');
 
@@ -6724,6 +6725,11 @@ function SubagentPreview(props: {
 
 function presentSubagentStatus(status: SubagentResult['status']): string {
   return SUBAGENT_STATUS_LABEL[status] ?? status;
+}
+
+function presentSubagentPermission(permissionMode: SubagentResult['permissionMode']): string {
+  if (permissionMode === 'explore') return '只读';
+  return permissionMode;
 }
 
 function ExploreAgentPreview(props: {

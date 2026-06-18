@@ -17,8 +17,6 @@ import type { PermissionResponse } from './permission.js';
 export interface BackendSendInput {
   /** AgentRun id for this invocation, when the caller has a run ledger. */
   runId?: string;
-  /** Parent AgentRun id when this backend invocation is a child agent turn. */
-  parentRunId?: string;
   /** Caller-generated turn id shared by the persisted UserMessage and every emitted event. */
   turnId: string;
   text: string;

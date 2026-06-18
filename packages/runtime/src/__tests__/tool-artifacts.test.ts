@@ -122,62 +122,6 @@ describe('ToolRuntime artifact recorder scheduling', () => {
     expect(events.some((event) => event.type === 'tool_result' && event.toolUseId === 'tool-1')).toBe(true);
   });
 
-  test('child artifact wait mode waits for recorder completion before returning', async () => {
-    let releaseRecorder!: () => void;
-    let completed = false;
-    const { runtime, events } = makeToolRuntime({
-      artifactRecorderWaitTimeoutMs: 100,
-      recordToolArtifacts: async () => {
-        await new Promise<void>((resolve) => {
-          releaseRecorder = resolve;
-        });
-      },
-    });
-    runtime.setArtifactRecorderWait(true);
-    const execute = runtime.wrapToolExecute(writeArtifactTool(), 'turn-1', {
-      push: (event) => events.push(event),
-    });
-
-    const pending = execute({ path: 'notes.md', content: 'hello' }, {
-      toolCallId: 'tool-1',
-      abortSignal: new AbortController().signal,
-    }).then(() => {
-      completed = true;
-    });
-    await delay(0);
-
-    expect(completed).toBe(false);
-    releaseRecorder();
-    await pending;
-    expect(completed).toBe(true);
-    expect(events.some((event) => event.type === 'tool_result' && event.toolUseId === 'tool-1')).toBe(true);
-  });
-
-  test('child artifact wait mode times out instead of hanging forever', async () => {
-    const { runtime, events } = makeToolRuntime({
-      artifactRecorderWaitTimeoutMs: 1,
-      recordToolArtifacts: () => new Promise(() => {}),
-    });
-    runtime.setArtifactRecorderWait(true);
-    const execute = runtime.wrapToolExecute(writeArtifactTool(), 'turn-1', {
-      push: (event) => events.push(event),
-    });
-
-    const outcome = await Promise.race([
-      execute({ path: 'notes.md', content: 'hello' }, {
-        toolCallId: 'tool-1',
-        abortSignal: new AbortController().signal,
-      }).then(() => 'done' as const),
-      delay(50).then(() => 'timeout' as const),
-    ]);
-
-    expect(outcome).toBe('done');
-    expect(events.some((event) =>
-      event.type === 'tool_progress' &&
-      event.toolUseId === 'tool-1' &&
-      toolProgressText(event.chunk).includes('Artifact recorder timed out')
-    )).toBe(true);
-  });
 });
 
 function makeToolRuntime(overrides: Partial<ToolRuntimeInput> = {}): { runtime: ToolRuntime; events: SessionEvent[] } {
@@ -256,8 +200,4 @@ function nextId(): () => string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function toolProgressText(chunk: Extract<SessionEvent, { type: 'tool_progress' }>['chunk']): string {
-  return typeof chunk === 'string' ? chunk : chunk.text;
 }
