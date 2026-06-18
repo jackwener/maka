@@ -107,6 +107,13 @@ import {
   DialogContent,
   DialogRoot,
   Input,
+  SelectItem,
+  SelectPopup,
+  SelectPortal,
+  SelectPositioner,
+  SelectRoot,
+  SelectTrigger,
+  SelectValue,
   Textarea as UiTextarea,
   cn,
 } from './ui.js';
@@ -1340,6 +1347,40 @@ function DailyReviewTopList(props: { title: string; entries: ReadonlyArray<Daily
   );
 }
 
+function PlanReminderSelect<T extends string>(props: {
+  value: T;
+  options: ReadonlyArray<readonly [T, string]>;
+  onChange(value: T): void;
+  ariaLabel: string;
+  disabled?: boolean;
+}) {
+  return (
+    <SelectRoot
+      value={props.value}
+      items={props.options.map(([value, label]) => ({ value, label }))}
+      disabled={props.disabled}
+      onValueChange={(value) => {
+        if (value !== null) props.onChange(value);
+      }}
+    >
+      <SelectTrigger className="maka-plan-select w-full" aria-label={props.ariaLabel}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectPortal>
+        <SelectPositioner alignItemWithTrigger={false} sideOffset={6}>
+          <SelectPopup className="maka-plan-select-popup">
+            {props.options.map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </SelectPositioner>
+      </SelectPortal>
+    </SelectRoot>
+  );
+}
+
 function PlanReminderPanel(props: {
   reminders: PlanReminder[];
   onCreate?(input: PlanReminderDraftInput): boolean | Promise<boolean> | void | Promise<void>;
@@ -1553,17 +1594,19 @@ function PlanReminderPanel(props: {
         </div>
         <label className="maka-plan-field">
           <span>重复</span>
-          <select
+          <PlanReminderSelect
             value={recurrence}
-            onChange={(event) => setRecurrence(event.currentTarget.value as PlanReminderRecurrence)}
+            onChange={(value) => setRecurrence(value)}
             disabled={formInteractionDisabled}
-          >
-            <option value="none">不重复</option>
-            <option value="daily">每天</option>
-            <option value="weekly">每周</option>
-            <option value="monthly">每月</option>
-            <option value="cron">Cron</option>
-          </select>
+            ariaLabel="重复"
+            options={[
+              ['none', '不重复'],
+              ['daily', '每天'],
+              ['weekly', '每周'],
+              ['monthly', '每月'],
+              ['cron', 'Cron'],
+            ] satisfies ReadonlyArray<readonly [PlanReminderRecurrence, string]>}
+          />
         </label>
         {recurrence === 'cron' && (
           <label className="maka-plan-field">
@@ -1580,27 +1623,27 @@ function PlanReminderPanel(props: {
         <div className="maka-plan-delivery-grid">
           <label className="maka-plan-field">
             <span>投递</span>
-            <select
+            <PlanReminderSelect
               value={deliveryChannel}
-              onChange={(event) => setDeliveryChannel(event.currentTarget.value as PlanReminderDeliveryTarget['channel'])}
+              onChange={(value) => setDeliveryChannel(value)}
               disabled={formInteractionDisabled}
-            >
-              <option value="local">本地提醒</option>
-              <option value="bot">机器人聊天</option>
-            </select>
+              ariaLabel="投递"
+              options={[
+                ['local', '本地提醒'],
+                ['bot', '机器人聊天'],
+              ] satisfies ReadonlyArray<readonly [PlanReminderDeliveryTarget['channel'], string]>}
+            />
           </label>
           {deliveryChannel === 'bot' && (
             <label className="maka-plan-field">
               <span>平台</span>
-              <select
+              <PlanReminderSelect
                 value={deliveryPlatform}
-                onChange={(event) => setDeliveryPlatform(event.currentTarget.value as BotProvider)}
+                onChange={(value) => setDeliveryPlatform(value)}
                 disabled={formInteractionDisabled}
-              >
-                {BOT_DELIVERY_PROVIDERS.map((provider) => (
-                  <option key={provider} value={provider}>{botDisplayLabel(provider)}</option>
-                ))}
-              </select>
+                ariaLabel="平台"
+                options={BOT_DELIVERY_PROVIDERS.map((provider) => [provider, botDisplayLabel(provider)] as const)}
+              />
             </label>
           )}
         </div>

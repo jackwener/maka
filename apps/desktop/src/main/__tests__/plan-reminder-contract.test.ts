@@ -112,8 +112,11 @@ describe('Plan reminder MVP contract', () => {
 
     const panelBlock = ui.match(/function PlanReminderPanel[\s\S]*?function comparePlanReminderForDisplay/)?.[0] ?? '';
     assert.match(ui, /Input,[\s\S]*Textarea as UiTextarea,[\s\S]*cn,/, 'plan reminder text controls must use shared Input/Textarea imports');
+    assert.match(ui, /SelectItem,[\s\S]*SelectPopup,[\s\S]*SelectPortal,[\s\S]*SelectPositioner,[\s\S]*SelectRoot,[\s\S]*SelectTrigger,[\s\S]*SelectValue,/, 'plan reminder selects must use shared Base UI Select imports');
+    assert.match(ui, /function PlanReminderSelect[\s\S]*<SelectPositioner alignItemWithTrigger=\{false\} sideOffset=\{6\}>/, 'PlanReminder Select popups must opt out of item-trigger alignment');
     assert.doesNotMatch(panelBlock, /<input\b/, 'PlanReminderPanel text fields must use shared Input');
     assert.doesNotMatch(panelBlock, /<textarea\b/, 'PlanReminderPanel notes must use shared Textarea');
+    assert.doesNotMatch(panelBlock, /<select\b/, 'PlanReminderPanel selects must use Base UI Select');
     assert.doesNotMatch(panelBlock, /<button\b/, 'PlanReminderPanel actions must use shared Button');
     assert.match(panelBlock, /const \[submitPending, setSubmitPending\] = useState\(false\)/, 'plan form must gate duplicate async submits');
     assert.match(panelBlock, /const submitDisabled = !canCreate \|\| submitPending/, 'pending create/save must disable the submit button');
@@ -121,7 +124,7 @@ describe('Plan reminder MVP contract', () => {
     assert.match(panelBlock, /data-maka-plan-title-input="true"[\s\S]*disabled=\{formInteractionDisabled\}/, 'pending create/save must disable title edits');
     assert.match(panelBlock, /aria-label="提醒时间"[\s\S]*disabled=\{formInteractionDisabled\}/, 'pending create/save must disable time edits');
     assert.match(panelBlock, /className="maka-plan-preset"[\s\S]*disabled=\{formInteractionDisabled\}/, 'pending create/save must disable quick presets');
-    assert.match(panelBlock, /<select[\s\S]*value=\{recurrence\}[\s\S]*disabled=\{formInteractionDisabled\}/, 'pending create/save must disable recurrence changes');
+    assert.match(panelBlock, /<PlanReminderSelect[\s\S]*value=\{recurrence\}[\s\S]*disabled=\{formInteractionDisabled\}/, 'pending create/save must disable recurrence changes');
     assert.match(panelBlock, /placeholder="可选：补充需要提醒的上下文"[\s\S]*disabled=\{formInteractionDisabled\}/, 'pending create/save must disable note edits');
     assert.match(panelBlock, /onClick=\{resetForm\}[\s\S]*disabled=\{formInteractionDisabled\}/, 'cancel edit must not clear the draft while create/save is pending');
     assert.match(panelBlock, /onClick=\{\(\) => editReminder\(reminder\)\}[\s\S]*disabled=\{submitPending \|\| reminderActionPending \|\| reminder\.status === 'completed'\}/, 'row edit must not overwrite a pending create/save draft');
