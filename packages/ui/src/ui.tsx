@@ -1,5 +1,6 @@
 import React, { forwardRef } from 'react';
 import { Button as BaseButton } from '@base-ui/react/button';
+import { Checkbox as BaseCheckbox } from '@base-ui/react/checkbox';
 import { Dialog as BaseDialog } from '@base-ui/react/dialog';
 import { Tabs as BaseTabs } from '@base-ui/react/tabs';
 import { Tooltip as BaseTooltip } from '@base-ui/react/tooltip';
@@ -167,6 +168,29 @@ export const Separator = forwardRef<HTMLDivElement, React.ComponentPropsWithoutR
       )}
       {...props}
     />
+  );
+});
+
+export const Checkbox = forwardRef<
+  HTMLButtonElement,
+  React.ComponentPropsWithoutRef<typeof BaseCheckbox.Root>
+>(function Checkbox({ className, ...props }, ref) {
+  return (
+    <BaseCheckbox.Root
+      ref={ref}
+      className={cn(
+        'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border border-input bg-background text-foreground shadow-sm transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        'data-[checked]:border-primary data-[checked]:bg-primary data-[checked]:text-primary-foreground',
+        'data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50',
+        className,
+      )}
+      {...props}
+    >
+      <BaseCheckbox.Indicator className="grid place-items-center">
+        <Check size={11} strokeWidth={3} aria-hidden="true" />
+      </BaseCheckbox.Indicator>
+    </BaseCheckbox.Root>
   );
 });
 

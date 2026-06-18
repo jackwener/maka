@@ -102,6 +102,7 @@ import {
   Badge,
   Button as UiButton,
   Card,
+  Checkbox,
   DialogClose,
   DialogContent,
   DialogRoot,
@@ -6365,11 +6366,10 @@ export function PermissionDialog(props: {
             <pre className="maka-code">{formatRedactedJson(props.request.args)}</pre>
           </details>
           <label className="permissionRemember">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={rememberForTurn}
               disabled={responsePending}
-              onChange={(event) => setRememberForTurn(event.currentTarget.checked)}
+              onCheckedChange={(checked) => setRememberForTurn(checked === true)}
             />
             本轮对话内记住选择（同类型工具不再询问，关闭/切换对话后失效）
           </label>
