@@ -134,7 +134,7 @@ import {
 import { Alert, AlertAction, AlertDescription, AlertTitle } from './coss/alert.js';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from './coss/empty.js';
 import { InputGroup, InputGroupAddon, InputGroupInput } from './coss/input-group.js';
-import { Kbd, KbdGroup } from './coss/kbd.js';
+import { Kbd } from './coss/kbd.js';
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from './coss/menu.js';
 
 /**
@@ -4402,7 +4402,6 @@ export function detectDayPeriod(nowMs: number = Date.now()): DayPeriod {
 
 const EMPTY_HERO_COPY_BY_LOCALE: Record<PromptSuggestionLocale, {
   ariaLabel: string;
-  eyebrow: string;
   /** Time-of-day prefix: "早上好" / "Good morning" etc. */
   greeting: Record<DayPeriod, string>;
   /** Soft contextual phrase appended when no userLabel is set
@@ -4413,19 +4412,9 @@ const EMPTY_HERO_COPY_BY_LOCALE: Record<PromptSuggestionLocale, {
   /** Compose the headline when no name (greeting + tail). */
   headlineFallback: (greeting: string, tail: string) => string;
   intro: string;
-  /** PR-UI-LAYOUT-5: small discoverability hint for ⌘K command
-   *  palette — analog of the reference design's "Space 可以随时唤起 AI 输入".
-   *  We use ⌘K rather than Space because Cmd+K is the actual
-   *  Maka shortcut and Space conflicts with normal typing in
-   *  the composer. */
-  paletteHint: string;
 }> = {
   zh: {
     ariaLabel: '开始对话',
-    // PR-SIDEBAR-IA-0 Phase 3 P0 fixup v2 (kenji `08be08d8` +
-    // `e2f932d7`): dropped the all-caps English prefix that read
-    // inconsistently against the rest of this Chinese-first surface.
-    eyebrow: '准备就绪 · 想一起做点什么？',
     greeting: {
       morning: '早上好',
       noon: '中午好',
@@ -4441,11 +4430,9 @@ const EMPTY_HERO_COPY_BY_LOCALE: Record<PromptSuggestionLocale, {
     headlineWithLabel: (greeting, label) => `${greeting} ${label}，今天想做点什么？`,
     headlineFallback: (greeting, tail) => `${greeting}，${tail}。`,
     intro: '说一下你要改的、想问的、想查的；直接在下方输入框里描述需求，Maka 会从这里开始。',
-    paletteHint: '唤起命令面板：搜索 · 设置 · 模型 · 主题 · 新对话 都在这里',
   },
   en: {
     ariaLabel: 'Start a conversation',
-    eyebrow: 'READY · What shall we work on?',
     greeting: {
       morning: 'Good morning',
       noon: 'Good afternoon',
@@ -4461,18 +4448,12 @@ const EMPTY_HERO_COPY_BY_LOCALE: Record<PromptSuggestionLocale, {
     headlineWithLabel: (greeting, label) => `${greeting} ${label} — what shall we tackle today?`,
     headlineFallback: (greeting, tail) => `${greeting} — ${tail}.`,
     intro: 'Describe what you want to change, ask, or look up. Type it in the composer below and Maka will start from there.',
-    paletteHint: 'Open the command palette: search · settings · models · theme · new chat',
   },
 };
 
 function EmptyChatHero(props: { onPromptSuggestion?(prompt: string): void; userLabel?: string }) {
   // Greet the user by name when they've set one in Personalization Settings.
   // Falls back to a neutral title so first-run users don't see "Hi 你, …".
-  //
-  // PR-UI-1 (@yuejing 2026-05-22): visual unification with OnboardingHero
-  // ReadyEmptyHero. Both heroes now use the same Sparkles-eyebrow chrome
-  // and headline scale so users don't see a jarring visual switch between
-  // "first-run" and "empty session" surfaces.
   //
   // PR-QODERWORK-HERO-0: the normal empty chat page now follows the
   // QoderWork single-card pattern: calm copy above the one real composer
@@ -4493,31 +4474,10 @@ function EmptyChatHero(props: { onPromptSuggestion?(prompt: string): void; userL
   return (
     <section className="maka-hero maka-hero-empty-chat" aria-label={copy.ariaLabel}>
       <header>
-        <span className="maka-hero-eyebrow">
-          <Sparkles size={12} strokeWidth={2} aria-hidden="true" />
-          <span>{copy.eyebrow}</span>
-        </span>
         <h1>
           {label ? copy.headlineWithLabel(greeting, label) : copy.headlineFallback(greeting, greetingTail)}
         </h1>
         <p>{copy.intro}</p>
-        {/* PR-UI-LAYOUT-5b / B1-a1 review fixup (@kenji msg 708255f3):
-         *   - Outer wrapper is NOT `aria-hidden` — the hint copy
-         *     announces a real keyboard shortcut and command-palette
-         *     entrypoint to assistive tech users; hiding it strips
-         *     real navigation info from the AT tree.
-         *   - Only the visual COSS Kbd glyphs are aria-hidden (their
-         *     content reads noisily as "command K"); the textual hint
-         *     stays in the AT tree.
-         *   - `aria-keyshortcuts` lets AT users know the chord without
-         *     parsing the visual key glyphs. */}
-        <span className="maka-hero-palette-hint" aria-keyshortcuts="Meta+K">
-          <KbdGroup className="maka-shortcut-group" aria-hidden="true">
-            <Kbd className="maka-shortcut-kbd">⌘</Kbd>
-            <Kbd className="maka-shortcut-kbd">K</Kbd>
-          </KbdGroup>
-          <span>{copy.paletteHint}</span>
-        </span>
       </header>
     </section>
   );

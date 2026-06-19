@@ -47,9 +47,10 @@ describe('localized main shell contract', () => {
   it('does not render idle Composer keyboard shortcut copy in the chat surface', async () => {
     const components = await readFile(resolve(process.cwd(), '..', '..', 'packages', 'ui', 'src', 'components.tsx'), 'utf8');
 
-    assert.match(components, /import \{ Kbd, KbdGroup \} from '\.\/coss\/kbd\.js';/);
+    assert.match(components, /import \{ Kbd \} from '\.\/coss\/kbd\.js';/);
     assert.doesNotMatch(components, /maka-composer-shortcut-hint/);
     assert.doesNotMatch(components, /enterHint/);
+    assert.doesNotMatch(components, /KbdGroup/);
     assert.match(
       components,
       /copy\.awaitingPermission/,
@@ -60,11 +61,7 @@ describe('localized main shell contract', () => {
       /copy\.sending/,
       'sending status must stay visible to assistive technology',
     );
-    assert.match(
-      components,
-      /aria-keyshortcuts="Meta\+K"[\s\S]*<KbdGroup className="maka-shortcut-group" aria-hidden="true">[\s\S]*<Kbd className="maka-shortcut-kbd">⌘<\/Kbd>[\s\S]*<Kbd className="maka-shortcut-kbd">K<\/Kbd>/,
-      'hero command hint must keep semantic aria-keyshortcuts while rendering visual keys through COSS Kbd',
-    );
+    assert.doesNotMatch(components, /aria-keyshortcuts="Meta\+K"/);
     assert.match(
       components,
       /copy\.streamingHintPrefix\} <Kbd className="maka-shortcut-kbd">Esc<\/Kbd> \{copy\.streamingHintInterrupt/,
@@ -484,6 +481,10 @@ describe('localized main shell contract', () => {
     assert.doesNotMatch(emptyHero, /maka-prompt-suggestions/);
     assert.doesNotMatch(emptyHero, /maka-prompt-chip/);
     assert.doesNotMatch(emptyHero, /getPromptSuggestions\(locale\)/);
+    assert.doesNotMatch(emptyHero, /maka-hero-eyebrow/);
+    assert.doesNotMatch(emptyHero, /maka-hero-palette-hint/);
+    assert.doesNotMatch(emptyHero, /paletteHint|copy\.eyebrow/);
+    assert.doesNotMatch(styles, /\.maka-hero-palette-hint/);
     assert.ok(composerShell, '.composer rule must exist');
     assert.match(composerShell, /display:\s*flex/);
     assert.match(composerShell, /align-items:\s*center/);
