@@ -570,9 +570,9 @@
     overflow: hidden;          /* main shell handles its own scrolling */
   }
 
-  /* Scrollbars: thin, accent-on-hover, transparent track. */
-  /* PR-UI-10: thinner default scrollbar (8→6) + smoother hover state
-   * + Firefox `scrollbar-width: thin` for parity. */
+  /* Native fallback for raw browser scroll surfaces. Primary app scroll
+   * containers are mounted through OverlayScrollbars with the os-theme-maka
+   * theme in styles.css. */
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;

@@ -81,6 +81,7 @@ import {
   DialogContent,
   DialogRoot,
   Input,
+  OverlayScrollArea,
   RelativeTime,
   SelectItem,
   SelectPopup,
@@ -1019,7 +1020,11 @@ function SettingsSurface(props: {
           </Button>
         </header>
 
-        <div className="settingsPageContent">
+        <OverlayScrollArea
+          className="settingsPageContent"
+          viewportClassName="settingsPageContentViewport"
+          contentClassName="settingsPageContentInner"
+        >
           {loading ? (
             <SettingsSkeleton />
           ) : (
@@ -1043,7 +1048,7 @@ function SettingsSurface(props: {
               onOpenSession={props.onOpenSession}
             />
           )}
-        </div>
+        </OverlayScrollArea>
       </section>
     </main>
   );

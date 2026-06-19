@@ -56,6 +56,7 @@ import {
   type MakaUriDest,
 } from './maka-uri.js';
 import { prepareSmoothStreamText, useSmoothStreamContent } from './smooth-stream.js';
+import { OverlayScrollArea } from './overlay-scroll-area.js';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -663,7 +664,12 @@ export function SessionListPanel(props: {
               cta={{ label: '新建对话', onClick: props.onNew }}
             />
           ) : (
-            <div className="maka-list-stack" onKeyDown={handleListKeyDown}>
+            <OverlayScrollArea
+              className="maka-list-stack"
+              viewportClassName="maka-list-stackViewport"
+              contentClassName="maka-list-stackContent"
+              onKeyDown={handleListKeyDown}
+            >
               <SessionListGroups
                 groups={
                   props.statusGroups && props.selection.section === 'sessions' && props.selection.filter === 'chats'
@@ -688,7 +694,7 @@ export function SessionListPanel(props: {
                 onSelectSession={props.onSelectSession}
                 rowActions={props.rowActions}
               />
-            </div>
+            </OverlayScrollArea>
           )
         ) : props.selection.section === 'daily-review' ? (
           <SidebarModuleHint
@@ -3722,9 +3728,13 @@ export function ChatView(props: {
           </UiButton>
           <span className="maka-chat-header-spacer" />
         </header>
-        <div className="maka-chat messages">
+        <OverlayScrollArea
+          className="maka-chat messages"
+          viewportClassName="maka-chatViewport"
+          contentClassName="maka-chatContent"
+        >
           {props.emptyOverride ?? <EmptyChatHero onPromptSuggestion={props.onPromptSuggestion} userLabel={props.userLabel} />}
-        </div>
+        </OverlayScrollArea>
       </main>
     );
   }
@@ -3809,7 +3819,13 @@ export function ChatView(props: {
             onClick={props.onBranchBannerClick}
           />
         )}
-        <div ref={scrollRef} className="maka-chat messages" onScroll={onScroll}>
+        <OverlayScrollArea
+          ref={scrollRef}
+          className="maka-chat messages"
+          viewportClassName="maka-chatViewport"
+          contentClassName="maka-chatContent"
+          onScroll={onScroll}
+        >
           {chat.length === 0 && !props.streamingText && (
             props.messageLoadError ? (
               <div role="alert" aria-busy={props.messageLoadRetryPending ? 'true' : undefined}>
@@ -3898,7 +3914,7 @@ export function ChatView(props: {
               still appear instead of vanishing. materializeTurns already
               folds these into the `__loose` turn, so this is normally a
               no-op. */}
-        </div>
+        </OverlayScrollArea>
         {!pinnedToBottom && (
           <UiButton
             type="button"

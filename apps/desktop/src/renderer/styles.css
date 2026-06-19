@@ -7,6 +7,7 @@
    remains so the app stays legible even if the font fails to load. */
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
+@import "overlayscrollbars/overlayscrollbars.css";
 
 @import "./maka-tokens.css";
 
@@ -55,6 +56,45 @@
 
 body {
   margin: 0;
+}
+
+.maka-overlay-scrollarea {
+  min-width: 0;
+  min-height: 0;
+}
+
+.maka-overlay-scrollarea-viewport {
+  min-width: 0;
+  min-height: 0;
+}
+
+.maka-overlay-scrollarea-content {
+  min-width: 0;
+}
+
+.os-theme-maka {
+  --os-size: 8px;
+  --os-padding-perpendicular: 2px;
+  --os-padding-axis: 2px;
+  --os-track-border-radius: 8px;
+  --os-track-bg: transparent;
+  --os-track-bg-hover: oklch(from var(--foreground) l c h / 0.04);
+  --os-track-bg-active: oklch(from var(--foreground) l c h / 0.06);
+  --os-handle-border-radius: 6px;
+  --os-handle-bg: var(--border);
+  --os-handle-bg-hover: var(--foreground-30);
+  --os-handle-bg-active: var(--foreground-40);
+  --os-handle-interactive-area-offset: 4px;
+  --os-handle-min-size: 32px;
+  box-sizing: border-box;
+}
+
+.os-theme-maka.os-scrollbar-vertical {
+  width: var(--os-size);
+}
+
+.os-theme-maka.os-scrollbar-horizontal {
+  height: var(--os-size);
 }
 
 button,
@@ -604,7 +644,7 @@ button:active {
 .maka-session-panel[data-collapsed="true"] .maka-list-stack,
 .maka-session-panel[data-collapsed="true"] .maka-sidebar-module-hint,
 .maka-session-panel[data-collapsed="true"] .maka-empty-state {
-  display: none;
+  display: none !important;
 }
 
 /* PR-SIDEBAR-IA-0 Phase 2 fixup v3 (xuan `dce5a6fb` #3): the
@@ -623,13 +663,13 @@ button:active {
 .maka-session-list {
   /* PR-SIDEBAR-IA-0 Phase 1 (xuan msg `dc790a54`, kenji msg `0f7bb872`):
    * scroll fix. The previous block layout let the inner `.maka-list-stack`
-   * grow to its natural content height, so `overflow: auto` on the
-   * stack was a no-op — once a workspace had enough sessions, the
+   * grow to its natural content height, so the scroll viewport was
+   * unconstrained — once a workspace had enough sessions, the
    * list overflowed the parent and the footer (Settings / Update) got
    * pushed out of view. Defining a grid row template here pins the
    * title at the top (`auto`) and gives the scroll body the remaining
    * space (`minmax(0, 1fr)`), at which point the stack's own
-   * `overflow: auto` activates correctly.
+   * overlay viewport activates correctly.
    *
    * Hard gate: 50+ sessions in a narrow window must still let the
    * footer stay visible. See the visual-smoke `sidebar-long-sessions`
@@ -984,9 +1024,17 @@ button:active {
 
 .maka-list-stack {
   min-height: 0;
-  overflow: auto;
-  display: grid;
+  overflow: hidden;
+}
+
+.maka-list-stackViewport {
+  height: 100%;
+  overscroll-behavior: contain;
+}
+
+.maka-list-stackContent {
   align-content: start;
+  display: grid;
   /* PR-SIDEBAR-IA-0 Phase 3: with card chrome removed from rows, the
    * inter-row gap shrinks 4 → 2 so the list reads as a continuous
    * list (Slack/Linear) rather than gappy chunks. Padding also drops
@@ -1038,7 +1086,7 @@ button:active {
  * After Phase 3:
  *   - 32px min-height, single line: status indicator + name + time.
  *   - Flat list (no border, no radius, no shadow); the surrounding
- *     `.maka-list-stack` provides the scroll body, so rows just need
+ *     `.maka-list-stackContent` provides the row stack, so rows just need
  *     to read as a list, not a stack of cards.
  *   - Snippet drops out of the default DOM (lives only in a native
  *     `title=` tooltip on hover) — see SessionRow render path.
@@ -3530,7 +3578,20 @@ button:active {
 }
 
 .messages {
+  position: relative;
+  flex: 1;
   min-height: 0;
+  overflow: hidden;
+}
+
+.maka-chatViewport {
+  height: 100%;
+  overscroll-behavior: contain;
+}
+
+.maka-chatContent {
+  position: relative;
+  min-height: 100%;
 }
 
 /* Soft scrim at the top of the chat scroll area so headings + tabs read
@@ -5860,7 +5921,15 @@ button:active {
 
 .settingsPageContent {
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
+}
+
+.settingsPageContentViewport {
+  height: 100%;
+  overscroll-behavior: contain;
+}
+
+.settingsPageContentInner {
   padding-top: 16px;
 }
 

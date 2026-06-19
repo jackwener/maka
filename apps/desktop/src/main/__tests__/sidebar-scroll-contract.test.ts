@@ -5,8 +5,8 @@
  * The scroll fix lives in plain CSS — there is no component invariant
  * a unit test can exercise. This file is a cheap grep-style regression
  * gate: if a later phase changes `.maka-session-list` or
- * `.maka-list-stack` and drops the grid layout / `min-height: 0` /
- * `overflow: auto`, the list stops scrolling and the footer
+ * `.maka-list-stack` and drops the OverlayScrollbars host /
+ * viewport / content split or `min-height: 0`, the list stops scrolling and the footer
  * (Settings + Version info) gets pushed off-screen
  * again — the exact P0 WAWQAQ flagged in msg `761141c5`.
  *
@@ -33,7 +33,7 @@ describe('sidebar session list CSS scroll contract (PR-SIDEBAR-IA-0 Phase 1)', (
   it('.maka-session-list is a grid with auto + minmax(0, 1fr) rows', async () => {
     // The grid layout is what makes `.maka-list-stack` a constrained
     // scroll body. Without `minmax(0, 1fr)` on the second row, the
-    // stack grows to its content height and `overflow: auto` becomes
+    // stack grows to its content height and the overlay viewport becomes
     // a no-op (the original P0).
     const css = await readFile(STYLES_PATH, 'utf8');
     // Grab the .maka-session-list rule body. Permissive whitespace
@@ -59,13 +59,14 @@ describe('sidebar session list CSS scroll contract (PR-SIDEBAR-IA-0 Phase 1)', (
     );
   });
 
-  it('.maka-list-stack has min-height: 0 and overflow: auto so the scroll body engages', async () => {
-    // These two are what actually scroll. They worked correctly before
-    // Phase 1 (the bug was the parent), but if a later phase strips
-    // them while reshuffling the list rendering, scroll breaks again.
+  it('.maka-list-stack uses OverlayScrollbars host + viewport/content split so the scroll body engages', async () => {
     const css = await readFile(STYLES_PATH, 'utf8');
     const ruleBody = extractRuleBody(css, '.maka-list-stack');
+    const viewportBody = extractRuleBody(css, '.maka-list-stackViewport');
+    const contentBody = extractRuleBody(css, '.maka-list-stackContent');
     assert.ok(ruleBody, '.maka-list-stack rule must exist');
+    assert.ok(viewportBody, '.maka-list-stackViewport rule must exist');
+    assert.ok(contentBody, '.maka-list-stackContent rule must exist');
     assert.match(
       ruleBody,
       /min-height:\s*0/,
@@ -73,8 +74,18 @@ describe('sidebar session list CSS scroll contract (PR-SIDEBAR-IA-0 Phase 1)', (
     );
     assert.match(
       ruleBody,
-      /overflow:\s*auto/,
-      '.maka-list-stack must declare overflow: auto',
+      /overflow:\s*hidden/,
+      '.maka-list-stack must be the OverlayScrollbars host, not a native overflow:auto scroller',
+    );
+    assert.match(
+      viewportBody,
+      /height:\s*100%/,
+      '.maka-list-stackViewport must fill the OverlayScrollbars host',
+    );
+    assert.match(
+      contentBody,
+      /display:\s*grid/,
+      '.maka-list-stackContent must keep the session groups in the compact grid stack',
     );
   });
 
