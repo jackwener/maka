@@ -512,6 +512,10 @@ describe('localized main shell contract', () => {
     assert.match(sidebarTopBar, /justify-content:\s*space-between/);
     assert.match(sidebarTopBar, /box-sizing:\s*border-box/);
     assert.match(sidebarTopBar, /padding-left:\s*calc\(var\(--maka-titlebar-control-safe-left\) - 10px\)/);
+    assert.match(styles, /(?:^|\n)\.maka-nav-icon\s*\{[\s\S]*?width:\s*18px[\s\S]*?height:\s*18px/);
+    assert.match(styles, /(?:^|\n)\.maka-nav-row\[data-active="true"\]\s*\{[\s\S]*?background:\s*oklch\(from var\(--accent\) l c h \/ 0\.10\)[\s\S]*?color:\s*var\(--accent\)[\s\S]*?font-weight:\s*600[\s\S]*?box-shadow:\s*none/);
+    assert.match(styles, /(?:^|\n)\.maka-nav-row\[data-active="true"\] \.maka-nav-icon\s*\{[\s\S]*?color:\s*var\(--accent\)/);
+    assert.doesNotMatch(styles, /\.maka-nav-row\[data-active="true"\]::before/);
     assert.match(styles, /\.maka-sidebar-search-button,\n\.maka-sidebar-toggle \{/);
     const detailWithArtifacts = extractCssRule(styles, '.maka-detail-with-artifacts');
     assert.ok(detailWithArtifacts, '.maka-detail-with-artifacts rule must exist');

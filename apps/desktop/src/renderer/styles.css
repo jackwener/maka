@@ -963,13 +963,13 @@ button:active {
 }
 
 .maka-session-panel[data-collapsed="true"] .maka-nav-row[data-active="true"] {
-  background: var(--foreground-5);
+  background: oklch(from var(--accent) l c h / 0.10);
   box-shadow: none;
-  color: var(--foreground);
+  color: var(--accent);
 }
 
 .maka-session-panel[data-collapsed="true"] .maka-nav-row[data-active="true"] .maka-nav-icon {
-  color: var(--foreground-70);
+  color: var(--accent);
 }
 
 .maka-nav-section {
@@ -1039,21 +1039,15 @@ button:active {
 }
 
 .maka-nav-row[data-active="true"] {
-  /* PR-UI-LAYOUT-8 + PR-CHAT-SIDEBAR-POLISH-1: the soft accent tint
-     stays, but pair it with an inset left accent bar (the standard
-     active-item marker — same pattern as the search modal result).
-     A glance at the sidebar should make the current session
-     unambiguous, even in low-contrast / glance contexts.
-
-     Matches the settings nav active state (PR-UI-LAYOUT-6) so
-     navigation feels coherent across surfaces. */
-  background: var(--foreground-5);
-  color: var(--foreground);
-  font-weight: 500;
+  /* QoderWork active nav rows use a light accent fill with stronger
+     label color, but no raised card chrome or left accent rail. */
+  background: oklch(from var(--accent) l c h / 0.10);
+  color: var(--accent);
+  font-weight: 600;
   box-shadow: none;
 }
 .maka-nav-row[data-active="true"] .maka-nav-icon {
-  color: var(--foreground-70);
+  color: var(--accent);
 }
 
 /* PR-SIDEBAR-IA-0 Phase 2: aria-disabled nav rows render dimmed and
@@ -1093,8 +1087,8 @@ button:active {
 }
 
 .maka-nav-row[data-active="true"] .maka-nav-count {
-  background: oklch(from var(--foreground) l c h / 0.08);
-  color: var(--foreground-70);
+  background: oklch(from var(--accent) l c h / 0.12);
+  color: var(--accent);
 }
 
 .maka-nav-row-sub {
@@ -1103,8 +1097,8 @@ button:active {
 }
 
 .maka-nav-icon {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   color: var(--foreground-50);
   justify-self: center;
 }
