@@ -6451,34 +6451,34 @@ function ToolErrorBanner(props: { result: ToolActivityItem['result'] }) {
   }
 
   return (
-    <div className="maka-tool-error" role="alert">
-      <span className="maka-tool-error-icon" aria-hidden="true">
-        <AlertOctagon size={16} strokeWidth={2} />
-      </span>
-      <div className="maka-tool-error-body">
-        <strong className="maka-tool-error-title">工具调用失败</strong>
-        {errorText && (
-          <p className="maka-tool-error-text">{errorText.length > 240 ? `${errorText.slice(0, 240)}…` : errorText}</p>
-        )}
-      </div>
+    <Alert variant="error" className="maka-tool-error">
+      <AlertOctagon size={16} strokeWidth={2} aria-hidden="true" />
+      <AlertTitle>工具调用失败</AlertTitle>
       {errorText && (
-        <UiButton
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="maka-button maka-tool-error-copy"
-          data-pending={copyPending ? 'true' : undefined}
-          data-copy-feedback={copyPhase ?? undefined}
-          aria-label={`${copyLabel}错误信息`}
-          aria-busy={copyPending ? 'true' : undefined}
-          disabled={copyPending}
-          onClick={() => void copy()}
-        >
-          {copyPhase === 'copied' ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
-          <span>{copyLabel}</span>
-        </UiButton>
+        <AlertDescription className="maka-tool-error-text">
+          {errorText.length > 240 ? `${errorText.slice(0, 240)}…` : errorText}
+        </AlertDescription>
       )}
-    </div>
+      {errorText && (
+        <AlertAction>
+          <UiButton
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="maka-button maka-tool-error-copy"
+            data-pending={copyPending ? 'true' : undefined}
+            data-copy-feedback={copyPhase ?? undefined}
+            aria-label={`${copyLabel}错误信息`}
+            aria-busy={copyPending ? 'true' : undefined}
+            disabled={copyPending}
+            onClick={() => void copy()}
+          >
+            {copyPhase === 'copied' ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+            <span>{copyLabel}</span>
+          </UiButton>
+        </AlertAction>
+      )}
+    </Alert>
   );
 }
 
