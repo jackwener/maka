@@ -445,6 +445,12 @@ function harborReward(value: Record<string, unknown>): number {
   const metrics = isRecord(value.metrics) ? value.metrics : undefined;
   const nested = metrics ? numericField(metrics, 'reward') ?? numericField(metrics, 'score') : undefined;
   if (nested !== undefined) return nested;
+  const verifierResult = isRecord(value.verifier_result) ? value.verifier_result : undefined;
+  const verifierRewards = verifierResult && isRecord(verifierResult.rewards) ? verifierResult.rewards : undefined;
+  const verifierReward = verifierRewards
+    ? numericField(verifierRewards, 'reward') ?? numericField(verifierRewards, 'score')
+    : undefined;
+  if (verifierReward !== undefined) return verifierReward;
   throw new Error('Harbor result must include a numeric reward or score');
 }
 

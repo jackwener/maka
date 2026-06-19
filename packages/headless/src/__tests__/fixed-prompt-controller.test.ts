@@ -122,7 +122,7 @@ describe('fixed prompt controller', () => {
     await withDir(async (dir) => {
       const harborResultPath = join(dir, 'result.json');
       const cellOutputPath = join(dir, 'maka-cell-output.json');
-      await writeFile(harborResultPath, JSON.stringify({ reward: 0 }), 'utf8');
+      await writeFile(harborResultPath, JSON.stringify({ verifier_result: { rewards: { reward: 0 } } }), 'utf8');
       await writeFile(cellOutputPath, JSON.stringify(harborOutput({ taskId: 'task-a' }).cell), 'utf8');
 
       const output = await readHarborTaskRunOutput({ harborResultPath, cellOutputPath });
