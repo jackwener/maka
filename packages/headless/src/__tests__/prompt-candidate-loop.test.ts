@@ -122,6 +122,7 @@ describe('prompt candidate loop', () => {
       );
 
       assert.equal(committed, false);
+      assert.equal(await readFile(systemPromptPath, 'utf8'), 'original prompt\n');
     });
   });
 
