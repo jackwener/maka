@@ -69,6 +69,12 @@ describe('Plan reminder MVP contract', () => {
     assert.match(ui, /type PlanReminderSort = 'created-desc' \| 'next-run-asc' \| 'updated-desc'/, 'plan list must expose a visible sort control');
     assert.match(ui, /按创建时间倒序/, 'default plan sort should match the QoderWork-style sort label');
     assert.match(ui, /comparePlanReminderBySort/, 'visible sort choices must be routed through a centralized comparator');
+    assert.match(ui, /PLAN_REMINDER_EXAMPLE_TEMPLATES/, 'plan reminders must expose top example templates instead of relying on an empty form');
+    assert.match(ui, /每日新闻摘要/, 'plan reminder examples must include the daily news brief template');
+    assert.match(ui, /周末待办整理/, 'plan reminder examples must include the weekend todo review template');
+    assert.match(ui, /openPlanReminderTemplate/, 'example cards must prefill the create dialog before persistence');
+    assert.match(ui, /setTitle\(template\.title\)[\s\S]*setNote\(template\.note\)[\s\S]*setCronExpression\(template\.cronExpression\)/, 'template click must prefill title, prompt, and cron without creating a reminder');
+    assert.doesNotMatch(ui, /function openPlanReminderTemplate[\s\S]*?props\.onCreate[\s\S]*?function closeReminderDialog/, 'template examples must not silently persist real reminders');
     assert.match(ui, /当前筛选没有提醒/, '计划 UI must distinguish empty filters from an empty reminder store');
     assert.match(ui, /filterCounts/, 'status picker must show counts per reminder status');
     assert.match(ui, /activePlanReminderCount/, 'sidebar Plan nav must derive an active reminder count');
@@ -104,6 +110,7 @@ describe('Plan reminder MVP contract', () => {
     assert.match(ui, /<Menu>[\s\S]*<MenuTrigger[\s\S]*<MenuPopup/, 'card secondary actions must be grouped behind a COSS menu');
     assert.match(ui, /<Switch[\s\S]*checked=\{reminder\.enabled\}/, 'plan cards must expose QoderWork-style enable switches');
     assert.match(ui, /保持系统唤醒[\s\S]*<Switch checked=\{false\} disabled aria-label="保持系统唤醒暂未启用" \/>/, 'info banner must include the QoderWork-style keep-awake switch affordance without faking backend support');
+    assert.match(ui, /className="maka-plan-new-task-button"/, 'primary create action must use the QoderWork-style black CTA hook');
     assert.match(ui, /maka-plan-card-grid/, 'task cards must render in a responsive grid');
     assert.match(ui, /maka-plan-card-divider/, 'task cards must use a dashed divider before schedule metadata');
     assert.match(ui, /planReminderRunRangeStart/, 'execution record filters must use a centralized range helper');
@@ -132,6 +139,10 @@ describe('Plan reminder MVP contract', () => {
     assert.match(ui, /SelectItem,[\s\S]*SelectPopup,[\s\S]*SelectPortal,[\s\S]*SelectPositioner,[\s\S]*SelectRoot,[\s\S]*SelectTrigger,[\s\S]*SelectValue,/, 'plan reminder selects must use shared Base UI Select imports');
     assert.match(css, /--color-info:\s*var\(--info\);[\s\S]*--color-warning-foreground:\s*var\(--warning-text\);/, 'COSS status color tokens must be mapped into Tailwind v4 theme variables');
     assert.match(css, /\.maka-plan-system-alert/, 'PlanReminderPanel COSS Alert must have a local product surface style hook');
+    assert.match(css, /\.maka-plan-template-strip[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/, 'example templates must use the same two-column surface rhythm as QoderWork');
+    assert.match(css, /\.maka-plan-template-card[\s\S]*border-radius:\s*6px/, 'example template cards must use the QoderWork 6px card radius');
+    assert.match(css, /\.maka-plan-new-task-button[\s\S]*background:\s*#000/, 'primary plan CTA must be black, not the app accent color');
+    assert.match(css, /\.maka-plan-form,[\s\S]*\.maka-plan-card,[\s\S]*\.maka-plan-run-row[\s\S]*border-radius:\s*6px/, 'plan cards and rows must keep the QoderWork 6px radius');
     assert.match(ui, /function PlanReminderSelect[\s\S]*<SelectPositioner alignItemWithTrigger=\{false\} sideOffset=\{6\}>/, 'PlanReminder Select popups must opt out of item-trigger alignment');
     assert.doesNotMatch(panelBlock, /<input\b/, 'PlanReminderPanel text fields must use shared Input');
     assert.doesNotMatch(panelBlock, /<textarea\b/, 'PlanReminderPanel notes must use shared Textarea');

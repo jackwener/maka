@@ -1445,6 +1445,37 @@ function PlanReminderSelect<T extends string>(props: {
   );
 }
 
+type PlanReminderExampleTemplate = {
+  id: string;
+  title: string;
+  note: string;
+  scheduleLabel: string;
+  recurrence: PlanReminderRecurrence;
+  cronExpression: string;
+  nextRun: { weekday?: number; hour: number; minute: number };
+};
+
+const PLAN_REMINDER_EXAMPLE_TEMPLATES: readonly PlanReminderExampleTemplate[] = [
+  {
+    id: 'daily-news-brief',
+    title: '每日新闻摘要',
+    note: '总结今天科技 / AI / Maka 相关新闻 5 条，按重要性排序，并给出每条 1 句影响判断。',
+    scheduleLabel: '每天 09:30',
+    recurrence: 'cron',
+    cronExpression: '30 9 * * *',
+    nextRun: { hour: 9, minute: 30 },
+  },
+  {
+    id: 'weekend-todo-review',
+    title: '周末待办整理',
+    note: '梳理这周完成 / 未完成的待办，输出下周计划，并标记需要优先处理的 3 件事。',
+    scheduleLabel: '每周日 20:00',
+    recurrence: 'cron',
+    cronExpression: '0 20 * * 0',
+    nextRun: { weekday: 0, hour: 20, minute: 0 },
+  },
+];
+
 function PlanReminderPanel(props: {
   reminders: PlanReminder[];
   onRefresh?(): void | Promise<void>;
@@ -1542,6 +1573,19 @@ function PlanReminderPanel(props: {
 
   function openCreateReminderDialog() {
     resetForm();
+    setFormDialogOpen(true);
+  }
+
+  function openPlanReminderTemplate(template: PlanReminderExampleTemplate) {
+    setEditingId(null);
+    setTitle(template.title);
+    setNote(template.note);
+    setRecurrence(template.recurrence);
+    setCronExpression(template.cronExpression);
+    setDeliveryChannel('local');
+    setDeliveryPlatform('telegram');
+    setDeliveryChatId('');
+    setRunAtLocal(toPlanReminderDateTimeInputValue(planReminderTemplateNextRunAt(template)));
     setFormDialogOpen(true);
   }
 
@@ -1672,14 +1716,44 @@ function PlanReminderPanel(props: {
             >
               <RefreshCcw size={15} strokeWidth={1.75} aria-hidden="true" />
             </UiButton>
-            <UiButton type="button" variant="secondary" onClick={openCreateReminderDialog}>
+            <UiButton
+              type="button"
+              variant="secondary"
+              className="maka-plan-create-through"
+              onClick={openCreateReminderDialog}
+            >
+              <Sparkles size={14} strokeWidth={1.75} aria-hidden="true" />
               通过 Maka 创建
             </UiButton>
-            <UiButton type="button" onClick={openCreateReminderDialog}>
+            <UiButton type="button" className="maka-plan-new-task-button" onClick={openCreateReminderDialog}>
               <Plus size={15} strokeWidth={1.75} aria-hidden="true" />
               新建定时任务
             </UiButton>
           </div>
+        </div>
+
+        <div className="maka-plan-template-strip" aria-label="定时任务示例模板">
+          {PLAN_REMINDER_EXAMPLE_TEMPLATES.map((template) => (
+            <UiButton
+              key={template.id}
+              type="button"
+              variant="ghost"
+              className="maka-plan-template-card"
+              onClick={() => openPlanReminderTemplate(template)}
+            >
+              <span className="maka-plan-template-icon" aria-hidden="true">
+                <Sparkles size={15} strokeWidth={1.8} />
+              </span>
+              <span className="maka-plan-template-main">
+                <span className="maka-plan-template-title">{template.title}</span>
+                <span className="maka-plan-template-note">{template.note}</span>
+              </span>
+              <span className="maka-plan-template-schedule">
+                <Clock size={13} strokeWidth={1.75} aria-hidden="true" />
+                {template.scheduleLabel}
+              </span>
+            </UiButton>
+          ))}
         </div>
 
         <Alert variant="info" className="maka-plan-system-alert">
@@ -2145,6 +2219,20 @@ function planReminderPresetRunAt(preset: 'ten-minutes' | 'one-hour' | 'tomorrow-
   date.setDate(date.getDate() + daysUntilNextMonday);
   date.setHours(9, 0, 0, 0);
   return date.getTime();
+}
+
+function planReminderTemplateNextRunAt(template: PlanReminderExampleTemplate, now: number = Date.now()): number {
+  const nextRun = new Date(now);
+  nextRun.setSeconds(0, 0);
+  nextRun.setHours(template.nextRun.hour, template.nextRun.minute, 0, 0);
+  if (typeof template.nextRun.weekday === 'number') {
+    const daysUntilTarget = (template.nextRun.weekday - nextRun.getDay() + 7) % 7;
+    nextRun.setDate(nextRun.getDate() + daysUntilTarget);
+  }
+  if (nextRun.getTime() <= now) {
+    nextRun.setDate(nextRun.getDate() + (typeof template.nextRun.weekday === 'number' ? 7 : 1));
+  }
+  return nextRun.getTime();
 }
 
 function planReminderFormValidationMessage(input: {

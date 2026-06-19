@@ -2572,8 +2572,8 @@ button:active {
   width: min(100%, 1080px);
   margin: 0 auto;
   display: grid;
-  gap: 22px;
-  padding: clamp(42px, 6vh, 72px) 0 32px;
+  gap: 16px;
+  padding: clamp(34px, 5vh, 58px) 0 32px;
 }
 
 .maka-plan-hero {
@@ -2626,10 +2626,108 @@ button:active {
   background: var(--foreground-3);
   color: var(--foreground);
   border-color: transparent;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.maka-plan-new-task-button {
+  gap: 6px;
+  border-color: #000;
+  border-radius: 999px;
+  background: #000;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.maka-plan-new-task-button:hover {
+  border-color: #111;
+  background: #111;
+  color: #fff;
 }
 
 .maka-plan-refresh-button {
   color: var(--foreground-60);
+}
+
+.maka-plan-template-strip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.maka-plan-template-card {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  gap: 12px;
+  min-width: 0;
+  height: auto;
+  min-height: 74px;
+  justify-content: stretch;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  padding: 13px 14px;
+  text-align: left;
+}
+
+.maka-plan-template-card:hover {
+  border-color: oklch(from var(--foreground) l c h / 0.18);
+  background: var(--foreground-2);
+}
+
+.maka-plan-template-icon {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--foreground-3);
+  color: var(--foreground-70);
+}
+
+.maka-plan-template-main {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.maka-plan-template-title {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.maka-plan-template-note {
+  color: var(--foreground-60);
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.maka-plan-template-schedule {
+  display: inline-flex;
+  align-self: start;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--foreground-2);
+  color: var(--foreground-55);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  padding: 6px 8px;
+  white-space: nowrap;
 }
 
 .maka-plan-system-alert {
@@ -2774,7 +2872,7 @@ button:active {
   display: grid;
   gap: 10px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--background);
   padding: 16px;
 }
@@ -2808,12 +2906,12 @@ button:active {
 
 .maka-plan-card-menu-trigger {
   display: inline-flex;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   align-items: center;
   justify-content: center;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: var(--foreground-60);
   cursor: pointer;
@@ -3061,7 +3159,7 @@ button:active {
   gap: 5px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--foreground-2);
+  background: transparent;
   color: var(--foreground-60);
   font-size: 11px;
   font-weight: 600;
@@ -3090,7 +3188,6 @@ button:active {
 
 .maka-plan-card-note {
   min-height: 44px;
-  border-radius: 8px;
   color: var(--foreground-60);
   font-size: 13px;
   line-height: 1.5;
@@ -3175,6 +3272,19 @@ button:active {
 
   .maka-plan-system-alert {
     display: grid;
+  }
+
+  .maka-plan-template-strip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .maka-plan-template-card {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+
+  .maka-plan-template-schedule {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .maka-plan-top-actions {
