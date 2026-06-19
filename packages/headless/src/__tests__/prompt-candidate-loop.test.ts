@@ -240,6 +240,43 @@ describe('prompt candidate loop', () => {
     });
   });
 
+  test('restores the original prompt when committing the candidate fails', async () => {
+    await withDir(async (dir) => {
+      const programPath = join(dir, 'program.md');
+      const systemPromptPath = join(dir, 'system_prompt.md');
+      const resultsTsvPath = join(dir, 'results.tsv');
+      await writeFile(programPath, 'Improve the prompt conservatively.\n', 'utf8');
+      await writeFile(systemPromptPath, 'original prompt\n', 'utf8');
+      await writeFile(resultsTsvPath, 'task_id\tpassed\ntask-a\tfalse\n', 'utf8');
+
+      await assert.rejects(
+        runPromptCandidateRound({
+          runId: 'run-1',
+          roundId: 'round-1',
+          programPath,
+          systemPromptPath,
+          resultsTsvPath,
+          resultsJsonlPath: join(dir, 'results.jsonl'),
+          heldInDigests: [],
+          metaAgent: async () => ({ systemPrompt: 'candidate prompt\n', summary: 'changed prompt' }),
+          git: {
+            gitRootPath: dir,
+            systemPromptGitPath: 'system_prompt.md',
+            changedFiles: async () => ['system_prompt.md'],
+            commit: async () => {
+              throw new Error('commit rejected');
+            },
+          },
+          now: () => 100,
+          newId: idFactory(),
+        }),
+        /commit rejected/,
+      );
+
+      assert.equal(await readFile(systemPromptPath, 'utf8'), 'original prompt\n');
+    });
+  });
+
   test('extracts a bounded digest from raw runtime events', async () => {
     await withDir(async (dir) => {
       const runtimeEventsPath = join(dir, 'runtime-events.jsonl');

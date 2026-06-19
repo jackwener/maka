@@ -111,13 +111,14 @@ export async function runPromptCandidateRound(
   });
 
   await writeFile(input.systemPromptPath, result.systemPrompt, 'utf8');
+  let commitSha: string;
   try {
     assertOnlySystemPromptChanged(await input.git.changedFiles(), input.git.systemPromptGitPath);
+    commitSha = await input.git.commit(`candidate prompt ${input.roundId}`);
   } catch (error) {
     await writeFile(input.systemPromptPath, currentSystemPrompt, 'utf8');
     throw error;
   }
-  const commitSha = await input.git.commit(`candidate prompt ${input.roundId}`);
   await appendFixedPromptWalEvent(input.resultsJsonlPath, promptCandidateCommittedEvent({
     runId: input.runId,
     roundId: input.roundId,
