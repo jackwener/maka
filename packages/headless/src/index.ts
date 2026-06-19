@@ -91,6 +91,9 @@ export type {
   PromptAcceptanceReason,
   PromptAcceptanceResult,
   PromptAcceptanceState,
+  SelectStablePromptTasksInput,
+  StablePromptTaskRejectionReason,
+  StablePromptTaskSelectionResult,
 } from './prompt-acceptance-policy.js';
 export {
   appendPromptAcceptanceDecision,
@@ -98,6 +101,7 @@ export {
   decidePromptAcceptance,
   promptAcceptanceNoiseBand,
   promptAcceptanceStateFromWal,
+  selectStablePromptTasks,
   summarizePromptAcceptancePartition,
 } from './prompt-acceptance-policy.js';
 export type {

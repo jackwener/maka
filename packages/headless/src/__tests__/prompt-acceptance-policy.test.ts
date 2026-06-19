@@ -9,6 +9,7 @@ import {
   decidePromptAcceptance,
   promptAcceptanceNoiseBand,
   promptAcceptanceStateFromWal,
+  selectStablePromptTasks,
   summarizePromptAcceptancePartition,
 } from '../prompt-acceptance-policy.js';
 import type {
@@ -152,6 +153,43 @@ describe('prompt acceptance policy', () => {
       }),
       /baseline held-in run 1 is incomplete/,
     );
+  });
+
+  test('selects stable fast tasks from baseline runs', () => {
+    const result = selectStablePromptTasks({
+      taskIds: ['stable-fast', 'flaky', 'infra', 'slow'],
+      baselineRuns: [
+        [
+          completed('stable-fast', false, { durationMs: 100 }),
+          completed('flaky', true, { durationMs: 100 }),
+          completed('infra', true, { durationMs: 100 }),
+          completed('slow', false, { durationMs: 1_000 }),
+        ],
+        [
+          completed('stable-fast', false, { durationMs: 120 }),
+          completed('flaky', false, { durationMs: 100 }),
+          infraFailed('infra'),
+          completed('slow', false, { durationMs: 1_200 }),
+        ],
+        [
+          completed('stable-fast', false, { durationMs: 110 }),
+          completed('flaky', true, { durationMs: 100 }),
+          completed('infra', true, { durationMs: 100 }),
+          completed('slow', false, { durationMs: 1_100 }),
+        ],
+      ],
+      maxPassRateSpread: 0,
+      maxDurationMs: 500,
+    });
+
+    assert.deepEqual(result, {
+      selectedTaskIds: ['stable-fast'],
+      rejectedTaskIds: [
+        { taskId: 'flaky', reason: 'unstable_outcome' },
+        { taskId: 'infra', reason: 'incomplete' },
+        { taskId: 'slow', reason: 'too_slow' },
+      ],
+    });
   });
 
   test('keeps candidates that improve held-in beyond noise without falling below the held-out original floor', () => {

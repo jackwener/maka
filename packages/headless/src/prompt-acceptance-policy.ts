@@ -1,6 +1,7 @@
 import {
   appendFixedPromptWalEvent,
   FIXED_PROMPT_WAL_SCHEMA_VERSION,
+  type FixedPromptTaskCompletedEvent,
   type FixedPromptWalEvent,
   type FixedPromptTaskWalEvent,
   type PromptCandidateDecisionEvent,
@@ -130,6 +131,26 @@ export interface PromptAcceptanceState {
   }>;
 }
 
+export type StablePromptTaskRejectionReason =
+  | 'incomplete'
+  | 'unstable_outcome'
+  | 'too_slow';
+
+export interface SelectStablePromptTasksInput {
+  taskIds: readonly string[];
+  baselineRuns: readonly (readonly FixedPromptTaskWalEvent[])[];
+  maxPassRateSpread?: number;
+  maxDurationMs?: number;
+}
+
+export interface StablePromptTaskSelectionResult {
+  selectedTaskIds: string[];
+  rejectedTaskIds: Array<{
+    taskId: string;
+    reason: StablePromptTaskRejectionReason;
+  }>;
+}
+
 export function calibratePromptAcceptanceBaseline(
   input: CalibratePromptAcceptanceBaselineInput,
 ): PromptAcceptanceBaseline {
@@ -189,6 +210,41 @@ export function promptAcceptanceNoiseBand(input: PromptAcceptanceNoiseBandInput)
   const wilson = wilsonHalfWidth(input.sampleSize, input.passRate, zScore);
   const differenceWidth = wilson * Math.sqrt(1 + 1 / input.baselineRunCount);
   return Math.max(differenceWidth, observedSpread);
+}
+
+export function selectStablePromptTasks(
+  input: SelectStablePromptTasksInput,
+): StablePromptTaskSelectionResult {
+  const maxPassRateSpread = input.maxPassRateSpread ?? 0;
+  const selectedTaskIds: string[] = [];
+  const rejectedTaskIds: StablePromptTaskSelectionResult['rejectedTaskIds'] = [];
+  const baselineRunsByTask = input.baselineRuns.map((run) => new Map(run.map((event) => [event.taskId, event])));
+  for (const taskId of input.taskIds) {
+    const events = baselineRunsByTask.map((run) => run.get(taskId));
+    const completedEvents = events.filter(isStableBaselineEvent);
+    if (completedEvents.length !== events.length) {
+      rejectedTaskIds.push({ taskId, reason: 'incomplete' });
+      continue;
+    }
+    const maxDurationMs = input.maxDurationMs;
+    if (maxDurationMs !== undefined && completedEvents.some((event) => event.durationMs > maxDurationMs)) {
+      rejectedTaskIds.push({ taskId, reason: 'too_slow' });
+      continue;
+    }
+    const passRates = completedEvents.map((event) => event.passed ? 1 : 0);
+    if (Math.max(...passRates) - Math.min(...passRates) > maxPassRateSpread) {
+      rejectedTaskIds.push({ taskId, reason: 'unstable_outcome' });
+      continue;
+    }
+    selectedTaskIds.push(taskId);
+  }
+  return { selectedTaskIds, rejectedTaskIds };
+}
+
+function isStableBaselineEvent(
+  event: FixedPromptTaskWalEvent | undefined,
+): event is FixedPromptTaskCompletedEvent {
+  return event?.type === 'task_completed' && event.eligible && event.scored;
 }
 
 export function decidePromptAcceptance(input: DecidePromptAcceptanceInput): PromptAcceptanceResult {
