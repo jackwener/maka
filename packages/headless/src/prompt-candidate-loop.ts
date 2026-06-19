@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { lstat, readFile, writeFile } from 'node:fs/promises';
+import { lstat, readFile, realpath, writeFile } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import {
@@ -57,6 +57,7 @@ export interface CreateScriptedMetaAgentInput {
 }
 
 export interface PromptCandidateGit {
+  gitRootPath: string;
   systemPromptGitPath: string;
   changedFiles(): Promise<readonly string[]>;
   commit(message: string): Promise<string>;
@@ -93,7 +94,7 @@ export async function runPromptCandidateRound(
 ): Promise<PromptCandidateRoundResult> {
   const now = input.now ?? Date.now;
   const newId = input.newId ?? randomId;
-  await assertRegularSystemPromptFile(input.systemPromptPath);
+  await assertRegularSystemPromptFile(input.systemPromptPath, input.git.gitRootPath);
   const program = await readFile(input.programPath, 'utf8');
   const currentSystemPrompt = await readFile(input.systemPromptPath, 'utf8');
   const resultsTsv = filterResultsTsvForHeldIn(
@@ -246,16 +247,24 @@ export function assertOnlySystemPromptChanged(
   }
 }
 
-async function assertRegularSystemPromptFile(systemPromptPath: string): Promise<void> {
+async function assertRegularSystemPromptFile(systemPromptPath: string, gitRootPath: string): Promise<void> {
   const stat = await lstat(systemPromptPath);
   if (!stat.isFile() || stat.isSymbolicLink()) {
     throw new Error('system_prompt.md must be a regular file');
+  }
+  const [promptRealPath, gitRootRealPath] = await Promise.all([
+    realpath(systemPromptPath),
+    realpath(gitRootPath),
+  ]);
+  if (!isPathInside(gitRootRealPath, promptRealPath)) {
+    throw new Error('system_prompt.md must stay inside the git cwd');
   }
 }
 
 export function createCliPromptCandidateGit(input: CreateCliPromptCandidateGitInput): PromptCandidateGit {
   const systemPromptGitPath = toGitRelativePath(input.cwd, input.systemPromptPath);
   return {
+    gitRootPath: input.cwd,
     systemPromptGitPath,
     async changedFiles(): Promise<readonly string[]> {
       const { stdout } = await execFileAsync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: input.cwd });
@@ -271,6 +280,11 @@ export function createCliPromptCandidateGit(input: CreateCliPromptCandidateGitIn
       return stdout.trim();
     },
   };
+}
+
+function isPathInside(rootPath: string, targetPath: string): boolean {
+  const relativePath = relative(rootPath, targetPath).split('\\').join('/');
+  return relativePath !== '' && relativePath !== '..' && !relativePath.startsWith('../') && !isAbsolute(relativePath);
 }
 
 function toGitRelativePath(cwd: string, path: string): string {

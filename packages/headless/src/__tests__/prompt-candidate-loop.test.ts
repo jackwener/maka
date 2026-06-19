@@ -55,7 +55,7 @@ describe('prompt candidate loop', () => {
           seenInput = input;
           return { systemPrompt: 'candidate prompt\n', summary: 'tightened output instruction' };
         },
-        git: gitNoop(),
+        git: gitNoop(dir),
         now: () => 100,
         newId: idFactory(),
       });
@@ -108,6 +108,7 @@ describe('prompt candidate loop', () => {
           heldOutDigests: [],
           metaAgent: async () => ({ systemPrompt: 'candidate prompt\n', summary: 'changed prompt' }),
           git: {
+            gitRootPath: dir,
             systemPromptGitPath: 'system_prompt.md',
             changedFiles: async () => ['system_prompt.md', 'program.md'],
             commit: async () => {
@@ -147,7 +148,7 @@ describe('prompt candidate loop', () => {
           resultsJsonlPath: join(dir, 'results.jsonl'),
           heldInDigests: [],
           metaAgent: async () => ({ systemPrompt: 'candidate prompt\n', summary: 'changed prompt' }),
-          git: gitNoop(),
+          git: gitNoop(dir),
           now: () => 100,
           newId: idFactory(),
         }),
@@ -155,6 +156,46 @@ describe('prompt candidate loop', () => {
       );
 
       assert.equal(await readFile(outsidePath, 'utf8'), 'outside prompt\n');
+    });
+  });
+
+  test('rejects a system prompt through a symlinked parent before writing outside the repo', async () => {
+    await withDir(async (dir) => {
+      await withDir(async (outsideDir) => {
+        const programPath = join(dir, 'program.md');
+        const promptLinkPath = join(dir, 'prompts');
+        const outsidePath = join(outsideDir, 'system_prompt.md');
+        const systemPromptPath = join(promptLinkPath, 'system_prompt.md');
+        const resultsTsvPath = join(dir, 'results.tsv');
+        await writeFile(programPath, 'Improve the prompt conservatively.\n', 'utf8');
+        await writeFile(outsidePath, 'outside prompt\n', 'utf8');
+        await symlink(outsideDir, promptLinkPath);
+        await writeFile(resultsTsvPath, 'task_id\tpassed\ntask-a\tfalse\n', 'utf8');
+
+        await assert.rejects(
+          runPromptCandidateRound({
+            runId: 'run-1',
+            roundId: 'round-1',
+            programPath,
+            systemPromptPath,
+            resultsTsvPath,
+            resultsJsonlPath: join(dir, 'results.jsonl'),
+            heldInDigests: [],
+            metaAgent: async () => ({ systemPrompt: 'candidate prompt\n', summary: 'changed prompt' }),
+            git: {
+              gitRootPath: dir,
+              systemPromptGitPath: 'prompts/system_prompt.md',
+              changedFiles: async () => ['prompts/system_prompt.md'],
+              commit: async () => 'commit-1',
+            },
+            now: () => 100,
+            newId: idFactory(),
+          }),
+          /system_prompt.md must stay inside the git cwd/,
+        );
+
+        assert.equal(await readFile(outsidePath, 'utf8'), 'outside prompt\n');
+      });
     });
   });
 
@@ -181,6 +222,7 @@ describe('prompt candidate loop', () => {
           heldInDigests: [],
           metaAgent: async () => ({ systemPrompt: 'candidate prompt\n', summary: 'changed prompt' }),
           git: {
+            gitRootPath: dir,
             systemPromptGitPath: 'prompts/system_prompt.md',
             changedFiles: async () => ['system_prompt.md'],
             commit: async () => {
@@ -333,8 +375,9 @@ describe('prompt candidate loop', () => {
   });
 });
 
-function gitNoop() {
+function gitNoop(gitRootPath = process.cwd()) {
   return {
+    gitRootPath,
     systemPromptGitPath: 'system_prompt.md',
     changedFiles: async () => ['system_prompt.md'],
     commit: async () => 'commit-1',
