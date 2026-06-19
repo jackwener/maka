@@ -228,10 +228,12 @@ button:active {
   /* QoderWork's right column is a page-level content surface
      (.agents-content-area / parchment-paper-surface), while the
      sidebar stays flat. Keep this at the shell boundary so chat,
-     modules, and artifact panes share one workspace surface. */
-  margin: 12px 12px 12px 0;
+     modules, and artifact panes share one workspace surface.
+     gap/radius match QoderWork asar-extracted values (4px/6px)
+     per WAWQAQ ef6b2852. */
+  margin: 4px 4px 4px 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 6px;
   background: var(--background);
   box-shadow: none;
   box-sizing: border-box;

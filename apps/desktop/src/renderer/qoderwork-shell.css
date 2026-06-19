@@ -18,8 +18,11 @@
   --color-border-secondary: var(--border);
   --color-border-tertiary: color-mix(in srgb, var(--border) 60%, transparent);
   --agents-content-area-bg: var(--color-bg-container);
-  --agents-content-area-gap: 8px;
-  --agents-content-area-radius: 12px;
+  /* QoderWork asar-extracted values (2026-06-20 WAWQAQ ef6b2852).
+     The original 8px/12px we shipped at 7013f0f read too loose vs the
+     real bundle's 4px gap + 6px radius. */
+  --agents-content-area-gap: 4px;
+  --agents-content-area-radius: 6px;
 }
 
 .agents-layout-root {

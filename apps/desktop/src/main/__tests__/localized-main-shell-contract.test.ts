@@ -482,9 +482,10 @@ describe('localized main shell contract', () => {
     assert.match(styles, /\.maka-shell-2col\[data-sidebar-state="collapsed"\] \.maka-panel-list\.maka-floating-panel \{[\s\S]*?border-right:\s*0/);
     const detailPanel = extractCssRule(styles, '.maka-panel-detail.maka-floating-panel');
     assert.ok(detailPanel, '.maka-panel-detail.maka-floating-panel rule must exist');
-    assert.match(detailPanel, /margin:\s*12px 12px 12px 0/);
+    // WAWQAQ ef6b2852: asar-extracted values (4px gap + 6px radius), not 12px.
+    assert.match(detailPanel, /margin:\s*4px 4px 4px 0/);
     assert.match(detailPanel, /border:\s*1px solid var\(--border\)/);
-    assert.match(detailPanel, /border-radius:\s*12px/);
+    assert.match(detailPanel, /border-radius:\s*6px/);
     assert.match(detailPanel, /background:\s*var\(--background\)/);
     assert.match(detailPanel, /box-shadow:\s*none/);
     assert.match(detailPanel, /display:\s*flex/);
