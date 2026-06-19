@@ -129,6 +129,7 @@ import {
 } from './ui.js';
 import { Alert, AlertDescription, AlertTitle } from './coss/alert.js';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from './coss/empty.js';
+import { InputGroup, InputGroupAddon, InputGroupInput } from './coss/input-group.js';
 import { Kbd, KbdGroup } from './coss/kbd.js';
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from './coss/menu.js';
 
@@ -2526,9 +2527,11 @@ export function SearchModal(props: {
             <X size={16} strokeWidth={1.8} aria-hidden="true" />
           </DialogClose>
         </header>
-        <div className="maka-search-modal-input-row">
-          <Search size={16} strokeWidth={1.75} aria-hidden="true" className="maka-search-modal-input-icon" />
-          <Input
+        <InputGroup className="maka-search-modal-input-row" aria-label="搜索会话">
+          <InputGroupAddon>
+            <Search size={16} strokeWidth={1.75} aria-hidden="true" className="maka-search-modal-input-icon" />
+          </InputGroupAddon>
+          <InputGroupInput
             ref={inputRef}
             type="search"
             className="maka-search-modal-input"
@@ -2585,18 +2588,20 @@ export function SearchModal(props: {
             spellCheck={false}
           />
           {query.length > 0 && (
-            <UiButton
-              variant="quiet"
-              size="icon-sm"
-              type="button"
-              className="maka-search-modal-clear"
-              aria-label="清空搜索"
-              onClick={clearSearchQuery}
-            >
-              <X size={14} strokeWidth={1.8} aria-hidden="true" />
-            </UiButton>
+            <InputGroupAddon align="inline-end">
+              <UiButton
+                variant="quiet"
+                size="icon-sm"
+                type="button"
+                className="maka-search-modal-clear"
+                aria-label="清空搜索"
+                onClick={clearSearchQuery}
+              >
+                <X size={14} strokeWidth={1.8} aria-hidden="true" />
+              </UiButton>
+            </InputGroupAddon>
           )}
-        </div>
+        </InputGroup>
         <div className="maka-search-modal-body" role="region" aria-label="搜索状态和结果" aria-live="polite">
           {!searchThread && (
             <p className="maka-search-modal-placeholder">

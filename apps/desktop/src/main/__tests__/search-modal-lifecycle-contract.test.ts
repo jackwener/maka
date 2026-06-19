@@ -296,6 +296,39 @@ describe('SearchModal lifecycle contract (PR-SIDEBAR-IA-0 Phase 3 P0 fixup)', ()
     assert.match(styles, /\.maka-search-modal-clear/, 'Clear search button needs dedicated styling');
   });
 
+  it('search input shell uses COSS InputGroup instead of a hand-rolled grid wrapper', async () => {
+    const components = await readFile(COMPONENTS_PATH, 'utf8');
+    const styles = await readFile(STYLES_PATH, 'utf8');
+    const searchModal = components.slice(components.indexOf('export function SearchModal'), components.indexOf('/**\n * Render an ordered list of session groups'));
+    const inputRowStyle = styles.match(/\.maka-search-modal-input-row\s*\{[\s\S]*?\}/)?.[0] ?? '';
+
+    assert.match(
+      components,
+      /import \{ InputGroup, InputGroupAddon, InputGroupInput \} from '\.\/coss\/input-group\.js';/,
+      'SearchModal must consume the vendored COSS InputGroup primitives',
+    );
+    assert.match(
+      searchModal,
+      /<InputGroup className="maka-search-modal-input-row" aria-label="搜索会话">[\s\S]*<InputGroupAddon>[\s\S]*<InputGroupInput[\s\S]*<InputGroupAddon align="inline-end">/,
+      'SearchModal search field must be structured as COSS InputGroup + addons',
+    );
+    assert.doesNotMatch(
+      searchModal,
+      /<div className="maka-search-modal-input-row"/,
+      'SearchModal must not regress to the previous hand-rolled input-row wrapper',
+    );
+    assert.doesNotMatch(
+      inputRowStyle,
+      /display:\s*grid/,
+      'Search modal input row styling must not restore the old grid shell over COSS InputGroup',
+    );
+    assert.match(
+      inputRowStyle,
+      /margin:\s*12px 20px;/,
+      'Search modal InputGroup should keep the compact modal inset spacing',
+    );
+  });
+
   it('empty query invalidates any already-started search request from every clear path', async () => {
     const components = await readFile(COMPONENTS_PATH, 'utf8');
     const searchModal = components.slice(components.indexOf('export function SearchModal'), components.indexOf('/**\n * Render an ordered list of session groups'));

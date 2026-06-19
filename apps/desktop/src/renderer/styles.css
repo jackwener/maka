@@ -316,24 +316,20 @@ button:active {
  *   height capped so long result lists scroll inside the modal.
  */
 .maka-search-modal-input-row {
-  display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 20px 12px;
-  border-bottom: 1px solid var(--border);
+  width: auto;
+  min-height: 40px;
+  margin: 12px 20px;
+  border-color: var(--border);
+  background: var(--surface);
 }
 .maka-search-modal-input-icon {
   color: var(--foreground-50);
 }
 .maka-search-modal-input {
   width: 100%;
-  border: 0;
-  background: transparent;
   color: var(--foreground);
   font-size: 14px;
-  outline: 0;
-  padding: 0;
+  line-height: 1.4;
 }
 .maka-search-modal-input::placeholder {
   color: var(--foreground-40);
@@ -344,14 +340,8 @@ button:active {
 .maka-search-modal-clear {
   width: 28px;
   height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
   border-radius: 8px;
-  background: transparent;
   color: var(--foreground-50);
-  cursor: pointer;
 }
 .maka-search-modal-clear:hover {
   background: oklch(from var(--foreground) l c h / 0.06);
@@ -364,6 +354,7 @@ button:active {
 
 .maka-search-modal-body {
   display: block;
+  border-top: 1px solid var(--border);
   padding: 12px 12px 16px;
   min-height: 200px;
   max-height: calc(70vh - 110px);
