@@ -7256,8 +7256,7 @@ function ExploreAgentPreview(props: {
               type="button"
               variant="ghost"
               size="sm"
-              className="maka-button maka-button-ghost maka-explore-agent-copy"
-              data-size="sm"
+              className="maka-explore-agent-copy"
               onClick={() => void copyFeedback.copy('summary', summaryText)}
               disabled={summaryCopy.disabled}
               aria-label={summaryCopy.ariaLabel}
@@ -7277,8 +7276,7 @@ function ExploreAgentPreview(props: {
               type="button"
               variant="ghost"
               size="sm"
-              className="maka-button maka-button-ghost maka-explore-agent-copy"
-              data-size="sm"
+              className="maka-explore-agent-copy"
               onClick={() => void copyFeedback.copy('continuation', continuationText)}
               disabled={continuationCopy.disabled}
               aria-label={continuationCopy.ariaLabel}
@@ -7349,8 +7347,7 @@ function ExploreAgentPreview(props: {
               type="button"
               variant="ghost"
               size="sm"
-              className="maka-button maka-button-ghost maka-explore-agent-copy"
-              data-size="sm"
+              className="maka-explore-agent-copy"
               onClick={() => void copyFeedback.copy('process', processText)}
               disabled={processCopy.disabled}
               aria-label={processCopy.ariaLabel}
@@ -7380,8 +7377,7 @@ function ExploreAgentPreview(props: {
               type="button"
               variant="ghost"
               size="sm"
-              className="maka-button maka-button-ghost maka-explore-agent-copy"
-              data-size="sm"
+              className="maka-explore-agent-copy"
               onClick={() => void copyFeedback.copy('evidence', evidenceText)}
               disabled={evidenceCopy.disabled}
               aria-label={evidenceCopy.ariaLabel}
@@ -7418,8 +7414,7 @@ function ExploreAgentPreview(props: {
               type="button"
               variant="ghost"
               size="sm"
-              className="maka-button maka-button-ghost maka-explore-agent-copy"
-              data-size="sm"
+              className="maka-explore-agent-copy"
               onClick={() => void copyFeedback.copy('report', reportText)}
               disabled={reportCopy.disabled}
               aria-label={reportCopy.ariaLabel}
@@ -7449,8 +7444,7 @@ function ExploreAgentPreview(props: {
               type="button"
               variant="ghost"
               size="sm"
-              className="maka-button maka-button-ghost maka-explore-agent-copy"
-              data-size="sm"
+              className="maka-explore-agent-copy"
               onClick={() => void copyFeedback.copy('candidate', candidateText)}
               disabled={candidateCopy.disabled}
               aria-label={candidateCopy.ariaLabel}
@@ -7484,8 +7478,7 @@ function ExploreAgentPreview(props: {
               type="button"
               variant="ghost"
               size="sm"
-              className="maka-button maka-button-ghost maka-explore-agent-copy"
-              data-size="sm"
+              className="maka-explore-agent-copy"
               onClick={() => void copyFeedback.copy('matches', matchesText)}
               disabled={matchesCopy.disabled}
               aria-label={matchesCopy.ariaLabel}
