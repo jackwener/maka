@@ -494,7 +494,7 @@ describe('localized main shell contract', () => {
     assert.match(styles, /--w-sessionlist:\s*210px;/);
   });
 
-  it('keeps the chat composer as the only main card with a narrow QoderWork-like frame', async () => {
+  it('keeps the chat composer as the only main card with a QoderWork-like frame', async () => {
     const components = await readFile(resolve(process.cwd(), '..', '..', 'packages', 'ui', 'src', 'components.tsx'), 'utf8');
     const styles = await readFile(join(process.cwd(), 'src', 'renderer', 'styles.css'), 'utf8');
     const emptyHero = components.match(/function EmptyChatHero[\s\S]*?function DeepResearchEmptyHero/)?.[0] ?? '';
@@ -540,8 +540,8 @@ describe('localized main shell contract', () => {
     assert.match(heroHeadline, /font-size:\s*28px/);
     assert.doesNotMatch(heroHeadline, /clamp\(/);
     assert.ok(composerCard, '.composer .maka-composer-inner rule must exist');
-    assert.match(composerCard, /width:\s*min\(520px,\s*100%\)/);
-    assert.match(composerCard, /max-width:\s*520px/);
+    assert.match(composerCard, /width:\s*min\(640px,\s*80vw\)/);
+    assert.match(composerCard, /max-width:\s*640px/);
     assert.match(composerCard, /margin-inline:\s*auto/);
     assert.match(composerCard, /box-sizing:\s*border-box/);
     assert.match(composerCard, /border-radius:\s*8px/);
@@ -567,6 +567,9 @@ describe('localized main shell contract', () => {
     assert.match(components, /className="maka-composer-role-chip"[\s\S]*aria-label="通用助手"[\s\S]*通用[\s\S]*<ChevronDown size=\{12\}/);
     assert.match(components, /className="maka-composer-mode-chip"[\s\S]*aria-label="标准模式"[\s\S]*标准[\s\S]*<ChevronDown size=\{12\}/);
     assert.match(components, /aria-label="语音输入暂未启用"[\s\S]*<Mic size=\{14\}/);
+    assert.doesNotMatch(components, /aria-label=\{pendingImportAction === 'file' \? '正在导入文件内容' : '导入文件内容'\}/);
+    assert.doesNotMatch(components, /aria-label=\{pendingImportAction === 'folder' \? '正在导入文件夹目录' : '导入文件夹目录'\}/);
+    assert.doesNotMatch(components, /Paperclip/);
     assert.match(components, /import \{[\s\S]*ArrowUp,[\s\S]*\} from 'lucide-react';/);
     assert.match(components, /className="maka-composer-send-button"[\s\S]*size="icon-sm"[\s\S]*aria-label=\{buttonCopy\.sendLabel\}[\s\S]*<ArrowUp size=\{16\} strokeWidth=\{2\.1\} aria-hidden="true" \/>/);
     const sendButton = extractCssRule(styles, '.maka-composer-send-button');
@@ -579,7 +582,7 @@ describe('localized main shell contract', () => {
     assert.match(components, /workspacePicker\?: \{[\s\S]*label\?: string;[\s\S]*branch\?: string \| null;[\s\S]*onOpen\(\): void;[\s\S]*\};/);
     assert.match(components, /className="maka-composer-workspace-picker"[\s\S]*<FolderOpen size=\{13\}[\s\S]*<span>选择工作目录<\/span>[\s\S]*<ChevronDown size=\{12\}/);
     assert.ok(workspaceRow, '.maka-composer-workspace-row rule must exist');
-    assert.match(workspaceRow, /width:\s*min\(520px,\s*100%\)/);
+    assert.match(workspaceRow, /width:\s*min\(640px,\s*80vw\)/);
     assert.doesNotMatch(workspaceRow, /padding-inline/);
     assert.ok(workspacePicker, '.maka-composer-workspace-picker rule must exist');
     assert.match(workspacePicker, /font-size:\s*12px/);

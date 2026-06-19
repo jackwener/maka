@@ -2436,25 +2436,24 @@ button:active {
 }
 
 .maka-plan-shell {
-  width: min(100%, 1180px);
+  width: min(100%, 1080px);
   margin: 0 auto;
   display: grid;
-  gap: 16px;
-  padding: clamp(10px, 2vw, 22px) 0 22px;
+  gap: 14px;
+  padding: clamp(14px, 2.2vw, 28px) 0 22px;
 }
 
 .maka-plan-hero {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
-  padding-top: 10px;
+  gap: 20px;
 }
 
 .maka-plan-heading {
   display: grid;
-  gap: 6px;
-  max-width: 620px;
+  gap: 8px;
+  max-width: 560px;
 }
 
 .maka-plan-eyebrow {
@@ -2468,10 +2467,10 @@ button:active {
 .maka-plan-heading h2 {
   margin: 0;
   color: var(--foreground);
-  font-size: clamp(28px, 4vw, 42px);
-  font-weight: 720;
+  font-size: 30px;
+  font-weight: 680;
   letter-spacing: 0;
-  line-height: 1.05;
+  line-height: 1.15;
 }
 
 .maka-plan-heading p:last-child {
@@ -2489,14 +2488,55 @@ button:active {
   flex-wrap: wrap;
 }
 
+.maka-plan-refresh-button {
+  color: var(--foreground-60);
+}
+
 .maka-plan-system-alert {
-  border-color: oklch(from var(--info) l c h / 0.24);
-  background: oklch(from var(--info) l c h / 0.08);
-  color: var(--info-text);
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-color: oklch(0.86 0.055 245);
+  border-radius: 8px;
+  background: oklch(0.975 0.018 245);
+  color: oklch(0.40 0.085 245);
 }
 
 .maka-plan-system-alert [class*="lucide"] {
-  color: var(--info-text);
+  color: oklch(0.42 0.095 245);
+}
+
+.maka-plan-system-alert-main,
+.maka-plan-system-alert-switch {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.maka-plan-system-alert-main > [class*="lucide"] {
+  flex: 0 0 auto;
+}
+
+.maka-plan-system-alert-switch {
+  flex: 0 0 auto;
+  color: oklch(0.38 0.075 245);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dark .maka-plan-system-alert {
+  border-color: oklch(0.56 0.08 245 / 0.44);
+  background: oklch(0.25 0.04 245 / 0.52);
+  color: oklch(0.84 0.07 245);
+}
+
+.dark .maka-plan-system-alert [class*="lucide"],
+.dark .maka-plan-system-alert-switch {
+  color: oklch(0.84 0.07 245);
 }
 
 .maka-plan-tabs {
@@ -2513,8 +2553,8 @@ button:active {
 
 .maka-plan-tabs-list {
   border-radius: 8px;
-  background: var(--foreground-3);
-  padding: 3px;
+  background: var(--foreground-4);
+  padding: 2px;
 }
 
 .maka-plan-tab {
@@ -2529,14 +2569,15 @@ button:active {
 }
 
 .maka-plan-toolbar {
-  display: grid;
-  grid-template-columns: minmax(220px, 320px) minmax(150px, 190px);
+  display: flex;
+  flex-wrap: wrap;
   align-items: end;
+  justify-content: flex-end;
   gap: 8px;
 }
 
 .maka-plan-toolbar-compact {
-  grid-template-columns: minmax(150px, 190px);
+  display: flex;
 }
 
 .maka-plan-tab-panel {
@@ -2547,7 +2588,7 @@ button:active {
 .maka-plan-card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
 }
 
 .maka-plan-form,
@@ -2557,19 +2598,19 @@ button:active {
   gap: 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--foreground-2);
-  padding: 14px;
+  background: var(--background);
+  padding: 16px;
 }
 
 .maka-plan-card {
-  min-height: 210px;
+  min-height: 214px;
   align-content: start;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
 .maka-plan-card:hover {
-  border-color: oklch(from var(--accent) l c h / 0.28);
-  background: var(--foreground-3);
+  border-color: oklch(from var(--foreground) l c h / 0.18);
+  background: var(--foreground-2);
   transform: translateY(-1px);
 }
 
@@ -2734,6 +2775,18 @@ button:active {
   font-weight: 600;
 }
 
+.maka-plan-search {
+  width: min(240px, 34vw);
+}
+
+.maka-plan-compact-select {
+  width: 160px;
+}
+
+.maka-plan-sort-select {
+  width: 190px;
+}
+
 .maka-plan-search input {
   width: 100%;
   border: 1px solid var(--border);
@@ -2794,8 +2847,8 @@ button:active {
   margin: 0;
   min-width: 0;
   color: var(--foreground);
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 680;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -2808,7 +2861,7 @@ button:active {
 
 .maka-plan-card-divider {
   border-top: 1px dashed var(--border);
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .maka-plan-card-footer {
@@ -2825,7 +2878,7 @@ button:active {
   gap: 5px;
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--background);
+  background: var(--foreground-2);
   color: var(--foreground-60);
   font-size: 11px;
   font-weight: 600;
@@ -2851,12 +2904,11 @@ button:active {
 .maka-plan-card-note {
   min-height: 52px;
   border-radius: 8px;
-  background: var(--background);
   color: var(--foreground-60);
   font-size: 12px;
   line-height: 1.5;
   margin: 0;
-  padding: 10px;
+  padding: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -2931,16 +2983,29 @@ button:active {
     display: grid;
   }
 
+  .maka-plan-system-alert {
+    display: grid;
+  }
+
   .maka-plan-top-actions {
     justify-content: flex-start;
   }
 
-  .maka-plan-toolbar,
-  .maka-plan-toolbar-compact,
   .maka-plan-card-grid,
   .maka-plan-form-grid,
   .maka-plan-delivery-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .maka-plan-toolbar,
+  .maka-plan-toolbar-compact {
+    justify-content: flex-start;
+  }
+
+  .maka-plan-search,
+  .maka-plan-compact-select,
+  .maka-plan-sort-select {
+    width: min(100%, 260px);
   }
 
   .maka-plan-run-row {
@@ -4906,8 +4971,8 @@ button:active {
 }
 
 .composer .maka-composer-inner {
-  width: min(520px, 100%);
-  max-width: 520px;
+  width: min(640px, 80vw);
+  max-width: 640px;
   margin-inline: auto;
   box-sizing: border-box;
   border-radius: 8px;
@@ -5048,7 +5113,7 @@ button:active {
 }
 
 .maka-composer-workspace-row {
-  width: min(520px, 100%);
+  width: min(640px, 80vw);
   display: flex;
   justify-content: flex-start;
   box-sizing: border-box;

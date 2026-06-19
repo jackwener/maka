@@ -29,7 +29,6 @@ import {
   MessageSquare,
   MoreHorizontal,
   Mic,
-  Paperclip,
   PanelLeftClose,
   PanelLeftOpen,
   Pencil,
@@ -388,6 +387,7 @@ export function SessionListPanel(props: {
    * lifecycle behind this callback.
    */
   onOpenSearchModal?(): void;
+  onRefreshPlanReminders?(): void | Promise<void>;
   onCreatePlanReminder?(input: PlanReminderDraftInput): boolean | Promise<boolean> | void | Promise<void>;
   onUpdatePlanReminder?(id: string, patch: PlanReminderUpdatePatch): boolean | Promise<boolean> | void | Promise<void>;
   onTogglePlanReminder?(id: string, enabled: boolean): void | Promise<void>;
@@ -1441,6 +1441,7 @@ function PlanReminderSelect<T extends string>(props: {
 
 function PlanReminderPanel(props: {
   reminders: PlanReminder[];
+  onRefresh?(): void | Promise<void>;
   onCreate?(input: PlanReminderDraftInput): boolean | Promise<boolean> | void | Promise<void>;
   onUpdate?(id: string, patch: PlanReminderUpdatePatch): boolean | Promise<boolean> | void | Promise<void>;
   onToggle?(id: string, enabled: boolean): void | Promise<void>;
@@ -1452,6 +1453,7 @@ function PlanReminderPanel(props: {
   type PlanReminderListFilter = 'all' | PlanReminderStatus;
   type PlanReminderView = 'tasks' | 'runs';
   type PlanReminderRunRange = 'day' | 'week' | 'month' | 'all';
+  type PlanReminderSort = 'created-desc' | 'next-run-asc' | 'updated-desc';
   const [title, setTitle] = useState('');
   const [note, setNote] = useState('');
   const [runAtLocal, setRunAtLocal] = useState(() => toPlanReminderDateTimeInputValue(Date.now() + 60 * 60 * 1000));
@@ -1469,7 +1471,9 @@ function PlanReminderPanel(props: {
   const [planView, setPlanView] = useState<PlanReminderView>('tasks');
   const [runRange, setRunRange] = useState<PlanReminderRunRange>('week');
   const [listFilter, setListFilter] = useState<PlanReminderListFilter>('all');
+  const [listSort, setListSort] = useState<PlanReminderSort>('created-desc');
   const [listQuery, setListQuery] = useState('');
+  const [refreshPending, setRefreshPending] = useState(false);
   const parsedRunAt = Date.parse(runAtLocal);
   const normalizedListQuery = normalizePlanReminderSearchQuery(listQuery);
   const searchMatchedReminders = normalizedListQuery
@@ -1478,7 +1482,7 @@ function PlanReminderPanel(props: {
   const visibleReminders = listFilter === 'all'
     ? searchMatchedReminders
     : searchMatchedReminders.filter((reminder) => reminder.status === listFilter);
-  const sortedReminders = [...visibleReminders].sort(comparePlanReminderForDisplay);
+  const sortedReminders = [...visibleReminders].sort((a, b) => comparePlanReminderBySort(a, b, listSort));
   const runRangeStart = planReminderRunRangeStart(runRange, Date.now());
   const visibleRunEntries = props.reminders
     .flatMap((reminder) => reminder.runs.map((run) => ({ reminder, run })))
@@ -1628,35 +1632,64 @@ function PlanReminderPanel(props: {
     }
   }
 
+  async function refreshFromPanel() {
+    if (!props.onRefresh || refreshPending) return;
+    setRefreshPending(true);
+    try {
+      await props.onRefresh();
+    } finally {
+      if (planReminderMountedRef.current) setRefreshPending(false);
+    }
+  }
+
   return (
     <div className="maka-plan-panel">
       <div className="maka-plan-shell">
         <div className="maka-plan-hero">
           <div className="maka-plan-heading">
-            <p className="maka-plan-eyebrow">计划提醒</p>
             <h2>定时任务</h2>
             <p>
-              管理本机计划提醒、重复提醒和机器人投递；到点后会写入执行记录，方便复盘。
+              创建和管理周期性任务，让 Maka 按计划执行提醒、复盘和投递。
             </p>
           </div>
           <div className="maka-plan-top-actions" aria-label="计划提醒操作">
-            <UiButton type="button" variant="secondary" onClick={() => setPlanView('runs')}>
-              <Clock size={15} strokeWidth={1.75} aria-hidden="true" />
-              执行记录
+            <UiButton
+              type="button"
+              variant="quiet"
+              size="icon-sm"
+              className="maka-plan-refresh-button"
+              onClick={() => void refreshFromPanel()}
+              disabled={!props.onRefresh || refreshPending}
+              aria-label={refreshPending ? '正在刷新定时任务' : '刷新定时任务'}
+              aria-busy={refreshPending ? 'true' : undefined}
+              title={refreshPending ? '正在刷新定时任务' : '刷新定时任务'}
+            >
+              <RefreshCcw size={15} strokeWidth={1.75} aria-hidden="true" />
+            </UiButton>
+            <UiButton type="button" variant="secondary" onClick={openCreateReminderDialog}>
+              通过 Maka 创建
             </UiButton>
             <UiButton type="button" onClick={openCreateReminderDialog}>
               <Plus size={15} strokeWidth={1.75} aria-hidden="true" />
-              新建计划提醒
+              新建定时任务
             </UiButton>
           </div>
         </div>
 
         <Alert variant="info" className="maka-plan-system-alert">
-          <Clock strokeWidth={1.75} aria-hidden="true" />
-          <AlertTitle>计划提醒会在本机唤醒时运行</AlertTitle>
-          <AlertDescription>
-            Maka 会保留执行记录；重复提醒、机器人投递和手动触发都走同一套计划队列。
-          </AlertDescription>
+          <div className="maka-plan-system-alert-main">
+            <Clock strokeWidth={1.75} aria-hidden="true" />
+            <div>
+              <AlertTitle>计划提醒会在本机唤醒时运行</AlertTitle>
+              <AlertDescription>
+                Maka 会保留执行记录；重复提醒、机器人投递和手动触发都走同一套计划队列。
+              </AlertDescription>
+            </div>
+          </div>
+          <div className="maka-plan-system-alert-switch">
+            <span>保持系统唤醒</span>
+            <Switch checked={false} disabled aria-label="保持系统唤醒暂未启用" />
+          </div>
         </Alert>
 
         <TabsRoot
@@ -1679,6 +1712,19 @@ function PlanReminderPanel(props: {
             </TabsList>
             {planView === 'tasks' ? (
               <div className="maka-plan-toolbar" aria-label="计划提醒筛选">
+                <label className="maka-plan-compact-select maka-plan-sort-select">
+                  <span>排序</span>
+                  <PlanReminderSelect
+                    value={listSort}
+                    onChange={(value) => setListSort(value)}
+                    ariaLabel="定时任务排序"
+                    options={[
+                      ['created-desc', '按创建时间倒序'],
+                      ['next-run-asc', '按下次触发升序'],
+                      ['updated-desc', '按更新时间倒序'],
+                    ] satisfies ReadonlyArray<readonly [PlanReminderSort, string]>}
+                  />
+                </label>
                 <label className="maka-plan-search">
                   <span>搜索计划提醒</span>
                   <Input
@@ -1849,10 +1895,6 @@ function PlanReminderPanel(props: {
                         <span className="maka-plan-card-chip">
                           <Repeat size={13} strokeWidth={1.75} aria-hidden="true" />
                           {formatPlanRecurrence(reminder)}
-                        </span>
-                        <span className="maka-plan-card-chip">
-                          <MessageSquare size={13} strokeWidth={1.75} aria-hidden="true" />
-                          {formatPlanReminderDeliveryTarget(reminder.delivery)}
                         </span>
                       </div>
                     </article>
@@ -2133,6 +2175,16 @@ function comparePlanReminderForDisplay(a: PlanReminder, b: PlanReminder): number
     return planReminderLastRunSortValue(b) - planReminderLastRunSortValue(a);
   }
   return a.title.localeCompare(b.title, 'zh-Hans-CN');
+}
+
+function comparePlanReminderBySort(a: PlanReminder, b: PlanReminder, sort: 'created-desc' | 'next-run-asc' | 'updated-desc'): number {
+  if (sort === 'created-desc') {
+    return b.createdAt - a.createdAt || comparePlanReminderForDisplay(a, b);
+  }
+  if (sort === 'updated-desc') {
+    return b.updatedAt - a.updatedAt || comparePlanReminderForDisplay(a, b);
+  }
+  return comparePlanReminderForDisplay(a, b);
 }
 
 function planReminderStatusDisplayRank(reminder: PlanReminder): number {
@@ -3524,6 +3576,7 @@ export function ChatView(props: {
   onCreateSkillTemplate?(): void | Promise<void>;
   onOpenSkill?(skillId: string): void | Promise<void>;
   planReminders?: PlanReminder[];
+  onRefreshPlanReminders?: () => void | Promise<void>;
   onCreatePlanReminder?(input: PlanReminderDraftInput): boolean | Promise<boolean> | void | Promise<void>;
   onUpdatePlanReminder?(id: string, patch: PlanReminderUpdatePatch): boolean | Promise<boolean> | void | Promise<void>;
   onTogglePlanReminder?: (id: string, enabled: boolean) => void | Promise<void>;
@@ -3651,14 +3704,9 @@ export function ChatView(props: {
   if (props.mode === 'automations') {
     return (
       <main className="maka-main detailPane maka-module-main" aria-label="计划">
-        <header className="maka-module-main-header">
-          <div>
-            <h2>计划</h2>
-            <p>创建和管理本机计划提醒。</p>
-          </div>
-        </header>
         <PlanReminderPanel
           reminders={props.planReminders ?? []}
+          onRefresh={props.onRefreshPlanReminders}
           onCreate={props.onCreatePlanReminder}
           onUpdate={props.onUpdatePlanReminder}
           onToggle={props.onTogglePlanReminder}
@@ -6036,7 +6084,37 @@ export const Composer = forwardRef<
         )}
         <div className="maka-composer-toolbar composerActions" data-streaming={props.streaming ? 'true' : undefined}>
           <div className="maka-composer-left-controls">
-            {!props.streaming && props.onImportTextFile && (
+            {!props.streaming && props.onImportTextFile && props.onImportFolderOutline ? (
+              <Menu>
+                <MenuTrigger
+                  className="maka-composer-tool-button maka-composer-context-plus"
+                  type="button"
+                  disabled={props.disabled || importActionBusy}
+                  aria-label={pendingImportAction ? '正在添加上下文' : '添加上下文'}
+                  aria-busy={pendingImportAction ? 'true' : undefined}
+                  data-pending={pendingImportAction ? 'true' : undefined}
+                  title={pendingImportAction ? '正在添加上下文' : '添加上下文'}
+                >
+                  <Plus size={15} strokeWidth={1.85} aria-hidden="true" />
+                </MenuTrigger>
+                <MenuPopup className="maka-composer-context-menu" align="start">
+                  <MenuItem
+                    onClick={() => void runImportAction('file', props.onImportTextFile)}
+                    disabled={props.disabled || importActionBusy}
+                  >
+                    <FileEdit size={14} strokeWidth={1.75} aria-hidden="true" />
+                    导入文件内容
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => void runImportAction('folder', props.onImportFolderOutline)}
+                    disabled={props.disabled || importActionBusy}
+                  >
+                    <FolderOpen size={14} strokeWidth={1.75} aria-hidden="true" />
+                    导入文件夹目录
+                  </MenuItem>
+                </MenuPopup>
+              </Menu>
+            ) : !props.streaming && props.onImportTextFile ? (
               <UiButton
                 variant="quiet"
                 size="icon-sm"
@@ -6051,7 +6129,7 @@ export const Composer = forwardRef<
               >
                 <Plus size={15} strokeWidth={1.85} aria-hidden="true" />
               </UiButton>
-            )}
+            ) : null}
             <span className="maka-composer-role-chip" aria-label="通用助手">
               通用
               <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
@@ -6091,39 +6169,7 @@ export const Composer = forwardRef<
                 >
                   <Mic size={14} strokeWidth={1.75} aria-hidden="true" />
                 </UiButton>
-                {props.onImportTextFile && (
-                  <UiButton
-                    variant="quiet"
-                    size="icon-sm"
-                    className="maka-composer-tool-button"
-                    type="button"
-                    disabled={props.disabled || importActionBusy}
-                    onClick={() => void runImportAction('file', props.onImportTextFile)}
-                    aria-label={pendingImportAction === 'file' ? '正在导入文件内容' : '导入文件内容'}
-                    aria-busy={pendingImportAction === 'file' ? 'true' : undefined}
-                    data-pending={pendingImportAction === 'file' ? 'true' : undefined}
-                    title={pendingImportAction === 'file' ? '正在导入文件内容' : '导入文件内容'}
-                  >
-                    <Paperclip size={14} strokeWidth={1.75} aria-hidden="true" />
-                  </UiButton>
-                )}
               </>
-            )}
-            {!props.streaming && props.onImportFolderOutline && (
-              <UiButton
-                variant="quiet"
-                size="icon-sm"
-                className="maka-composer-tool-button"
-                type="button"
-                disabled={props.disabled || importActionBusy}
-                onClick={() => void runImportAction('folder', props.onImportFolderOutline)}
-                aria-label={pendingImportAction === 'folder' ? '正在导入文件夹目录' : '导入文件夹目录'}
-                aria-busy={pendingImportAction === 'folder' ? 'true' : undefined}
-                data-pending={pendingImportAction === 'folder' ? 'true' : undefined}
-                title={pendingImportAction === 'folder' ? '正在导入文件夹目录' : '导入文件夹目录'}
-              >
-                <FolderOpen size={14} strokeWidth={1.75} aria-hidden="true" />
-              </UiButton>
             )}
             {props.streaming ? (
               <UiButton

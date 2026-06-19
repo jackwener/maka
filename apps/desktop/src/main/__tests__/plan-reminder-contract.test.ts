@@ -66,6 +66,9 @@ describe('Plan reminder MVP contract', () => {
     assert.match(ui, /清空记录/, '计划 UI must clear run history without deleting the reminder');
     assert.match(ui, /onClearRunHistory/, 'clear history action must be wired through PlanReminderPanel');
     assert.match(ui, /计划提醒筛选/, '计划 UI must expose list filtering for non-trivial reminder lists');
+    assert.match(ui, /type PlanReminderSort = 'created-desc' \| 'next-run-asc' \| 'updated-desc'/, 'plan list must expose a visible sort control');
+    assert.match(ui, /按创建时间倒序/, 'default plan sort should match the QoderWork-style sort label');
+    assert.match(ui, /comparePlanReminderBySort/, 'visible sort choices must be routed through a centralized comparator');
     assert.match(ui, /当前筛选没有提醒/, '计划 UI must distinguish empty filters from an empty reminder store');
     assert.match(ui, /filterCounts/, 'status picker must show counts per reminder status');
     assert.match(ui, /activePlanReminderCount/, 'sidebar Plan nav must derive an active reminder count');
@@ -100,6 +103,7 @@ describe('Plan reminder MVP contract', () => {
     assert.match(ui, /<DialogRoot[\s\S]*open=\{formDialogOpen\}/, 'create/edit form must live in a dialog instead of staying inline above the task grid');
     assert.match(ui, /<Menu>[\s\S]*<MenuTrigger[\s\S]*<MenuPopup/, 'card secondary actions must be grouped behind a COSS menu');
     assert.match(ui, /<Switch[\s\S]*checked=\{reminder\.enabled\}/, 'plan cards must expose QoderWork-style enable switches');
+    assert.match(ui, /保持系统唤醒[\s\S]*<Switch checked=\{false\} disabled aria-label="保持系统唤醒暂未启用" \/>/, 'info banner must include the QoderWork-style keep-awake switch affordance without faking backend support');
     assert.match(ui, /maka-plan-card-grid/, 'task cards must render in a responsive grid');
     assert.match(ui, /maka-plan-card-divider/, 'task cards must use a dashed divider before schedule metadata');
     assert.match(ui, /planReminderRunRangeStart/, 'execution record filters must use a centralized range helper');

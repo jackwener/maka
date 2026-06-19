@@ -2700,6 +2700,7 @@ function AppShell() {
             onOpenUpdate={() => openSettingsSection('about')}
             onNew={createSession}
             onOpenSearchModal={() => setSearchModalOpen(true)}
+            onRefreshPlanReminders={() => refreshPlanReminders({ shouldShowError: isAutomationsSurfaceActive })}
             onCreatePlanReminder={(input) => createPlanReminder(input)}
             onUpdatePlanReminder={(id, patch) => updatePlanReminder(id, patch)}
             onTogglePlanReminder={(id, enabled) => togglePlanReminder(id, enabled)}
@@ -2833,6 +2834,7 @@ function AppShell() {
                 onCreateSkillTemplate={() => createSkillTemplate()}
                 onOpenSkill={(skillId) => openSkill(skillId)}
                 planReminders={planReminders}
+                onRefreshPlanReminders={() => refreshPlanReminders({ shouldShowError: isAutomationsSurfaceActive })}
                 onCreatePlanReminder={(input) => createPlanReminder(input)}
                 onUpdatePlanReminder={(id, patch) => updatePlanReminder(id, patch)}
                 onTogglePlanReminder={(id, enabled) => togglePlanReminder(id, enabled)}
