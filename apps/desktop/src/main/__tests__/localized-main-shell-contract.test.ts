@@ -476,8 +476,22 @@ describe('localized main shell contract', () => {
     const composerShell = extractCssRule(styles, '.composer');
     const workspaceRow = extractCssRule(styles, '.maka-composer-workspace-row');
     const workspacePicker = extractCssRule(styles, '.maka-composer-workspace-picker');
+    const noActiveSessionBlock = components.match(/if \(!props\.activeSession\) \{[\s\S]*?\n  \}/)?.[0] ?? '';
+    const activeSessionBlock = components.match(/const isLocalSimulationBackend[\s\S]*?<\/header>/)?.[0] ?? '';
 
     assert.ok(emptyHero, 'EmptyChatHero source must be discoverable');
+    assert.ok(noActiveSessionBlock, 'no-active-session chat branch must be discoverable');
+    assert.ok(activeSessionBlock, 'active-session chat header branch must be discoverable');
+    assert.doesNotMatch(
+      noActiveSessionBlock,
+      /PermissionModeSwitcher|新建对话后再切换模式/,
+      'new-chat empty home should not waste top-bar space on an unavailable mode switcher',
+    );
+    assert.match(
+      activeSessionBlock,
+      /<PermissionModeSwitcher[\s\S]*mode=\{props\.activeSession\.permissionMode\}/,
+      'active sessions must keep the permission mode switcher available in the chat header',
+    );
     assert.doesNotMatch(emptyHero, /maka-prompt-suggestions/);
     assert.doesNotMatch(emptyHero, /maka-prompt-chip/);
     assert.doesNotMatch(emptyHero, /getPromptSuggestions\(locale\)/);

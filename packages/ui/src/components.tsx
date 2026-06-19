@@ -3719,7 +3719,6 @@ export function ChatView(props: {
             <Plus strokeWidth={1.5} aria-hidden="true" />
           </UiButton>
           <span className="maka-chat-header-spacer" />
-          <PermissionModeSwitcher mode="ask" disabled disabledReason="新建对话后再切换模式。" />
         </header>
         <div className="maka-chat messages">
           {props.emptyOverride ?? <EmptyChatHero onPromptSuggestion={props.onPromptSuggestion} userLabel={props.userLabel} />}
