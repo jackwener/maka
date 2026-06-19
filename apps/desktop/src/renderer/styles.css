@@ -180,7 +180,7 @@ button:active {
 
 .maka-panel-list.maka-floating-panel {
   border-right: 1px solid var(--border);
-  background: oklch(from var(--background) calc(l - 0.015) c h);
+  background: var(--background);
 }
 
 .maka-panel-detail.maka-floating-panel {
@@ -263,7 +263,7 @@ button:active {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
   overflow: hidden;
-  background: oklch(from var(--background) calc(l - 0.015) c h);
+  background: var(--background);
 }
 
 .maka-session-panel[data-collapsed="true"] {

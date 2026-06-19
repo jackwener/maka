@@ -453,7 +453,11 @@ describe('localized main shell contract', () => {
     const listPanel = extractCssRule(styles, '.maka-panel-list.maka-floating-panel');
     assert.ok(listPanel, '.maka-panel-list.maka-floating-panel rule must exist');
     assert.match(listPanel, /border-right:\s*1px solid var\(--border\)/);
-    assert.match(listPanel, /background:\s*oklch\(from var\(--background\) calc\(l - 0\.015\) c h\)/);
+    // WAWQAQ msg 4b16e5c1: sidebar must not carry a gray tint that reads as a shadow.
+    // QoderWork's .agents-sidebar is transparent on the window background — only the
+    // 1px border-right separates it from the main pane.
+    assert.match(listPanel, /background:\s*var\(--background\)/);
+    assert.doesNotMatch(listPanel, /calc\(l - 0\.015\)/);
     const sidebarTopBar = extractCssRule(styles, '.maka-sidebar-drag-strip');
     assert.ok(sidebarTopBar, '.maka-sidebar-drag-strip rule must exist');
     assert.match(sidebarTopBar, /justify-content:\s*space-between/);
