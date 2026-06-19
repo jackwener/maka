@@ -62,6 +62,7 @@ export interface PromptCandidateGit {
   systemPromptGitPath: string;
   changedFiles(): Promise<readonly string[]>;
   commit(message: string): Promise<string>;
+  restoreSystemPrompt(): Promise<void>;
 }
 
 export interface CreateCliPromptCandidateGitInput {
@@ -117,7 +118,7 @@ export async function runPromptCandidateRound(
     assertOnlySystemPromptChanged(await input.git.changedFiles(), input.git.systemPromptGitPath);
     commitSha = await input.git.commit(`candidate prompt ${input.roundId}`);
   } catch (error) {
-    await writeFile(input.systemPromptPath, currentSystemPrompt, 'utf8');
+    await input.git.restoreSystemPrompt();
     throw error;
   }
   await appendFixedPromptWalEvent(input.resultsJsonlPath, promptCandidateCommittedEvent({
@@ -284,6 +285,9 @@ export function createCliPromptCandidateGit(input: CreateCliPromptCandidateGitIn
       await execFileAsync('git', ['commit', '-m', message], { cwd: gitRootPath });
       const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: gitRootPath });
       return stdout.trim();
+    },
+    async restoreSystemPrompt(): Promise<void> {
+      await execFileAsync('git', ['restore', '--staged', '--worktree', '--', systemPromptGitPath], { cwd: gitRootPath });
     },
   };
 }

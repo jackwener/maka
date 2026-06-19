@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
@@ -115,6 +115,9 @@ describe('prompt candidate loop', () => {
               committed = true;
               return 'commit-1';
             },
+            restoreSystemPrompt: async () => {
+              await writeFile(systemPromptPath, 'original prompt\n', 'utf8');
+            },
           },
           now: () => 100,
           newId: idFactory(),
@@ -187,6 +190,9 @@ describe('prompt candidate loop', () => {
               systemPromptGitPath: 'prompts/system_prompt.md',
               changedFiles: async () => ['prompts/system_prompt.md'],
               commit: async () => 'commit-1',
+              restoreSystemPrompt: async () => {
+                await writeFile(systemPromptPath, 'outside prompt\n', 'utf8');
+              },
             },
             now: () => 100,
             newId: idFactory(),
@@ -229,6 +235,9 @@ describe('prompt candidate loop', () => {
               committed = true;
               return 'commit-1';
             },
+            restoreSystemPrompt: async () => {
+              await writeFile(systemPromptPath, 'original prompt\n', 'utf8');
+            },
           },
           now: () => 100,
           newId: idFactory(),
@@ -249,6 +258,7 @@ describe('prompt candidate loop', () => {
       await writeFile(systemPromptPath, 'original prompt\n', 'utf8');
       await writeFile(resultsTsvPath, 'task_id\tpassed\ntask-a\tfalse\n', 'utf8');
 
+      let restored = false;
       await assert.rejects(
         runPromptCandidateRound({
           runId: 'run-1',
@@ -266,6 +276,10 @@ describe('prompt candidate loop', () => {
             commit: async () => {
               throw new Error('commit rejected');
             },
+            restoreSystemPrompt: async () => {
+              restored = true;
+              await writeFile(systemPromptPath, 'original prompt\n', 'utf8');
+            },
           },
           now: () => 100,
           newId: idFactory(),
@@ -273,6 +287,7 @@ describe('prompt candidate loop', () => {
         /commit rejected/,
       );
 
+      assert.equal(restored, true);
       assert.equal(await readFile(systemPromptPath, 'utf8'), 'original prompt\n');
     });
   });
@@ -446,6 +461,47 @@ describe('prompt candidate loop', () => {
       assert.equal(result.commitSha.length, 40);
     });
   });
+
+  test('CLI git adapter restores worktree and index when commit fails', async () => {
+    await withDir(async (dir) => {
+      await execFileAsync('git', ['init'], { cwd: dir });
+      await execFileAsync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir });
+      await execFileAsync('git', ['config', 'user.name', 'Test User'], { cwd: dir });
+      const programPath = join(dir, 'program.md');
+      const systemPromptPath = join(dir, 'system_prompt.md');
+      const resultsTsvPath = join(dir, 'results.tsv');
+      await writeFile(programPath, 'Improve the prompt conservatively.\n', 'utf8');
+      await writeFile(systemPromptPath, 'original prompt\n', 'utf8');
+      await writeFile(resultsTsvPath, 'task_id\tpassed\ntask-a\tfalse\n', 'utf8');
+      await execFileAsync('git', ['add', '.'], { cwd: dir });
+      await execFileAsync('git', ['commit', '-m', 'initial'], { cwd: dir });
+      const hookPath = join(dir, '.git', 'hooks', 'pre-commit');
+      await writeFile(hookPath, '#!/bin/sh\nexit 1\n', 'utf8');
+      await chmod(hookPath, 0o755);
+
+      await assert.rejects(
+        runPromptCandidateRound({
+          runId: 'run-1',
+          roundId: 'round-1',
+          programPath,
+          systemPromptPath,
+          resultsTsvPath,
+          resultsJsonlPath: join(dir, 'results.jsonl'),
+          heldInDigests: [],
+          metaAgent: async () => ({ systemPrompt: 'candidate prompt\n', summary: 'changed prompt' }),
+          git: createCliPromptCandidateGit({ cwd: dir, systemPromptPath }),
+          now: () => 100,
+          newId: idFactory(),
+        }),
+      );
+
+      const cached = await execFileAsync('git', ['diff', '--cached', '--', 'system_prompt.md'], { cwd: dir });
+      const worktree = await execFileAsync('git', ['diff', '--', 'system_prompt.md'], { cwd: dir });
+      assert.equal(await readFile(systemPromptPath, 'utf8'), 'original prompt\n');
+      assert.equal(cached.stdout, '');
+      assert.equal(worktree.stdout, '');
+    });
+  });
 });
 
 function gitNoop(gitRootPath = process.cwd()) {
@@ -454,6 +510,7 @@ function gitNoop(gitRootPath = process.cwd()) {
     systemPromptGitPath: 'system_prompt.md',
     changedFiles: async () => ['system_prompt.md'],
     commit: async () => 'commit-1',
+    restoreSystemPrompt: async () => {},
   };
 }
 
