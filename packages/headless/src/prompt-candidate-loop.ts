@@ -11,6 +11,19 @@ export interface TrajectoryDigest {
   taskId: string;
   errorClass?: string;
   summary: string;
+  recentToolCalls?: readonly TrajectoryToolCallDigest[];
+}
+
+export interface TrajectoryToolCallDigest {
+  name: string;
+  argsPreview: string;
+}
+
+export interface ExtractTrajectoryDigestInput {
+  taskId: string;
+  errorClass?: string;
+  runtimeEventsPath: string;
+  verifierSummary: string;
 }
 
 export interface MetaAgentPromptInput {
@@ -91,6 +104,22 @@ export async function runPromptCandidateRound(
   };
 }
 
+export async function extractTrajectoryDigest(
+  input: ExtractTrajectoryDigestInput,
+): Promise<TrajectoryDigest> {
+  const events = await readRuntimeEventsJsonl(input.runtimeEventsPath);
+  const recentToolCalls = events
+    .map((event) => functionCallDigest(event))
+    .filter((call): call is TrajectoryToolCallDigest => call !== undefined)
+    .slice(-2);
+  return {
+    taskId: input.taskId,
+    ...(input.errorClass ? { errorClass: input.errorClass } : {}),
+    summary: input.verifierSummary,
+    ...(recentToolCalls.length > 0 ? { recentToolCalls } : {}),
+  };
+}
+
 function promptCandidateCommittedEvent(input: {
   runId: string;
   roundId: string;
@@ -142,4 +171,31 @@ function stripLeadingDotSlash(path: string): string {
 
 function randomId(): string {
   return randomUUID();
+}
+
+async function readRuntimeEventsJsonl(path: string): Promise<unknown[]> {
+  const raw = await readFile(path, 'utf8');
+  return raw
+    .split('\n')
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.parse(line) as unknown);
+}
+
+function functionCallDigest(event: unknown): TrajectoryToolCallDigest | undefined {
+  if (!isRecord(event) || !isRecord(event.content)) return undefined;
+  const content = event.content;
+  if (content.kind !== 'function_call' || typeof content.name !== 'string') return undefined;
+  return {
+    name: content.name,
+    argsPreview: argsPreview(content.args),
+  };
+}
+
+function argsPreview(args: unknown): string {
+  if (!isRecord(args)) return typeof args;
+  return Object.keys(args).sort((a, b) => a.localeCompare(b)).join(',');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

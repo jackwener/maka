@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, test } from 'node:test';
 import { hashSystemPrompt } from '../fixed-prompt-controller.js';
 import {
+  extractTrajectoryDigest,
   runPromptCandidateRound,
   type MetaAgentPromptInput,
   type MetaAgentPromptResult,
@@ -115,6 +116,36 @@ describe('prompt candidate loop', () => {
       assert.equal(committed, false);
     });
   });
+
+  test('extracts a bounded digest from raw runtime events', async () => {
+    await withDir(async (dir) => {
+      const runtimeEventsPath = join(dir, 'runtime-events.jsonl');
+      await writeFile(runtimeEventsPath, [
+        JSON.stringify(runtimeEvent('call-1', 'Read', { path: '/app/first.txt' })),
+        JSON.stringify(runtimeEvent('call-2', 'Bash', { command: 'pytest -q' })),
+        JSON.stringify(runtimeEvent('call-3', 'Write', { path: '/app/out.txt', content: 'long raw content that should not appear' })),
+        '',
+      ].join('\n'), 'utf8');
+
+      const digest = await extractTrajectoryDigest({
+        taskId: 'task-a',
+        errorClass: 'verification_failed',
+        runtimeEventsPath,
+        verifierSummary: 'expected output missing',
+      });
+
+      assert.deepEqual(digest, {
+        taskId: 'task-a',
+        errorClass: 'verification_failed',
+        summary: 'expected output missing',
+        recentToolCalls: [
+          { name: 'Bash', argsPreview: 'command' },
+          { name: 'Write', argsPreview: 'content,path' },
+        ],
+      });
+      assert.equal(JSON.stringify(digest).includes('long raw content'), false);
+    });
+  });
 });
 
 function gitNoop() {
@@ -127,6 +158,21 @@ function gitNoop() {
 function idFactory(): () => string {
   let i = 0;
   return () => `id-${++i}`;
+}
+
+function runtimeEvent(id: string, name: string, args: unknown) {
+  return {
+    id,
+    invocationId: 'inv-1',
+    runId: 'run-1',
+    sessionId: 'session-1',
+    turnId: 'turn-1',
+    ts: 1,
+    partial: false,
+    role: 'model',
+    author: 'agent',
+    content: { kind: 'function_call', id, name, args },
+  };
 }
 
 async function withDir(fn: (dir: string) => Promise<void>): Promise<void> {
