@@ -439,6 +439,8 @@ describe('localized main shell contract', () => {
     assert.match(main, /localStorage\.setItem\('maka-chat-list-collapsed-v1', sessionListCollapsed \? 'true' : 'false'\)/);
     assert.match(main, /data-sidebar-state=\{sessionListCollapsed \? 'collapsed' : 'expanded'\}/);
     assert.match(main, /const SESSION_LIST_COLLAPSED_WIDTH = 0;/);
+    assert.match(main, /const onboardingComposerHidden = showOnboardingHero && onboardingState !== undefined;/);
+    assert.match(main, /hidden=\{navSelection\.section !== 'sessions' \|\| onboardingComposerHidden\}/);
     assert.match(main, /'--maka-session-list-width': `\$\{sessionListCollapsed \? SESSION_LIST_COLLAPSED_WIDTH : sessionListWidth\}px`/);
     assert.match(main, /'--maka-resize-handle-width': '0px'/);
     assert.match(main, /className="maka-panel maka-panel-list maka-floating-panel"[\s\S]*aria-hidden=\{sessionListCollapsed \? 'true' : undefined\}[\s\S]*inert=\{sessionListCollapsed \? true : undefined\}/);
@@ -464,7 +466,8 @@ describe('localized main shell contract', () => {
     assert.match(workspaceFeedbackAction, /font-size:\s*13px/);
     assert.match(workspaceFeedbackAction, /font-weight:\s*500/);
     assert.match(workspaceFeedbackAction, /color:\s*var\(--foreground-55\)/);
-    assert.match(styles, /\.mainColumn\[data-home-surface="true"\]\s*\{[\s\S]*?grid-template-rows:\s*auto auto[\s\S]*?align-content:\s*center/);
+    assert.match(styles, /\.mainColumn\[data-home-surface="true"\]\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0,\s*1fr\) auto[\s\S]*?align-content:\s*stretch/);
+    assert.match(styles, /\.mainColumn\[data-home-surface="true"\] \.maka-chatContent\s*\{[\s\S]*?padding:\s*clamp\(72px,\s*10vh,\s*116px\) 0 clamp\(20px,\s*4vh,\s*42px\)[\s\S]*?display:\s*grid[\s\S]*?align-content:\s*center/);
     assert.match(main, /if \(sessionListCollapsed\) return;[\s\S]*function onResizeHandleKeyDown/);
     assert.match(main, /aria-hidden=\{sessionListCollapsed \? 'true' : undefined\}/);
     assert.match(main, /tabIndex=\{sessionListCollapsed \? -1 : 0\}/);

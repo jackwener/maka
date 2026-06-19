@@ -2685,6 +2685,7 @@ function AppShell() {
     && activeThinking.length === 0
     && liveTools.length === 0
     && !activeMessageLoadError;
+  const onboardingComposerHidden = showOnboardingHero && onboardingState !== undefined;
   useEffect(() => {
     void window.maka.appWindow.setTitlebarControlsVisible(!hasModalOpen).catch(() => {});
     return () => {
@@ -3017,7 +3018,7 @@ function AppShell() {
               />
               <Composer
                 ref={composerRef}
-                hidden={navSelection.section !== 'sessions'}
+                hidden={navSelection.section !== 'sessions' || onboardingComposerHidden}
                 draftKey={activeId ?? 'new-session'}
                 disabled={Boolean(activePermission)}
                 streaming={activeStreaming.length > 0}

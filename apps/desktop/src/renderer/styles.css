@@ -332,24 +332,28 @@ button:active {
 }
 
 .mainColumn[data-home-surface="true"] {
-  grid-template-rows: auto auto;
-  align-content: center;
-  padding-bottom: clamp(36px, 7vh, 72px);
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-content: stretch;
+  padding-bottom: 0;
 }
 
 .mainColumn[data-home-surface="true"] .maka-main,
 .mainColumn[data-home-surface="true"] .maka-chat-shell,
 .mainColumn[data-home-surface="true"] .messages {
-  flex: 0 0 auto;
-  min-height: auto;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .mainColumn[data-home-surface="true"] .maka-chatViewport {
-  height: auto;
+  height: 100%;
 }
 
 .mainColumn[data-home-surface="true"] .maka-chatContent {
-  min-height: 0;
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: clamp(72px, 10vh, 116px) 0 clamp(20px, 4vh, 42px);
+  display: grid;
+  align-content: center;
 }
 
 .maka-workspace-top-actions {
