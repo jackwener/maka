@@ -74,6 +74,18 @@ export {
   runPromptCandidateRound,
 } from './prompt-candidate-loop.js';
 export type {
+  DecidePromptAcceptanceInput,
+  PromptAcceptanceDecision,
+  PromptAcceptanceMetrics,
+  PromptAcceptancePartitionSummary,
+  PromptAcceptanceReason,
+  PromptAcceptanceResult,
+} from './prompt-acceptance-policy.js';
+export {
+  decidePromptAcceptance,
+  summarizePromptAcceptancePartition,
+} from './prompt-acceptance-policy.js';
+export type {
   BenchmarkAdapter,
   BenchmarkAdapterRegistry,
   BenchmarkInstanceRef,
