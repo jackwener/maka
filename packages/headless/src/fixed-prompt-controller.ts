@@ -84,7 +84,7 @@ export interface FixedPromptTaskPlumbingFailedEvent {
   passed: false;
   scored: false;
   eligible: false;
-  errorClass: 'zero_cost_with_tokens' | 'prompt_hash_mismatch';
+  errorClass: 'zero_cost_with_tokens' | 'prompt_hash_mismatch' | 'missing_prompt_hash';
   error: string;
   promptHash?: string;
   expectedPromptHash?: string;
@@ -132,7 +132,7 @@ export async function runFixedPromptController(
   const expectedPromptHash = hashSystemPrompt(systemPrompt);
   const config = { ...input.config, systemPrompt };
   const events = await readFixedPromptWal(input.resultsJsonlPath);
-  const completed = terminalTaskEvents(events, input.runId, input.roundId);
+  const completed = terminalTaskEvents(events, input.runId, input.roundId, expectedPromptHash);
 
   for (const task of input.tasks) {
     if (completed.has(task.id)) continue;
@@ -362,6 +362,12 @@ function classifyPlumbingFailure(output: HarborTaskRunOutput, expectedPromptHash
   errorClass: FixedPromptTaskPlumbingFailedEvent['errorClass'];
   error: string;
 } | undefined {
+  if (output.cell.tokenSummary.total > 0 && output.cell.promptHash === undefined) {
+    return {
+      errorClass: 'missing_prompt_hash',
+      error: `Harbor cell did not report prompt hash ${expectedPromptHash}`,
+    };
+  }
   if (output.cell.promptHash !== undefined && output.cell.promptHash !== expectedPromptHash) {
     return {
       errorClass: 'prompt_hash_mismatch',
@@ -406,10 +412,12 @@ function terminalTaskEvents(
   events: readonly FixedPromptWalEvent[],
   runId: string,
   roundId: string,
+  expectedPromptHash: string,
 ): Map<string, FixedPromptWalEvent> {
   const byTask = new Map<string, FixedPromptWalEvent>();
   for (const event of events) {
     if (event.runId !== runId || event.roundId !== roundId) continue;
+    if (!eventMatchesPrompt(event, expectedPromptHash)) continue;
     if (
       event.type === 'task_completed'
       || event.type === 'task_infra_failed'
@@ -419,6 +427,12 @@ function terminalTaskEvents(
     }
   }
   return byTask;
+}
+
+function eventMatchesPrompt(event: FixedPromptWalEvent, expectedPromptHash: string): boolean {
+  if (event.type === 'task_infra_failed') return true;
+  if (event.promptHash === expectedPromptHash) return true;
+  return event.type === 'task_plumbing_failed' && event.expectedPromptHash === expectedPromptHash;
 }
 
 function tsvCell(value: string): string {

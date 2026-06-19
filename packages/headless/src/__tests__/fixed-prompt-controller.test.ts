@@ -56,6 +56,41 @@ describe('fixed prompt controller', () => {
     });
   });
 
+  test('reruns completed WAL events whose prompt hash is stale', async () => {
+    await withDir(async (dir) => {
+      const systemPromptPath = join(dir, 'system_prompt.md');
+      const resultsJsonlPath = join(dir, 'results.jsonl');
+      await writeFile(systemPromptPath, 'fixed prompt\n', 'utf8');
+      await appendFile(
+        resultsJsonlPath,
+        `${JSON.stringify(taskCompletedEvent({ taskId: 'task-a', promptHash: 'sha256:stale' }))}\n`,
+        'utf8',
+      );
+
+      const calls: string[] = [];
+      const result = await runFixedPromptController({
+        runId: 'run-1',
+        roundId: 'round-1',
+        config,
+        systemPromptPath,
+        resultsJsonlPath,
+        resultsTsvPath: join(dir, 'results.tsv'),
+        tasks: [{ id: 'task-a', path: '/bench/task-a' }],
+        harborRunner: async ({ task }) => {
+          calls.push(task.id);
+          return harborOutput({ taskId: task.id });
+        },
+        now: () => 100,
+        newId: idFactory(),
+      });
+
+      assert.deepEqual(calls, ['task-a']);
+      assert.equal(result.events[0]?.type, 'task_completed');
+      assert.equal(result.events[0]?.promptHash, hashSystemPrompt('fixed prompt\n'));
+      assert.equal((await readFile(resultsJsonlPath, 'utf8')).trimEnd().split('\n').length, 2);
+    });
+  });
+
   test('derives results TSV from replayed task events', async () => {
     await withDir(async (dir) => {
       const systemPromptPath = join(dir, 'system_prompt.md');
@@ -81,7 +116,7 @@ describe('fixed prompt controller', () => {
         await readFile(resultsTsvPath, 'utf8'),
         [
           'task_id\tstatus\tpassed\tscored\teligible\terror_class\tprompt_hash\ttokens\tcost_usd\truntime_events_path',
-          'task-a\tcompleted\ttrue\ttrue\ttrue\t\tsha256:prompt\t5\t0.01\t/logs/task-a/runtime-events.jsonl',
+          `task-a\tcompleted\ttrue\ttrue\ttrue\t\t${hashSystemPrompt('fixed prompt\n')}\t5\t0.01\t/logs/task-a/runtime-events.jsonl`,
           '',
         ].join('\n'),
       );
@@ -214,9 +249,33 @@ describe('fixed prompt controller', () => {
       assert.equal(result.events[0]?.expectedPromptHash, hashSystemPrompt('fixed prompt\n'));
     });
   });
+
+  test('records missing prompt hashes with tokens as plumbing failures', async () => {
+    await withDir(async (dir) => {
+      const systemPromptPath = join(dir, 'system_prompt.md');
+      await writeFile(systemPromptPath, 'fixed prompt\n', 'utf8');
+
+      const result = await runFixedPromptController({
+        runId: 'run-1',
+        roundId: 'round-1',
+        config,
+        systemPromptPath,
+        resultsJsonlPath: join(dir, 'results.jsonl'),
+        resultsTsvPath: join(dir, 'results.tsv'),
+        tasks: [{ id: 'task-a', path: '/bench/task-a' }],
+        harborRunner: async () => harborOutput({ taskId: 'task-a', omitPromptHash: true }),
+        now: () => 100,
+        newId: idFactory(),
+      });
+
+      assert.equal(result.events[0]?.type, 'task_plumbing_failed');
+      assert.equal(result.events[0]?.errorClass, 'missing_prompt_hash');
+      assert.equal(result.events[0]?.expectedPromptHash, hashSystemPrompt('fixed prompt\n'));
+    });
+  });
 });
 
-function taskCompletedEvent(input: { taskId: string }): FixedPromptWalEvent {
+function taskCompletedEvent(input: { taskId: string; promptHash?: string }): FixedPromptWalEvent {
   return {
     schemaVersion: 1,
     type: 'task_completed',
@@ -229,7 +288,7 @@ function taskCompletedEvent(input: { taskId: string }): FixedPromptWalEvent {
     passed: true,
     scored: true,
     eligible: true,
-    promptHash: 'sha256:prompt',
+    promptHash: input.promptHash ?? hashSystemPrompt('fixed prompt\n'),
     tokenSummary: { input: 2, output: 3, reasoning: 0, total: 5, costUsd: 0.01 },
     steps: 4,
     durationMs: 50,
@@ -242,6 +301,7 @@ function harborOutput(input: {
   taskId: string;
   reward?: number;
   promptHash?: string;
+  omitPromptHash?: boolean;
   tokenSummary?: HarborTaskRunOutput['cell']['tokenSummary'];
 }): HarborTaskRunOutput {
   return {
@@ -250,7 +310,7 @@ function harborOutput(input: {
       schemaVersion: 1,
       status: 'completed',
       runtimeEventsPath: `/logs/${input.taskId}/runtime-events.jsonl`,
-      promptHash: input.promptHash ?? hashSystemPrompt('fixed prompt\n'),
+      ...(input.omitPromptHash ? {} : { promptHash: input.promptHash ?? hashSystemPrompt('fixed prompt\n') }),
       tokenSummary: input.tokenSummary ?? { input: 1, output: 2, reasoning: 0, total: 3, costUsd: 0.02 },
       steps: 2,
       durationMs: 40,
