@@ -83,7 +83,7 @@ describe('module main surface contract', () => {
       /\.catch\(\(err: unknown\) => \{[\s\S]*?if \(cancelled\) return;\s*setSummary\(null\);\s*setError/,
       'Same-scope refresh failures should preserve the current Daily Review dashboard',
     );
-    assert.match(panelBlock, /<div className="maka-daily-review-alert" role="alert">/);
+    assert.match(panelBlock, /<Alert variant="warning" className="maka-daily-review-alert">/);
     assert.match(panelBlock, /每日回顾刷新失败：\{error\}/);
     assert.match(panelBlock, /summary: visibleSummary/);
   });

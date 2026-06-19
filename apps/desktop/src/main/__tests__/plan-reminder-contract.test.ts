@@ -104,7 +104,7 @@ describe('Plan reminder MVP contract', () => {
     assert.match(ui, /maka-plan-card-divider/, 'task cards must use a dashed divider before schedule metadata');
     assert.match(ui, /planReminderRunRangeStart/, 'execution record filters must use a centralized range helper');
     assert.match(ui, /planReminderStatusLabel/, 'status labels must come from a centralized mapper');
-    assert.match(ui, /import \{ Alert, AlertDescription, AlertTitle \} from '\.\/coss\/alert\.js'/, 'PlanReminderPanel must consume the vendored COSS Alert primitive');
+    assert.match(ui, /import \{[^}]*\bAlert\b[^}]*\bAlertDescription\b[^}]*\bAlertTitle\b[^}]*\} from '\.\/coss\/alert\.js'/, 'PlanReminderPanel must consume the vendored COSS Alert primitive');
     assert.match(ui, /<Alert variant="info" className="maka-plan-system-alert">[\s\S]*计划提醒会在本机唤醒时运行/, 'PlanReminderPanel must render the QoderWork-style info banner through COSS Alert');
     assert.match(ui, /import \{ Menu, MenuItem, MenuPopup, MenuTrigger \} from '\.\/coss\/menu\.js'/, 'PlanReminderPanel card actions must consume the vendored COSS Menu primitive');
     assert.match(ui, /import \{ Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle \} from '\.\/coss\/empty\.js'/, 'shared EmptyState must be backed by the vendored COSS Empty primitive');

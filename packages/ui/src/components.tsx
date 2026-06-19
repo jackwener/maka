@@ -127,7 +127,7 @@ import {
   Textarea as UiTextarea,
   cn,
 } from './ui.js';
-import { Alert, AlertDescription, AlertTitle } from './coss/alert.js';
+import { Alert, AlertAction, AlertDescription, AlertTitle } from './coss/alert.js';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from './coss/empty.js';
 import { InputGroup, InputGroupAddon, InputGroupInput } from './coss/input-group.js';
 import { Kbd, KbdGroup } from './coss/kbd.js';
@@ -1193,18 +1193,20 @@ function DailyReviewPanel(props: {
       </nav>
 
       {error && visibleSummary ? (
-        <div className="maka-daily-review-alert" role="alert">
-          <span>每日回顾刷新失败：{error}</span>
-          <UiButton
-            type="button"
-            variant="ghost"
-            className="maka-button maka-button-ghost"
-            onClick={() => setReloadToken((n) => n + 1)}
-            disabled={loading}
-          >
-            重试
-          </UiButton>
-        </div>
+        <Alert variant="warning" className="maka-daily-review-alert">
+          <AlertDescription>每日回顾刷新失败：{error}</AlertDescription>
+          <AlertAction>
+            <UiButton
+              type="button"
+              variant="ghost"
+              className="maka-button maka-button-ghost"
+              onClick={() => setReloadToken((n) => n + 1)}
+              disabled={loading}
+            >
+              重试
+            </UiButton>
+          </AlertAction>
+        </Alert>
       ) : null}
 
       {error && !visibleSummary ? (
