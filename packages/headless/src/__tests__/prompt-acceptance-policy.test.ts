@@ -325,6 +325,35 @@ describe('prompt acceptance policy', () => {
     assert.deepEqual(decision.metrics.original.heldOut.missingTaskIds, ['out-a']);
   });
 
+  test('discards candidates with missing task results', () => {
+    const decision = decidePromptAcceptance({
+      ...baseDecisionInput(),
+      candidateEvents: [
+        completed('in-a', true),
+        completed('out-a', true),
+      ],
+    });
+
+    assert.equal(decision.decision, 'discard');
+    assert.equal(decision.reason, 'coverage_regressed');
+    assert.deepEqual(decision.metrics.candidate.heldIn.missingTaskIds, ['in-b']);
+  });
+
+  test('discards candidates with plumbing failures', () => {
+    const decision = decidePromptAcceptance({
+      ...baseDecisionInput(),
+      candidateEvents: [
+        completed('in-a', true),
+        plumbingFailed('in-b'),
+        completed('out-a', true),
+      ],
+    });
+
+    assert.equal(decision.decision, 'discard');
+    assert.equal(decision.reason, 'coverage_regressed');
+    assert.deepEqual(decision.metrics.candidate.heldIn.plumbingFailedTaskIds, ['in-b']);
+  });
+
   test('discards candidates that fall below the held-out original floor', () => {
     const decision = decidePromptAcceptance({
       ...baseDecisionInput(),
@@ -479,6 +508,31 @@ function infraFailed(taskId: string): FixedPromptTaskWalEvent {
     eligible: false,
     errorClass: 'infra_error',
     error: 'container crashed',
+  };
+}
+
+function plumbingFailed(taskId: string): FixedPromptTaskWalEvent {
+  return {
+    schemaVersion: 1,
+    type: 'task_plumbing_failed',
+    id: `event-${taskId}`,
+    ts: 1,
+    runId: 'run-1',
+    roundId: 'round-1',
+    taskId,
+    status: 'plumbing_failed',
+    passed: false,
+    scored: false,
+    eligible: false,
+    errorClass: 'prompt_hash_mismatch',
+    error: 'prompt hash mismatch',
+    promptHash: 'actual',
+    expectedPromptHash: 'expected',
+    tokenSummary: { input: 1, output: 1, reasoning: 0, total: 2, costUsd: 0.01 },
+    steps: 1,
+    durationMs: 10,
+    runtimeEventsPath: `/logs/${taskId}.jsonl`,
+    harbor: { reward: 0 },
   };
 }
 
