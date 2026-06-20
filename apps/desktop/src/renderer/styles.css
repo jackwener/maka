@@ -262,9 +262,9 @@ button:active {
 }
 
 .maka-collapsed-topbar-button {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   color: var(--foreground-70);
   -webkit-app-region: no-drag;
 }
@@ -3682,40 +3682,33 @@ button:active {
 }
 
 .maka-chat-header {
-  height: 42px;
+  height: 32px;
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  padding: 0 14px;
-  /* PR-UI-LAYOUT-5: chat header now blends with the surrounding
-   * floating panel's `--background` instead of carrying its own
-   * `--foreground-5` tint. Matches the reference design screenshot 1 where the tab
-   * strip reads as part of the main panel, not a separate header
-   * band. The active tab still pops because it owns `--background`
-   * with a thin border and rounded top corners — the contrast
-   * comes from the tab chrome, not from the surrounding band. */
+  padding: 0 10px;
   background: transparent;
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
 }
 
 .maka-chat-tab {
-  height: 36px;
-  max-width: min(340px, 54vw);
-  min-width: 180px;
+  height: 28px;
+  max-width: min(300px, 50vw);
+  min-width: 140px;
   display: grid;
-  grid-template-columns: 15px minmax(0, 1fr) auto;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin-bottom: -1px;
-  padding: 0 13px;
+  padding: 0 10px;
   border: 1px solid var(--border);
   border-bottom-color: var(--background);
-  border-radius: 12px 12px 0 0;
+  border-radius: 8px 8px 0 0;
   background: var(--background);
   box-shadow: rgba(var(--foreground-rgb), 0.04) 0 -1px 0 0 inset;
   color: var(--foreground);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   -webkit-app-region: no-drag;
 }
@@ -3767,15 +3760,13 @@ button:active {
 }
 
 .maka-chat-tab-plus {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   display: grid;
   place-items: center;
-  margin: 0 4px 4px 2px;
+  margin: 0 2px 3px 2px;
   border: 0;
-  /* PR-UI-LAYOUT-20: tab-plus radius 6 → 8 (matches the new card
-   * family rhythm); added focus-visible ring for keyboard a11y. */
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--foreground-50);
   cursor: pointer;
@@ -3796,8 +3787,8 @@ button:active {
 }
 
 .maka-chat-tab-plus svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .maka-chat-header-spacer {
