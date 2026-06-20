@@ -1977,35 +1977,31 @@ button:active {
   max-width: 56ch;
 }
 .maka-onboarding-quickchat {
-  /* target-layout style unified composer card: textarea + action row
-     share one bordered surface instead of stacking as two
-     separate fields. The outer wrapper holds the border + radius;
-     each child is borderless so the surface reads as one panel. */
   display: flex;
   flex-direction: column;
   gap: 0;
-  margin-top: 16px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: var(--background-elevated, var(--background));
+  margin-top: 8px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--background);
+  box-shadow: 0 0 0 1px oklch(from var(--foreground) l c h / 0.06);
   transition:
-    border-color 140ms ease,
     box-shadow 160ms ease;
 }
 .maka-onboarding-quickchat:focus-within {
-  border-color: oklch(from var(--accent) l c h / 0.55);
-  box-shadow: 0 0 0 3px oklch(from var(--accent) l c h / 0.14);
+  box-shadow: 0 0 0 1px oklch(from var(--foreground) l c h / 0.16);
 }
 .maka-onboarding-quickchat-input {
   width: 100%;
   resize: vertical;
-  min-height: 80px;
-  padding: 14px 16px;
-  border-radius: 14px 14px 0 0;
+  min-height: 64px;
+  padding: 10px 12px;
+  border-radius: 10px 10px 0 0;
   border: 0;
   background: transparent;
   color: var(--foreground);
   font: inherit;
+  font-size: 13px;
   line-height: 1.5;
 }
 .maka-onboarding-quickchat[data-drag-active="true"] .maka-onboarding-quickchat-input {
@@ -2031,10 +2027,10 @@ button:active {
  * to type after we shortened the placeholder to "Message Maka…". */
 .maka-onboarding-quickchat-example {
   margin-top: -2px;
-  padding-inline: 16px;
+  padding-inline: 12px;
   color: var(--foreground-50);
-  font-size: 0.78rem;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.4;
   font-style: italic;
 }
 .maka-onboarding-quickchat-example[data-pending="true"] {
@@ -2064,12 +2060,9 @@ button:active {
   justify-content: flex-end;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  /* Sit inside the unified composer card frame; the parent
-     `.maka-onboarding-quickchat` owns the border + background,
-     so the action row keeps its padding here. */
-  padding: 8px 10px 10px;
-  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  gap: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid oklch(from var(--foreground) l c h / 0.05);
 }
 
 .maka-onboarding-quickchat-action,

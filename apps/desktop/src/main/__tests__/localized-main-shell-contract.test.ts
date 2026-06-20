@@ -737,11 +737,11 @@ describe('localized main shell contract', () => {
     assert.ok(quickchatExamplePending, '.maka-onboarding-quickchat-example[data-pending="true"] rule must exist');
     assert.ok(quickchatMode, '.maka-onboarding-quickchat-mode rule must exist');
     assert.ok(quickchatActions, '.maka-onboarding-quickchat-actions rule must exist');
-    assert.match(quickchat, /border-radius:\s*14px/);
-    assert.match(quickchatInput, /padding:\s*14px 16px/);
+    assert.match(quickchat, /border-radius:\s*10px/);
+    assert.match(quickchatInput, /padding:\s*10px 12px/);
     assert.match(
       quickchatExample,
-      /padding-inline:\s*16px/,
+      /padding-inline:\s*12px/,
       'Quick Chat example copy must align with textarea text instead of touching the card border',
     );
     assert.match(
@@ -760,7 +760,7 @@ describe('localized main shell contract', () => {
       /max-width:\s*calc\(100% - 32px\)/,
       'Quick Chat mode chip must stay inside the bordered composer card on narrow widths',
     );
-    assert.match(quickchatActions, /padding:\s*8px 10px 10px/);
+    assert.match(quickchatActions, /padding:\s*6px 8px/);
   });
 
   it('keeps English skill metadata out of the visible skills list copy', async () => {
