@@ -2953,34 +2953,34 @@ button:active {
   border: 0;
   border-radius: 0;
   background: var(--background);
-  padding: 18px;
+  padding: 12px;
   overflow: auto;
 }
 
 .maka-plan-form-header {
   align-items: flex-start;
-  padding-bottom: 4px;
+  padding-bottom: 2px;
 }
 
 .maka-plan-form-title {
   margin: 0;
   color: var(--foreground);
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 .maka-plan-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 6px;
 }
 
 .maka-plan-field {
   display: grid;
-  gap: 4px;
+  gap: 3px;
   color: var(--foreground-60);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
 }
 
@@ -3008,12 +3008,12 @@ button:active {
 .maka-plan-presets {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  gap: 4px;
 }
 
 .maka-plan-preset {
   min-width: 0;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3027,27 +3027,27 @@ button:active {
 .maka-plan-validation {
   margin: 0;
   border: 1px solid oklch(from var(--warning) l c h / 0.34);
-  border-radius: 6px;
+  border-radius: 5px;
   background: oklch(from var(--warning) l c h / 0.08);
   color: var(--foreground-80);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  line-height: 1.45;
-  padding: 7px 8px;
+  line-height: 1.4;
+  padding: 4px 8px;
 }
 
 .maka-plan-delivery-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
+  gap: 6px;
 }
 
 .maka-plan-delivery-help {
   margin: 0;
   color: var(--foreground-60);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
 .maka-plan-submit {
