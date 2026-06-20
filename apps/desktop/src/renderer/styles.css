@@ -5435,6 +5435,7 @@ button:active {
 
 .composer .maka-composer-inner {
   --h-composer-min: 72px;
+  position: relative;
   width: min(680px, 80vw);
   max-width: 680px;
   margin-inline: auto;
@@ -5443,6 +5444,46 @@ button:active {
   padding: 10px 12px;
   background: var(--background);
   box-shadow: 0 0 0 1px oklch(from var(--foreground) l c h / 0.06);
+}
+
+.composer .maka-composer-inner::before,
+.composer .maka-composer-inner::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  will-change: opacity;
+  animation: maka-composer-glow-pulse 4.8s ease-in-out infinite;
+}
+
+.composer .maka-composer-inner::before {
+  box-shadow:
+    0 10px 30px -14px oklch(from var(--accent) l c h / 0.20),
+    -18px 0 42px -24px oklch(from var(--accent) l c h / 0.16),
+    18px 0 42px -24px oklch(from var(--accent) l c h / 0.16);
+  animation-direction: normal;
+}
+
+.composer .maka-composer-inner::after {
+  box-shadow:
+    0 12px 34px -12px oklch(from var(--accent) l c h / 0.24),
+    20px 0 48px -22px oklch(from var(--accent) l c h / 0.18),
+    -20px 0 48px -22px oklch(from var(--accent) l c h / 0.18);
+  animation-direction: reverse;
+}
+
+@keyframes maka-composer-glow-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer .maka-composer-inner::before,
+  .composer .maka-composer-inner::after {
+    animation: none;
+    opacity: 0.4;
+  }
 }
 
 .composer .maka-composer-inner:focus-within {
