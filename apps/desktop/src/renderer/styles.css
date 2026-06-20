@@ -5752,22 +5752,22 @@ button:active {
 
 /* PR30 Permission dialog: per-reason iconography + per-tool summary block */
 .permissionDialog {
-  width: min(560px, calc(100vw - 48px));
+  width: min(480px, calc(100vw - 48px));
 }
 
 .maka-permission-header {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   align-items: start;
-  gap: 14px;
+  gap: 10px;
 }
 
 .maka-permission-icon {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 8px;
   background: oklch(from var(--info) l c h / 0.10);
   color: var(--info-text);
 }
@@ -5825,7 +5825,7 @@ button:active {
 .maka-permission-line {
   margin: 0;
   color: var(--foreground-80);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .maka-permission-path {
@@ -5834,12 +5834,8 @@ button:active {
 
 .maka-permission-path code {
   font-family: var(--font-mono);
-  font-size: 12.5px;
-  padding: 2px 6px;
-  /* PR-UI-LAYOUT-40: radius 4 → 5 + hairline border to match the
-   * inline `<code>` family (LAYOUT-28 / 40). The path display in
-   * the Permission Dialog now reads as the same kind of element
-   * as inline code anywhere else. */
+  font-size: 11px;
+  padding: 1px 5px;
   border-radius: 5px;
   background: var(--foreground-5);
   color: var(--foreground);
@@ -5849,23 +5845,23 @@ button:active {
 .maka-permission-command,
 .maka-permission-preview {
   margin: 0;
-  max-height: 200px;
+  max-height: 180px;
   overflow: auto;
 }
 
 .maka-permission-meta {
   margin: 0;
   color: var(--foreground-60);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .maka-permission-hint {
-  border-radius: 10px;
+  border-radius: 6px;
   background: oklch(from var(--info) l c h / 0.10);
   color: var(--info-text);
-  padding: 9px 12px;
-  font-size: 12.5px;
-  line-height: 1.5;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 /* Single-line emphasis under the "记住本轮" checkbox when the action is
@@ -5881,10 +5877,10 @@ button:active {
 
 .maka-permission-stale-note {
   margin: 0;
-  border-radius: 10px;
-  padding: 9px 12px;
-  font-size: 12px;
-  line-height: 1.5;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.4;
   color: var(--warning-text);
   background: oklch(from var(--warning) l c h / 0.10);
   border: 1px solid oklch(from var(--warning) l c h / 0.20);
