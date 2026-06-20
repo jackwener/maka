@@ -12,6 +12,8 @@ from harbor.models.trajectories import Agent, FinalMetrics, Step, Trajectory
 from harbor.models.trial.paths import EnvironmentPaths
 from harbor.utils.trajectory_utils import format_trajectory_json
 
+from trial_pricing import estimate_cost, pricing_from_env
+
 
 class MakaAgent(BaseInstalledAgent):
     """Run Maka inside the Harbor task container and expose the shared cell output."""
@@ -281,7 +283,7 @@ def _apply_trial_pricing(agent: MakaAgent, token_summary: dict[str, Any]) -> Non
     if not (token_summary.get("input") or token_summary.get("output")):
         return
 
-    pricing = _pricing_from_env(agent)
+    pricing = pricing_from_env(agent._get_env)
     if pricing is None:
         return
 
@@ -297,33 +299,14 @@ def _apply_trial_pricing(agent: MakaAgent, token_summary: dict[str, Any]) -> Non
     if cache_miss is None:
         cache_miss = max(0, input_tokens - cache_read - cache_write)
 
-    token_summary["costUsd"] = (
-        cache_miss / 1_000_000 * pricing["input"]
-        + output_tokens / 1_000_000 * pricing["output"]
-        + cache_read / 1_000_000 * pricing["cache_read"]
-        + cache_write / 1_000_000 * pricing["cache_write"]
+    token_summary["costUsd"] = estimate_cost(
+        {
+            "input": input_tokens,
+            "output": output_tokens,
+            "cache_read": cache_read,
+            "cache_write": cache_write,
+            "cache_miss": cache_miss,
+        },
+        pricing,
     )
     token_summary["pricingSource"] = agent._get_env("MAKA_TRIAL_PRICING_SOURCE") or "env"
-
-
-def _pricing_from_env(agent: MakaAgent) -> dict[str, float] | None:
-    input_rate = _env_float(agent, "MAKA_TRIAL_INPUT_USD_PER_1M")
-    output_rate = _env_float(agent, "MAKA_TRIAL_OUTPUT_USD_PER_1M")
-    if input_rate is None or output_rate is None:
-        return None
-    return {
-        "input": input_rate,
-        "output": output_rate,
-        "cache_read": _env_float(agent, "MAKA_TRIAL_CACHE_READ_USD_PER_1M") or 0.0,
-        "cache_write": _env_float(agent, "MAKA_TRIAL_CACHE_WRITE_USD_PER_1M") or 0.0,
-    }
-
-
-def _env_float(agent: MakaAgent, key: str) -> float | None:
-    value = agent._get_env(key)
-    if isinstance(value, str) and value.strip():
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    return None

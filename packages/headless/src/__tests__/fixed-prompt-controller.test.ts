@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 import type { Config } from '../contracts.js';
-import type { HarborCellTokenSummary } from '../cell-output.js';
+import { tokenSummary } from './helpers/cell-output-fixtures.js';
 import {
   hashSystemPrompt,
   readHarborTaskRunOutput,
@@ -718,20 +718,6 @@ function harborOutput(input: {
 function idFactory(): () => string {
   let i = 0;
   return () => `id-${++i}`;
-}
-
-function tokenSummary(
-  input: Pick<HarborCellTokenSummary, 'input' | 'output' | 'reasoning' | 'total' | 'costUsd'>,
-): HarborCellTokenSummary {
-  return {
-    ...input,
-    cachedInput: 0,
-    cacheHitInput: 0,
-    cacheMissInput: input.input,
-    cacheWriteInput: 0,
-    cacheMissInputSource: 'derived',
-    pricingSource: 'runtime',
-  };
 }
 
 async function delay(ms: number): Promise<void> {

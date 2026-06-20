@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import type { HarborCellTokenSummary } from '../cell-output.js';
 import type { FixedPromptWalEvent, PromptCandidateRewardHackScan } from '../fixed-prompt-controller.js';
 import {
   promptStructuralSmokeReport,
   renderPromptStructuralSmokeMarkdown,
 } from '../prompt-structural-smoke.js';
+import { tokenSummary } from './helpers/cell-output-fixtures.js';
 
 describe('prompt structural smoke report', () => {
   test('passes after ten unattended discard decisions under budget', () => {
@@ -525,19 +525,5 @@ function infraFailedEvent(roundId: string, taskId: string): FixedPromptWalEvent 
     eligible: false,
     errorClass: 'infra_error',
     error: 'container crashed',
-  };
-}
-
-function tokenSummary(
-  input: Pick<HarborCellTokenSummary, 'input' | 'output' | 'reasoning' | 'total' | 'costUsd'>,
-): HarborCellTokenSummary {
-  return {
-    ...input,
-    cachedInput: 0,
-    cacheHitInput: 0,
-    cacheMissInput: input.input,
-    cacheWriteInput: 0,
-    cacheMissInputSource: 'derived',
-    pricingSource: 'runtime',
   };
 }

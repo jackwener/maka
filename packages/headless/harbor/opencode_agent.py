@@ -6,9 +6,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
+from harbor.agents.installed.base import NonZeroAgentExitCodeError, with_prompt_template
 from harbor.agents.installed.opencode import OpenCode
 from harbor.environments.base import BaseEnvironment
 from harbor.models.agent.context import AgentContext
+
+from trial_pricing import estimate_cost, pricing_from_env
 
 
 class MakaOpenCodeAgent(OpenCode):
@@ -26,6 +29,7 @@ class MakaOpenCodeAgent(OpenCode):
     def name() -> str:
         return "opencode"
 
+    @with_prompt_template
     async def run(
         self,
         instruction: str,
@@ -35,8 +39,6 @@ class MakaOpenCodeAgent(OpenCode):
         with self._bridged_env():
             await self._run_with_stop_sentinel(instruction, environment)
         if messages := self._error_messages():
-            from harbor.agents.installed.base import NonZeroAgentExitCodeError
-
             raise NonZeroAgentExitCodeError(
                 "OpenCode emitted error event(s): " + "; ".join(messages[:3])
             )
@@ -69,9 +71,9 @@ class MakaOpenCodeAgent(OpenCode):
         estimated_cost = context.cost_usd
         pricing_source = "opencode" if estimated_cost is not None else None
 
-        pricing = self._pricing_from_env()
+        pricing = pricing_from_env(self._get_env)
         if pricing is not None:
-            estimated_cost = _estimate_cost(totals, pricing)
+            estimated_cost = estimate_cost(totals, pricing)
             context.cost_usd = estimated_cost
             pricing_source = self._get_env("MAKA_TRIAL_PRICING_SOURCE") or "env"
 
@@ -259,48 +261,9 @@ class MakaOpenCodeAgent(OpenCode):
             "cache_miss": max(0, input_tokens - cache_read - cache_write),
         }
 
-    def _pricing_from_env(self) -> dict[str, float] | None:
-        input_rate = _optional_float(self._get_env("MAKA_TRIAL_INPUT_USD_PER_1M"))
-        output_rate = _optional_float(self._get_env("MAKA_TRIAL_OUTPUT_USD_PER_1M"))
-        if input_rate is None or output_rate is None:
-            return None
-        return {
-            "input": input_rate,
-            "output": output_rate,
-            "cache_read": _optional_float(
-                self._get_env("MAKA_TRIAL_CACHE_READ_USD_PER_1M")
-            )
-            or 0.0,
-            "cache_write": _optional_float(
-                self._get_env("MAKA_TRIAL_CACHE_WRITE_USD_PER_1M")
-            )
-            or 0.0,
-        }
-
-
-def _estimate_cost(totals: dict[str, int], pricing: dict[str, float]) -> float:
-    return (
-        totals["cache_miss"] / 1_000_000 * pricing["input"]
-        + totals["output"] / 1_000_000 * pricing["output"]
-        + totals["cache_read"] / 1_000_000 * pricing["cache_read"]
-        + totals["cache_write"] / 1_000_000 * pricing["cache_write"]
-    )
-
-
 def _int_value(value: Any) -> int:
     return (
         int(value)
         if isinstance(value, (int, float)) and not isinstance(value, bool)
         else 0
     )
-
-
-def _optional_float(value: Any) -> float | None:
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return float(value)
-    if isinstance(value, str) and value.strip():
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    return None

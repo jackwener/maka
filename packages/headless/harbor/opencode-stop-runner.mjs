@@ -40,6 +40,7 @@ const child = spawn(command, commandArgs, {
 
 let stopSeen = false;
 let terminating = false;
+let terminatedByRunner = false;
 let stdoutBuffer = '';
 let stderrBuffer = '';
 
@@ -98,6 +99,7 @@ async function scheduleTermination() {
   if (child.exitCode !== null || child.signalCode !== null) {
     return;
   }
+  terminatedByRunner = true;
   terminateChild('SIGTERM');
   await delay(1000);
   if (child.exitCode === null && child.signalCode === null) {
@@ -138,7 +140,7 @@ const exitCode = await new Promise((resolve) => {
       inspectLine(remainingStderr);
     }
     output.end(() => {
-      if (stopSeen) {
+      if (stopSeen && terminatedByRunner) {
         resolve(0);
       } else if (typeof code === 'number') {
         resolve(code);

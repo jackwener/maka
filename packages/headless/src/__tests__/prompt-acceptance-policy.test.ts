@@ -17,8 +17,8 @@ import type {
   FixedPromptTaskCompletedEvent,
   FixedPromptTaskWalEvent,
 } from '../fixed-prompt-controller.js';
-import type { HarborCellTokenSummary } from '../cell-output.js';
 import { readFixedPromptWal } from '../fixed-prompt-controller.js';
+import { tokenSummary } from './helpers/cell-output-fixtures.js';
 
 describe('prompt acceptance policy', () => {
   test('calibrates separate held-in and held-out noise bands from baseline runs', () => {
@@ -737,18 +737,4 @@ async function withDir(fn: (dir: string) => Promise<void>): Promise<void> {
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
-}
-
-function tokenSummary(
-  input: Pick<HarborCellTokenSummary, 'input' | 'output' | 'reasoning' | 'total' | 'costUsd'>,
-): HarborCellTokenSummary {
-  return {
-    ...input,
-    cachedInput: 0,
-    cacheHitInput: 0,
-    cacheMissInput: input.input,
-    cacheWriteInput: 0,
-    cacheMissInputSource: 'derived',
-    pricingSource: 'runtime',
-  };
 }

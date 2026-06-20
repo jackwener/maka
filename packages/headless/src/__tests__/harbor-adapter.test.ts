@@ -101,6 +101,36 @@ describe('Harbor adapter contract', () => {
       rmSync(tmp, { recursive: true, force: true });
     }
   });
+
+  test('opencode stop runner preserves a natural non-zero exit after stop', () => {
+    const tmp = mkdtempSync(resolve(tmpdir(), 'maka-opencode-runner-'));
+    try {
+      const outputPath = resolve(tmp, 'opencode.txt');
+      const result = spawnSync(
+        process.execPath,
+        [
+          resolve(repoRoot, 'packages/headless/harbor/opencode-stop-runner.mjs'),
+          '--output',
+          outputPath,
+          '--grace-ms',
+          '1000',
+          '--',
+          process.execPath,
+          '-e',
+          [
+            'console.log(JSON.stringify({ type: "step_finish", part: { reason: "stop" } }))',
+            'process.exit(7)',
+          ].join(';'),
+        ],
+        { encoding: 'utf8', timeout: 2000 },
+      );
+
+      assert.equal(result.status, 7, result.stderr);
+      assert.match(result.stdout, /"reason":"stop"/);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
 });
 
 async function readRepoFile(path: string): Promise<string> {
@@ -315,13 +345,26 @@ module("harbor")
 module("harbor.agents")
 module("harbor.agents.installed")
 opencode_mod = module("harbor.agents.installed.opencode")
+base_mod = module("harbor.agents.installed.base")
+
+class NonZeroAgentExitCodeError(RuntimeError):
+    pass
+
+def with_prompt_template(fn):
+    async def wrapper(self, instruction, *args, **kwargs):
+        return await fn(self, self.render_instruction(instruction), *args, **kwargs)
+    return wrapper
+
+base_mod.NonZeroAgentExitCodeError = NonZeroAgentExitCodeError
+base_mod.with_prompt_template = with_prompt_template
 
 class OpenCode:
-    def __init__(self, logs_dir, *args, **kwargs):
+    def __init__(self, logs_dir, prompt_template_path=None, *args, **kwargs):
         self.logs_dir = Path(logs_dir)
         self._extra_env = kwargs.get("extra_env") or {}
         self.model_name = kwargs.get("model_name") or "openai/mimo-v2.5-pro"
         self._instruction = None
+        self._prompt_template_path = Path(prompt_template_path) if prompt_template_path else None
 
     @staticmethod
     def name():
@@ -329,6 +372,11 @@ class OpenCode:
 
     def _get_env(self, key):
         return self._extra_env.get(key) or os.environ.get(key)
+
+    def render_instruction(self, instruction):
+        if not self._prompt_template_path:
+            return instruction
+        return self._prompt_template_path.read_text().replace("{{ instruction }}", instruction)
 
     def _build_register_skills_command(self):
         return None
@@ -374,6 +422,8 @@ old_key = os.environ.pop("OPENAI_API_KEY", None)
 old_base = os.environ.pop("OPENAI_BASE_URL", None)
 try:
     with tempfile.TemporaryDirectory() as tmp:
+        template_path = Path(tmp) / "prompt.j2"
+        template_path.write_text("templated: {{ instruction }}", encoding="utf-8")
         agent = MakaOpenCodeAgent(Path(tmp), extra_env={
             "OPENAI_API_KEY": "test-key",
             "OPENAI_BASE_URL": "https://api.xiaomimimo.com/v1",
@@ -382,7 +432,7 @@ try:
             "MAKA_TRIAL_CACHE_READ_USD_PER_1M": "0.5",
             "MAKA_TRIAL_CACHE_WRITE_USD_PER_1M": "3",
             "MAKA_TRIAL_PRICING_SOURCE": "xiaomi-env",
-        })
+        }, prompt_template_path=template_path)
         context = AgentContext()
         environment = types.SimpleNamespace(agent_commands=[])
         async def exec_as_agent(environment, command, env=None, **kwargs):
@@ -394,6 +444,7 @@ try:
         assert "opencode-stop-runner.mjs" in command, command
         assert "--output /logs/agent/opencode.txt" in command, command
         assert "opencode --model=openai/mimo-v2.5-pro run --format=json" in command, command
+        assert "templated: hi" in command, command
         assert env["OPENAI_API_KEY"] == "test-key", env
         assert env["OPENAI_BASE_URL"] == "https://api.xiaomimimo.com/v1", env
         assert os.environ.get("OPENAI_API_KEY") is None
