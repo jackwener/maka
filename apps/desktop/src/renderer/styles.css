@@ -3166,17 +3166,17 @@ button:active {
 .maka-plan-card-chip {
   display: inline-flex;
   max-width: 100%;
-  min-height: 26px;
+  min-height: 20px;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: transparent;
   color: var(--foreground-60);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   line-height: 1;
-  padding: 5px 8px;
+  padding: 2px 6px;
 }
 
 .maka-plan-card-recurrence {
@@ -3188,20 +3188,20 @@ button:active {
    distance-from-now in one glance. */
 .maka-plan-card-countdown {
   display: inline-block;
-  margin-left: 6px;
-  padding: 1px 6px;
+  margin-left: 4px;
+  padding: 0 5px;
   border-radius: 999px;
   background: oklch(from var(--accent) l c h / 0.10);
   color: var(--accent);
   font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.02em;
+  font-size: 9px;
+  letter-spacing: 0;
 }
 
 .maka-plan-card-note {
   color: var(--foreground-55);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 10px;
+  line-height: 1.35;
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -3211,23 +3211,23 @@ button:active {
 
 .maka-plan-run-list {
   display: grid;
-  gap: 8px;
+  gap: 4px;
 }
 
 .maka-plan-run-row {
   grid-template-columns: max-content minmax(0, 1fr) max-content;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 8px;
+  padding: 6px 10px;
 }
 
 .maka-plan-run-status {
   border-radius: 999px;
   background: var(--foreground-3);
   color: var(--foreground-60);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 5px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
 }
 
 .maka-plan-run-status[data-status="triggered"] {
@@ -3243,13 +3243,13 @@ button:active {
 
 .maka-plan-run-main {
   display: grid;
-  gap: 3px;
+  gap: 1px;
   min-width: 0;
 }
 
 .maka-plan-run-main strong {
   color: var(--foreground);
-  font-size: 13px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3258,8 +3258,8 @@ button:active {
 .maka-plan-run-main span,
 .maka-plan-run-row time {
   color: var(--foreground-50);
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 10px;
+  line-height: 1.35;
 }
 
 .maka-plan-run-row time {
