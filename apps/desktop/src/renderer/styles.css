@@ -737,12 +737,12 @@ button:active {
 }
 
 .maka-session-list-title {
-  height: 24px;
+  height: 20px;
   display: flex;
   align-items: center;
-  padding: 0 12px;
+  padding: 0 10px;
   color: var(--foreground-35);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -750,10 +750,10 @@ button:active {
 
 .maka-session-panel-footer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px;
+  grid-template-columns: minmax(0, 1fr) 24px;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px 12px;
+  gap: 6px;
+  padding: 6px 10px 8px;
   border-top: 0;
 }
 
@@ -1791,15 +1791,8 @@ button:active {
 .maka-onboarding-footer {
   display: flex;
   align-items: center;
-  /* PR-PARCHMENT-HOME-7 (WAWQAQ msg `2690c2e4` round 7/20): center
-     the footer's CTAs so they sit on the column's vertical axis
-     instead of clinging to the left edge. The rest of the
-     OnboardingHero header is now centered (PR-PARCHMENT-HOME-1) and
-     the left-anchored footer read as a visual snag. The
-     `.maka-onboarding-ready` left-aligned branch overrides this
-     below for the in-chat composer-led state. */
   justify-content: center;
-  gap: 16px;
+  gap: 8px;
 }
 
 .maka-onboarding-ready .maka-onboarding-footer {
@@ -3112,9 +3105,9 @@ button:active {
   min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   color: var(--foreground-50);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
 }
 
@@ -3122,7 +3115,7 @@ button:active {
   position: static;
   width: auto;
   transform: none;
-  padding: 28px 12px;
+  padding: 16px 10px;
 }
 
 .maka-plan-card-main {
