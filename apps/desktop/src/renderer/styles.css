@@ -7261,12 +7261,12 @@ button:active {
 .settingsBotScanLoginModal {
   background: var(--background);
   border: 1px solid var(--border);
-  border-radius: 18px;
-  padding: 22px 26px 24px;
-  width: min(360px, 92vw);
+  border-radius: 10px;
+  padding: 14px 16px;
+  width: min(320px, 92vw);
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   box-shadow: var(--shadow-minimal);
 }
 .settingsBotScanLoginHeader {
@@ -7276,39 +7276,39 @@ button:active {
 }
 .settingsBotScanLoginHeader h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 600;
 }
 .settingsBotScanLoginBody {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
   text-align: center;
 }
 .settingsBotScanLoginQr {
-  width: 220px;
-  height: 220px;
-  border-radius: 12px;
+  width: 180px;
+  height: 180px;
+  border-radius: 8px;
   background: white;
-  padding: 12px;
+  padding: 8px;
   border: 1px solid var(--border);
   object-fit: contain;
 }
 .settingsBotScanLoginQrPlaceholder {
-  width: 220px;
-  height: 220px;
+  width: 180px;
+  height: 180px;
   display: grid;
   place-items: center;
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--foreground-5);
   border: 1px dashed var(--border);
   color: var(--foreground-40);
-  font-size: 32px;
+  font-size: 24px;
 }
 .settingsBotScanLoginStatus {
   margin: 0;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--foreground-70);
 }
@@ -8344,8 +8344,8 @@ button:active {
 .settingsConnectionDetail {
   margin: 0;
   color: var(--foreground-70);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .settingsAuthContract {
@@ -8788,14 +8788,14 @@ button:active {
 }
 
 .catalogTabs strong {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .catalogTabs small {
   color: var(--foreground-50);
   font-size: 10px;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .catalogGrid {
