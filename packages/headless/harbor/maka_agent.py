@@ -1,4 +1,4 @@
-"""Harbor adapter for running a Maka RuntimeRunner cell in-place at /app."""
+"""Harbor adapter for running a Maka RuntimeRunner cell in the task workdir."""
 
 import json
 import shlex
@@ -108,7 +108,6 @@ class MakaAgent(BaseInstalledAgent):
         run_log_path = agent_dir / self._RUN_LOG_FILENAME
         shell_script = (
             "set -o pipefail; "
-            f"cd /app && "
             f"node {shlex.quote(run_cell_path)} "
             f"2>&1 | tee {shlex.quote(run_log_path.as_posix())}"
         )
@@ -135,7 +134,6 @@ class MakaAgent(BaseInstalledAgent):
             "MAKA_MODEL": model,
             "MAKA_INSTRUCTION_FILE": instruction_path.as_posix(),
             "MAKA_SYSTEM_PROMPT": system_prompt,
-            "MAKA_WORKDIR": "/app",
             "MAKA_OUTPUT_DIR": EnvironmentPaths.agent_dir.as_posix(),
             "MAKA_STORAGE_ROOT": (EnvironmentPaths.agent_dir / "maka-storage").as_posix(),
         }
