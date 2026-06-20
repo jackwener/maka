@@ -278,8 +278,6 @@ def _optional_float(value: Any, key: str) -> float | None:
 
 
 def _apply_trial_pricing(agent: MakaAgent, token_summary: dict[str, Any]) -> None:
-    if _optional_float(token_summary, "costUsd"):
-        return
     if not (token_summary.get("input") or token_summary.get("output")):
         return
 

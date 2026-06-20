@@ -305,7 +305,7 @@ class OpenCode:
         context.n_input_tokens = 100
         context.n_output_tokens = 20
         context.n_cache_tokens = 40
-        context.cost_usd = None
+        context.cost_usd = 0.99
 
 opencode_mod.OpenCode = OpenCode
 
@@ -355,6 +355,7 @@ try:
         assert context.metadata["opencode_cache_miss_input_tokens"] == 60, context.metadata
         assert context.metadata["opencode_cache_write_input_tokens"] == 0, context.metadata
         assert context.metadata["opencode_estimated_cost_usd"] == context.cost_usd, context.metadata
+        assert context.metadata["opencode_reported_cost_usd"] == 0.99, context.metadata
         assert context.metadata["opencode_pricing_source"] == "xiaomi-env", context.metadata
         print("opencode_estimated_cost_usd", context.cost_usd)
 finally:

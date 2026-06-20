@@ -57,15 +57,15 @@ class MakaOpenCodeAgent(OpenCode):
 
     def _apply_cost_metadata(self, context: AgentContext) -> None:
         totals = self._token_totals(context)
+        reported_cost = context.cost_usd
         estimated_cost = context.cost_usd
         pricing_source = "opencode" if estimated_cost is not None else None
 
-        if estimated_cost is None:
-            pricing = self._pricing_from_env()
-            if pricing is not None:
-                estimated_cost = _estimate_cost(totals, pricing)
-                context.cost_usd = estimated_cost
-                pricing_source = self._get_env("MAKA_TRIAL_PRICING_SOURCE") or "env"
+        pricing = self._pricing_from_env()
+        if pricing is not None:
+            estimated_cost = _estimate_cost(totals, pricing)
+            context.cost_usd = estimated_cost
+            pricing_source = self._get_env("MAKA_TRIAL_PRICING_SOURCE") or "env"
 
         context.metadata = {
             **(context.metadata or {}),
@@ -76,6 +76,7 @@ class MakaOpenCodeAgent(OpenCode):
             "opencode_cache_miss_input_tokens": totals["cache_miss"],
             "opencode_cache_write_input_tokens": totals["cache_write"],
             "opencode_estimated_cost_usd": estimated_cost,
+            "opencode_reported_cost_usd": reported_cost,
             "opencode_pricing_source": pricing_source or "missing_pricing",
         }
 
