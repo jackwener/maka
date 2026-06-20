@@ -3958,8 +3958,8 @@ button:active {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 9px;
-  margin-bottom: 9px;
+  padding: 1px 6px;
+  margin-bottom: 3px;
   border-radius: 999px;
   border: 1px solid transparent;
   font-size: 11px;
@@ -4363,21 +4363,16 @@ button:active {
 
 .maka-toast {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto auto;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
   align-items: start;
-  gap: 10px;
-  /* PR-UI-LAYOUT-9: toast chrome aligns with the new card family.
-   * Was: `--border-strong` + `--shadow-medium` (heavy 4-layer
-   * stack). Now: `--border` hairline + softer 2-layer shadow that
-   * still floats above the chat but doesn't drop a heavy shadow
-   * onto the warm canvas. */
+  gap: 8px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--background);
   box-shadow:
     0 1px 2px oklch(from var(--foreground) l c h / 0.04),
-    0 10px 24px oklch(from var(--foreground) l c h / 0.08);
-  padding: 12px 14px;
+    0 6px 16px oklch(from var(--foreground) l c h / 0.06);
+  padding: 8px 10px;
   pointer-events: auto;
   opacity: 1;
   transform: translateY(0);
@@ -4415,15 +4410,15 @@ button:active {
 
 .maka-toast-copy strong {
   color: var(--foreground);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   text-wrap: balance;
 }
 
 .maka-toast-copy small {
   color: var(--foreground-60);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.4;
   text-wrap: pretty;
 }
 
@@ -4434,8 +4429,8 @@ button:active {
   background: var(--background);
   color: var(--accent);
   cursor: pointer;
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
   font-weight: 600;
 }
 
