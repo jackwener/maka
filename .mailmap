@@ -1,0 +1,6 @@
+# Canonical contributor identities.
+#
+# Historical local agent commits were authored with the host user's git config.
+# Keep shared history immutable, but make Git/GitHub contributor views fold
+# those commits under the agent identity used for future local commits.
+samuel <90952590+likun666661@users.noreply.github.com> likun <kunli@alva.xyz>
