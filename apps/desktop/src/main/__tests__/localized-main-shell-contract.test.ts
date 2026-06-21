@@ -478,7 +478,13 @@ describe('localized main shell contract', () => {
     assert.ok(workspaceTopActions, '.maka-workspace-top-actions rule must exist');
     assert.ok(workspaceFeedbackAction, '.maka-workspace-feedback-action rule must exist');
     assert.match(workspaceTopActions, /position:\s*absolute/);
-    assert.match(workspaceTopActions, /top:\s*11px/);
+    // PR-TITLEBAR-ROW-BASELINE: the right-side workspace top-actions
+    // share the single titlebar baseline with the two left strips —
+    // anchored on var(--maka-titlebar-control-safe-top), never a
+    // hardcoded vertical offset. We assert the baseline reference, not
+    // the per-container correction constant (geometry, free to tune):
+    // the invariant is that all three clusters key off the one baseline.
+    assert.match(workspaceTopActions, /top:\s*calc\(var\(--maka-titlebar-control-safe-top\) - \d+px\)/);
     assert.match(workspaceTopActions, /right:\s*24px/);
     assert.match(workspaceTopActions, /gap:\s*6px/);
     assert.match(workspaceFeedbackAction, /font-size:\s*11px/);
@@ -528,7 +534,15 @@ describe('localized main shell contract', () => {
     assert.ok(collapsedTopbar, '.maka-collapsed-drag-strip rule must exist');
     assert.match(collapsedTopbar, /min-height:\s*38px/);
     assert.match(styles, /--maka-titlebar-control-safe-left:\s*94px/);
-    assert.match(collapsedTopbar, /padding:\s*8px 12px 0 var\(--maka-titlebar-control-safe-left\)/);
+    // PR-TITLEBAR-ROW-BASELINE: the macOS window has ONE physical
+    // titlebar row (traffic-light center). All three top icon clusters
+    // — sidebar header strip, collapsed strip, workspace top-actions —
+    // center their 24px icons on the single --maka-titlebar-control-safe-top
+    // baseline so the row can't jump when the sidebar collapses/expands.
+    // Each cluster applies its own small per-container correction; no
+    // cluster may reintroduce an independent vertical baseline.
+    assert.match(styles, /--maka-titlebar-control-safe-top:\s*20px/);
+    assert.match(collapsedTopbar, /padding:\s*calc\(var\(--maka-titlebar-control-safe-top\) - \d+px\) 12px 0 var\(--maka-titlebar-control-safe-left\)/);
     assert.match(collapsedTopbar, /-webkit-app-region:\s*drag/);
     const collapsedTopbarButton = extractCssRule(styles, '.maka-collapsed-topbar-button');
     assert.ok(collapsedTopbarButton, '.maka-collapsed-topbar-button rule must exist');
@@ -538,6 +552,10 @@ describe('localized main shell contract', () => {
     assert.match(sidebarTopBar, /justify-content:\s*space-between/);
     assert.match(sidebarTopBar, /box-sizing:\s*border-box/);
     assert.match(sidebarTopBar, /padding-left:\s*calc\(var\(--maka-titlebar-control-safe-left\) - 10px\)/);
+    // same shared vertical baseline as the collapsed strip + workspace
+    // top-actions — references the one var(--maka-titlebar-control-safe-top),
+    // with its own per-container correction constant (not asserted).
+    assert.match(sidebarTopBar, /padding-top:\s*calc\(var\(--maka-titlebar-control-safe-top\) - \d+px\)/);
     assert.match(styles, /(?:^|\n)\.maka-nav-icon\s*\{[\s\S]*?width:\s*18px[\s\S]*?height:\s*18px/);
     assert.match(styles, /\.maka-sidebar-modules\b/);
     assert.doesNotMatch(styles, /\.maka-sidebar-module-hint\b/);
@@ -561,10 +579,10 @@ describe('localized main shell contract', () => {
     const icon = await stat(iconPath);
     const iconBuffer = await readFile(iconPath);
 
-    assert.ok(icon.size > 1_400_000, 'the edge-filled user-provided PNG icon must be present as the desktop app icon asset');
+    assert.ok(icon.size > 700_000, 'the padded macOS-safe-area PNG icon (PR #75) must be present as the desktop app icon asset');
     assert.equal(iconBuffer.toString('ascii', 1, 4), 'PNG', 'desktop app icon must remain a PNG asset');
-    assert.equal(iconBuffer.readUInt32BE(16), 1254, 'desktop app icon width must match the supplied edge-filled icon');
-    assert.equal(iconBuffer.readUInt32BE(20), 1254, 'desktop app icon height must match the supplied edge-filled icon');
+    assert.equal(iconBuffer.readUInt32BE(16), 1024, 'desktop app icon width must match the supplied 1024² padded icon (PR #75)');
+    assert.equal(iconBuffer.readUInt32BE(20), 1024, 'desktop app icon height must match the supplied 1024² padded icon (PR #75)');
     assert.equal(iconBuffer[25], 6, 'desktop app icon must be RGBA so the rounded icon corners stay transparent');
     assert.match(tokens, /--background:\s*oklch\(1\.000 0 0\);/);
     assert.match(tokens, /--surface-canvas:\s*oklch\(0\.935 0 0\);/);
