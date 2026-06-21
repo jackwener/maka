@@ -4904,18 +4904,18 @@ button:active {
 }
 
 .toolInline {
-  width: min(760px, 100%);
-  margin: 4px auto 0;
-  padding: 0 24px;
+  width: min(680px, 100%);
+  margin: 2px auto 0;
+  padding: 0 16px;
 }
 
 .toolInline > header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
   color: var(--foreground-50);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .toolItem {
@@ -4925,16 +4925,16 @@ button:active {
 
 .toolArgs {
   margin: 0;
-  max-height: 132px;
+  max-height: 110px;
   overflow: auto;
 }
 
 .maka-overlay-preview {
-  margin: 8px 0 0;
-  max-height: 240px;
+  margin: 6px 0 0;
+  max-height: 200px;
   overflow: auto;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: 11px;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -5586,7 +5586,7 @@ button:active {
   min-width: 0;
   flex: 1 1 auto;
   color: var(--foreground-50);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .maka-composer-role-chip,
@@ -5765,16 +5765,17 @@ button:active {
 .maka-composer-streaming-hint {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   color: var(--foreground-70);
+  font-size: 11px;
 }
 
 .maka-composer-streaming-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 3px oklch(from var(--accent) l c h / 0.15);
+  box-shadow: 0 0 0 2px oklch(from var(--accent) l c h / 0.15);
   animation: maka-composer-stream-pulse 1.2s ease-in-out infinite;
 }
 
