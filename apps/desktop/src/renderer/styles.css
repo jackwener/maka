@@ -5598,11 +5598,21 @@ button:active {
   white-space: nowrap;
 }
 
+.maka-composer-role-chip,
+.maka-composer-mode-chip,
+.maka-composer-model-chip {
+  transition:
+    background-color 150ms ease-out,
+    color 150ms ease-out,
+    border-color 150ms ease-out;
+}
+
 .maka-composer-role-chip:hover,
 .maka-composer-mode-chip:hover,
 .maka-composer-model-chip:hover {
   background: var(--foreground-3);
   color: var(--foreground);
+  border-color: oklch(from var(--foreground) l c h / 0.16);
 }
 
 .maka-composer-model-chip {
@@ -5635,6 +5645,10 @@ button:active {
   background: transparent;
   color: var(--foreground-60);
   cursor: pointer;
+  transition:
+    background-color 150ms ease-out,
+    color 150ms ease-out,
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .maka-composer-context-plus {
@@ -5655,6 +5669,11 @@ button:active {
 .maka-composer-tool-button:hover:not(:disabled) {
   color: var(--foreground);
   background: var(--foreground-5);
+  transform: scale(1.08);
+}
+
+.maka-composer-tool-button:active:not(:disabled) {
+  transform: scale(0.94);
 }
 
 .maka-composer-tool-button:disabled {
