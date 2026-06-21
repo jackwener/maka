@@ -1711,7 +1711,7 @@ button:active {
 
 .maka-onboarding-card:hover {
   background: oklch(from var(--foreground) l c h / 0.04);
-  transform: none;
+  transform: translateX(2px);
   box-shadow: none;
 }
 
@@ -3505,11 +3505,14 @@ button:active {
   white-space: normal !important;
   text-align: left;
   cursor: pointer;
-  transition: background-color 150ms ease-out;
+  transition:
+    background-color 150ms ease-out,
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .maka-skill-library-row:hover {
   background: oklch(from var(--accent) l c h / 0.055);
+  transform: translateX(2px);
 }
 
 .maka-skill-library-row:active {
