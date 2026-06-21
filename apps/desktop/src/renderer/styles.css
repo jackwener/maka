@@ -5766,10 +5766,10 @@ button:active {
 .permissionRemember,
 .credentialField {
   display: grid;
-  gap: 6px;
-  margin-top: 12px;
+  gap: 5px;
+  margin-top: 10px;
   color: var(--foreground-70);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .permissionRemember {
@@ -5784,17 +5784,17 @@ button:active {
 
 .maka-permission-header {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-columns: 24px minmax(0, 1fr);
   align-items: start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .maka-permission-icon {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: 6px;
   background: oklch(from var(--info) l c h / 0.10);
   color: var(--info-text);
 }
@@ -5825,7 +5825,7 @@ button:active {
 
 .maka-permission-age {
   color: var(--foreground-55);
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -5839,18 +5839,18 @@ button:active {
 
 .maka-permission-body {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .maka-permission-summary {
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .maka-permission-line {
   margin: 0;
   color: var(--foreground-80);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .maka-permission-path {
