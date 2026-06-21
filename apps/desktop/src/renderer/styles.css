@@ -3387,14 +3387,14 @@ button:active {
   justify-content: space-between;
   gap: 8px;
   color: var(--foreground-55);
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.35;
 }
 
 .maka-skill-section-label {
   color: var(--foreground);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .maka-skill-example-grid {
@@ -3402,31 +3402,30 @@ button:active {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 6px;
+  gap: 2px;
 }
 
 .maka-skill-template-row {
   min-width: 0;
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
-  gap: 2px 8px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 2px 6px;
   align-items: center;
-  padding: 9px 10px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: var(--foreground-2);
-  transition: border-color 160ms ease, background-color 160ms ease;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  transition: background-color 150ms ease-out;
 }
 
 .maka-skill-template-row:hover {
-  border-color: var(--foreground-10);
-  background: var(--background);
+  background: oklch(from var(--foreground) l c h / 0.04);
 }
 
 .maka-skill-template-icon {
   grid-row: span 2;
-  width: 26px;
-  height: 26px;
+  width: 18px;
+  height: 18px;
   display: inline-grid;
   place-items: center;
   border-radius: 6px;
@@ -3446,15 +3445,15 @@ button:active {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--foreground);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1.25;
 }
 
 .maka-skill-template-copy span {
   min-width: 0;
   color: var(--foreground-60);
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.35;
 }
 
@@ -3465,7 +3464,7 @@ button:active {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--foreground-45);
-  font-size: 10px;
+  font-size: 9px;
   line-height: 1.35;
 }
 
