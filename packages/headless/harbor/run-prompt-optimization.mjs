@@ -53,6 +53,22 @@ function envInt(name, fallback) {
   return value;
 }
 
+// Comma-separated explicit task ids (controlled smokes). Empty -> undefined.
+function envIds(name) {
+  const raw = process.env[name];
+  if (!raw) return undefined;
+  const ids = raw.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+  return ids.length > 0 ? ids : undefined;
+}
+
+// Pick tasks by explicit id, preserving the requested order; throw on any miss.
+function selectTasksByIds(allTasks, ids) {
+  const byId = new Map(allTasks.map((t) => [t.id, t]));
+  const missing = ids.filter((id) => !byId.has(id));
+  if (missing.length > 0) throw new Error(`unknown task id(s): ${missing.join(', ')}`);
+  return ids.map((id) => byId.get(id));
+}
+
 async function git(cwd, ...args) {
   await execFileAsync('git', args, { cwd });
 }
@@ -82,8 +98,23 @@ async function main() {
 
   const allTasks = await discoverCachedHarborTasks(tasksRoot);
   console.log(`Discovered ${allTasks.length} cached tasks under ${tasksRoot}`);
-  const { heldInTasks, heldOutTasks } = partitionPromptTasks(allTasks, { heldInCount, heldOutCount });
-  console.log(`Partitioned: ${heldInTasks.length} held-in, ${heldOutTasks.length} held-out`);
+  const heldInIds = envIds('MAKA_PROMPT_HELD_IN_IDS');
+  const heldOutIds = envIds('MAKA_PROMPT_HELD_OUT_IDS');
+  let heldInTasks;
+  let heldOutTasks;
+  if (heldInIds || heldOutIds) {
+    if (!heldInIds || !heldOutIds) {
+      throw new Error('MAKA_PROMPT_HELD_IN_IDS and MAKA_PROMPT_HELD_OUT_IDS must be set together');
+    }
+    const overlap = heldInIds.filter((id) => heldOutIds.includes(id));
+    if (overlap.length > 0) throw new Error(`held-in and held-out overlap: ${overlap.join(', ')}`);
+    heldInTasks = selectTasksByIds(allTasks, heldInIds);
+    heldOutTasks = selectTasksByIds(allTasks, heldOutIds);
+    console.log(`Selected by id: held-in [${heldInIds.join(', ')}], held-out [${heldOutIds.join(', ')}]`);
+  } else {
+    ({ heldInTasks, heldOutTasks } = partitionPromptTasks(allTasks, { heldInCount, heldOutCount }));
+    console.log(`Partitioned: ${heldInTasks.length} held-in, ${heldOutTasks.length} held-out`);
+  }
 
   const rewardHackVerifierPatternsByTaskId = await buildRewardHackVerifierPatterns([...heldInTasks, ...heldOutTasks]);
   const missingPatterns = [...heldInTasks, ...heldOutTasks].filter((t) => (rewardHackVerifierPatternsByTaskId[t.id] ?? []).length === 0);
