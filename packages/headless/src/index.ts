@@ -110,6 +110,12 @@ export {
   extractJsonObject,
 } from './meta-agent-completion.js';
 export type { CreateAiSdkMetaAgentInput } from './meta-agent-completion.js';
+export { runPromptOptimizationLoop } from './prompt-optimization-loop.js';
+export type {
+  PromptOptimizationLoopInput,
+  PromptOptimizationLoopResult,
+  PromptOptimizationLoopStopReason,
+} from './prompt-optimization-loop.js';
 export type {
   AppendPromptAcceptanceDecisionInput,
   CalibratePromptAcceptanceBaselineInput,
