@@ -364,9 +364,15 @@ export class ToolRuntime {
       push: (event) => queue.push(event),
     });
     try {
-      const pauseTarget = tool.categoryHint === 'subagent'
-        ? this.input.getPermissionPauseTarget()
-        : null;
+      // Pause the stream idle watchdog for the whole tool execution. In the
+      // ai-sdk step loop a tool runs *between* model requests — the tool-call
+      // step's stream already finished and the next request has not started —
+      // so provider silence here is expected, not a stalled model stream. A
+      // long-running tool (apt-get install, a build, an ML training step, a
+      // subagent loop) must not trip the idle timeout and abort the whole
+      // invocation; the tool carries its own timeout (e.g. Bash timeout_ms)
+      // and the trial/run layer is the outer backstop.
+      const pauseTarget = this.input.getPermissionPauseTarget();
       pauseTarget?.pause();
       try {
         const result = await tool.impl(args as never, {

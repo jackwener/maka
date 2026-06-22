@@ -3134,6 +3134,65 @@ describe('AiSdkBackend tool permission category hints', () => {
     assert.equal(resumeCount, 1);
   });
 
+  test('pauses stream watchdog while a regular (non-subagent) tool is running', async () => {
+    // A long Bash command (apt-get install, a build) must not trip the model
+    // stream idle timeout: the model is between steps while the tool runs.
+    const backend = new AiSdkBackend({
+      sessionId: 'session-1',
+      header: header('explore'),
+      appendMessage: async () => {},
+      connection: connection(),
+      apiKey: 'sk-test',
+      modelId: 'claude-sonnet-4-5-20250929',
+      permissionEngine: new PermissionEngine({ newId: () => 'permission-id', now: () => 1 }),
+      modelFactory: () => ({}),
+      tools: [],
+      newId: idGenerator(),
+      now: () => 1,
+    });
+    let pauseCount = 0;
+    let resumeCount = 0;
+    (backend as unknown as {
+      currentWatchdog: { pause(): void; resume(): void };
+    }).currentWatchdog = {
+      pause: () => {
+        pauseCount += 1;
+      },
+      resume: () => {
+        resumeCount += 1;
+      },
+    };
+    let release!: () => void;
+    const tool: MakaTool = {
+      name: 'Bash',
+      description: 'run a shell command',
+      parameters: {},
+      permissionRequired: false,
+      impl: async () => new Promise((resolve) => {
+        release = () => resolve({ kind: 'terminal', cwd: '/app', cmd: 'sleep 300', exitCode: 0, stdout: '', stderr: '' });
+      }),
+    };
+    const execute = (backend as unknown as {
+      wrapToolExecute(
+        tool: MakaTool,
+        turnId: string,
+        queue: { push(event: SessionEvent): void },
+      ): (args: unknown, ctx: { toolCallId: string; abortSignal: AbortSignal }) => Promise<unknown>;
+    }).wrapToolExecute(tool, 'turn-1', { push: () => {} });
+
+    const pending = execute({}, {
+      toolCallId: 'tool-1',
+      abortSignal: new AbortController().signal,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    assert.equal(pauseCount, 1);
+    assert.equal(resumeCount, 0);
+    release();
+    await pending;
+    assert.equal(resumeCount, 1);
+  });
+
   test('caps concurrent read-only subagent tools in one turn', async () => {
     const messages: unknown[] = [];
     const events: SessionEvent[] = [];
