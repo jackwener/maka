@@ -13711,3 +13711,61 @@ button:active {
     line-height: 1.2;
   }
 }
+
+/* =============================================================================
+   Glass material on macOS — atlas §1 + §12.1 documents the upstream reference
+   layout's `light-glass` / `dark-glass` themes that paint the sidebar against
+   native vibrancy material. We do the same:
+   - Main process sets BrowserWindow({ vibrancy: 'sidebar' }) on darwin.
+   - Renderer tags <html> with `data-os="darwin"` via window.maka.app.info().
+   - The CSS below makes the window background + sidebar surface translucent
+     so the macOS vibrancy material shows through, then re-tints with a
+     subtle warm overlay (matches reference's 172° linear-gradient on
+     --agents-layout-bg). Non-macOS platforms (Windows / Linux) keep their
+     opaque chrome since vibrancy is a no-op there.
+============================================================================= */
+
+html[data-os="darwin"],
+html[data-os="darwin"] body {
+  background: transparent;
+}
+
+html[data-os="darwin"] .maka-shell-2col {
+  background: transparent;
+}
+
+html[data-os="darwin"] .maka-session-panel {
+  background:
+    /* Subtle warm wash so the glass material reads as a defined column
+       rather than empty translucency. Matches the reference layout's
+       parchment-mode `--agents-layout-bg` gradient direction. */
+    linear-gradient(
+      172deg,
+      oklch(from var(--foreground) l c h / 0.04) 19.61%,
+      transparent 81.35%
+    ),
+    /* Faint translucent base so text stays legible on bright desktops. */
+    oklch(from var(--surface-canvas) l c h / 0.62);
+  /* Backdrop blur — even when vibrancy paints the OS material below,
+     this softens any window-content that bleeds through (e.g. during
+     resize). 12px matches the reference's chat-input parchment blur. */
+  backdrop-filter: saturate(140%) blur(12px);
+  -webkit-backdrop-filter: saturate(140%) blur(12px);
+  border-right: 1px solid oklch(from var(--foreground) l c h / 0.06);
+}
+
+html[data-os="darwin"] .maka-session-panel-footer {
+  border-top: 1px solid oklch(from var(--foreground) l c h / 0.05);
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    oklch(from var(--surface-canvas) l c h / 0.30) 100%
+  );
+}
+
+/* The main content column stays on its existing solid `var(--background)` so
+   chat text and cards remain legible. Without this, the page card would also
+   go translucent and hurt readability. */
+html[data-os="darwin"] .maka-panel-detail {
+  background: var(--background);
+}
