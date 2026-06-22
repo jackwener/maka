@@ -75,6 +75,32 @@ export interface ResolvedHarborCellAiSdkEnv {
   apiKey: string;
 }
 
+const PI_BASE_ENV_KEYS = ['PATH', 'HOME', 'USER', 'TMPDIR', 'TMP', 'TEMP', 'SHELL', 'SystemRoot', 'COMSPEC'];
+const PI_PROVIDER_ENV_RULES = [
+  { includes: ['volcengine'], prefixes: ['XIAOMI_', 'VOLCENGINE_'] },
+  { includes: ['deepseek'], keys: ['DEEPSEEK_API_KEY', 'DEEPSEEK_API_KEY_FILE', 'DEEPSEEK_BASE_URL'] },
+  { includes: ['openai'], keys: ['OPENAI_API_KEY', 'OPENAI_API_KEY_FILE', 'OPENAI_BASE_URL'] },
+  { includes: ['anthropic', 'claude'], keys: ['ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY_FILE'] },
+  {
+    includes: ['google', 'gemini'],
+    keys: [
+      'GOOGLE_API_KEY',
+      'GOOGLE_API_KEY_FILE',
+      'GEMINI_API_KEY',
+      'GOOGLE_GENERATIVE_AI_API_KEY',
+      'GOOGLE_APPLICATION_CREDENTIALS',
+      'GOOGLE_CLOUD_PROJECT',
+      'GOOGLE_CLOUD_LOCATION',
+      'GOOGLE_GENAI_USE_VERTEXAI',
+    ],
+  },
+  { includes: ['moonshot', 'kimi'], keys: ['MOONSHOT_API_KEY', 'MOONSHOT_API_KEY_FILE', 'MOONSHOT_BASE_URL'] },
+  {
+    includes: ['zai'],
+    keys: ['ZAI_API_KEY', 'ZAI_API_KEY_FILE', 'ZAI_CODING_CN_API_KEY', 'ZAI_CODING_CN_API_KEY_FILE', 'ZAI_BASE_URL'],
+  },
+] satisfies Array<{ includes: string[]; keys?: string[]; prefixes?: string[] }>;
+
 export async function runHarborCell(input: RunHarborCellInput): Promise<RunHarborCellResult> {
   if (backendNeedsIsolation(input.config.backend)) {
     validateRealBackendIsolation(input.realBackendIsolation);
@@ -360,51 +386,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function buildPiCliEnv(env: RunHarborCellEnv, provider: string | undefined): NodeJS.ProcessEnv {
   const result: NodeJS.ProcessEnv = {};
-  copyEnv(result, { ...process.env, ...env }, [
-    'PATH',
-    'HOME',
-    'USER',
-    'TMPDIR',
-    'TMP',
-    'TEMP',
-    'SHELL',
-    'SystemRoot',
-    'COMSPEC',
-  ]);
+  copyEnv(result, { ...process.env, ...env }, PI_BASE_ENV_KEYS);
   copyPrefixedEnv(result, env, 'PI_');
 
   const normalizedProvider = provider?.toLowerCase() ?? '';
-  if (normalizedProvider.includes('volcengine')) {
-    copyPrefixedEnv(result, env, 'XIAOMI_');
-    copyPrefixedEnv(result, env, 'VOLCENGINE_');
-  } else if (normalizedProvider.includes('deepseek')) {
-    copyEnv(result, env, ['DEEPSEEK_API_KEY', 'DEEPSEEK_API_KEY_FILE', 'DEEPSEEK_BASE_URL']);
-  } else if (normalizedProvider.includes('openai')) {
-    copyEnv(result, env, ['OPENAI_API_KEY', 'OPENAI_API_KEY_FILE', 'OPENAI_BASE_URL']);
-  } else if (normalizedProvider.includes('anthropic') || normalizedProvider.includes('claude')) {
-    copyEnv(result, env, ['ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY_FILE']);
-  } else if (normalizedProvider.includes('google') || normalizedProvider.includes('gemini')) {
-    copyEnv(result, env, [
-      'GOOGLE_API_KEY',
-      'GOOGLE_API_KEY_FILE',
-      'GEMINI_API_KEY',
-      'GOOGLE_GENERATIVE_AI_API_KEY',
-      'GOOGLE_APPLICATION_CREDENTIALS',
-      'GOOGLE_CLOUD_PROJECT',
-      'GOOGLE_CLOUD_LOCATION',
-      'GOOGLE_GENAI_USE_VERTEXAI',
-    ]);
-  } else if (normalizedProvider.includes('moonshot') || normalizedProvider.includes('kimi')) {
-    copyEnv(result, env, ['MOONSHOT_API_KEY', 'MOONSHOT_API_KEY_FILE', 'MOONSHOT_BASE_URL']);
-  } else if (normalizedProvider.includes('zai')) {
-    copyEnv(result, env, [
-      'ZAI_API_KEY',
-      'ZAI_API_KEY_FILE',
-      'ZAI_CODING_CN_API_KEY',
-      'ZAI_CODING_CN_API_KEY_FILE',
-      'ZAI_BASE_URL',
-    ]);
-  }
+  const rule = PI_PROVIDER_ENV_RULES.find((candidate) =>
+    candidate.includes.some((value) => normalizedProvider.includes(value)),
+  );
+  copyEnv(result, env, rule?.keys ?? []);
+  for (const prefix of rule?.prefixes ?? []) copyPrefixedEnv(result, env, prefix);
 
   return result;
 }

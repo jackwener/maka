@@ -40,11 +40,6 @@ interface PiUsageTotals {
   sawCost: boolean;
 }
 
-interface PiMappedLine {
-  frames: PiAgentFrame[];
-  sawAgentEnd: boolean;
-}
-
 type PiTokenUsageFrame = {
   type: 'token_usage';
   input: number;
@@ -107,15 +102,16 @@ export class PiCliJsonTransport implements PiAgentTransport {
         const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() ?? '';
         for (const line of lines) {
-          const mapped = framesFromLine(line);
-          if (mapped.sawAgentEnd) sawAgentEnd = true;
-          for (const frame of mapped.frames) yield frame;
+          if (!line.trim()) continue;
+          const event = parseJsonObject(line);
+          if (event.type === 'agent_end') sawAgentEnd = true;
+          for (const frame of framesFromEvent(event)) yield frame;
         }
       }
       if (buffer.trim()) {
-        const mapped = framesFromLine(buffer);
-        if (mapped.sawAgentEnd) sawAgentEnd = true;
-        for (const frame of mapped.frames) yield frame;
+        const event = parseJsonObject(buffer);
+        if (event.type === 'agent_end') sawAgentEnd = true;
+        for (const frame of framesFromEvent(event)) yield frame;
       }
 
       const result = await close;
@@ -166,17 +162,14 @@ async function collectStderr(stderr: Readable): Promise<string> {
   return output.trim();
 }
 
-function framesFromLine(line: string): PiMappedLine {
-  if (!line.trim()) return { frames: [], sawAgentEnd: false };
-  const event = parseJsonObject(line);
-
+function framesFromEvent(event: Record<string, unknown>): PiAgentFrame[] {
   switch (event.type) {
     case 'session':
     case 'agent_start':
     case 'turn_start':
     case 'turn_end':
     case 'message_start':
-      return { frames: [], sawAgentEnd: false };
+      return [];
 
     case 'message_update': {
       const assistantEvent = record(event.assistantMessageEvent);
@@ -188,16 +181,16 @@ function framesFromLine(line: string): PiMappedLine {
         case 'text_start':
         case 'text_end':
         case 'toolcall_start':
-          return { frames: [], sawAgentEnd: false };
+          return [];
         case 'text_delta': {
           const textDelta = stringValue(assistantEvent.delta);
           if (textDelta === undefined) throw new Error('pi text_delta missing string delta');
-          return { frames: [{ type: 'text_delta', text: textDelta }], sawAgentEnd: false };
+          return [{ type: 'text_delta', text: textDelta }];
         }
         case 'toolcall_end': {
           const toolCalls = toolCallsFromPartial(assistantEvent.partial);
           if (toolCalls.length === 0) throw new Error('pi toolcall_end missing valid tool call');
-          return { frames: toolCalls, sawAgentEnd: false };
+          return toolCalls;
         }
         default:
           throw new Error(`pi emitted unsupported assistant event: ${assistantEvent.type ?? '<missing type>'}`);
@@ -206,20 +199,20 @@ function framesFromLine(line: string): PiMappedLine {
 
     case 'message_end': {
       const message = record(event.message);
-      if (message?.role !== 'toolResult') return { frames: [], sawAgentEnd: false };
+      if (message?.role !== 'toolResult') return [];
       const toolUseId = stringValue(message.toolCallId);
       if (!toolUseId) throw new Error('pi toolResult message_end missing toolCallId');
-      return { frames: [{
+      return [{
         type: 'tool_result',
         toolUseId,
         isError: message.isError === true,
         content: { kind: 'text', text: textFromPiContent(message.content) },
-      }], sawAgentEnd: false };
+      }];
     }
 
     case 'agent_end': {
       const usage = usageFromAgentEnd(event);
-      return { frames: usage ? [usage] : [], sawAgentEnd: true };
+      return usage ? [usage] : [];
     }
 
     default:
