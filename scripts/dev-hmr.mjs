@@ -1,115 +1,75 @@
 #!/usr/bin/env node
 /**
- * Dev HMR launcher: run the Vite dev server and point Electron at it so
- * renderer edits (apps/desktop/src/renderer/**) hot-reload without a
- * rebuild. The main process already honors `VITE_DEV_SERVER_URL`
- * (apps/desktop/src/main/main.ts) — it `loadURL`s the dev server when
- * the env var is set, otherwise it `loadFile`s the built renderer.
+ * Dev HMR launcher: start the Vite dev server in-process and point Electron
+ * at it, so renderer edits (apps/desktop/src/renderer/**) hot-reload without
+ * a rebuild. The main process already honors `VITE_DEV_SERVER_URL`
+ * (apps/desktop/src/main/main.ts): it `loadURL`s the dev server when set,
+ * otherwise it `loadFile`s the built renderer.
  *
- * Prerequisite builds (workspace libs + main + preload) are run by the
- * `dev:hmr` npm script BEFORE this launcher; this file only orchestrates
- * the two long-running processes and their teardown.
+ * Prerequisite builds (workspace libs + main + preload) run in the `dev:hmr`
+ * npm script BEFORE this launcher; this file only runs the dev server and
+ * Electron and tears them down together. Extra args are forwarded to
+ * Electron, e.g. `npm run dev:hmr -- --remote-debugging-port=9230`.
  *
- * Scope: HMR covers the desktop renderer only. Main/preload changes are
- * not hot-reloadable (Electron restart required), and edits to the
- * shared `@maka/*` packages need that package rebuilt — neither is a
- * Vite concern.
- *
- * Extra CLI args are forwarded to Electron, e.g.
- *   node scripts/dev-hmr.mjs -- --remote-debugging-port=9230
+ * Scope: HMR covers the desktop renderer only. Main/preload changes need an
+ * Electron restart, and `@maka/*` package edits need that package rebuilt —
+ * neither is a Vite concern.
  */
 
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createServer } from 'vite';
 
 const REPO_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DESKTOP_DIR = join(REPO_ROOT, 'apps', 'desktop');
 
-// Walk up from the desktop package to find the nearest `node_modules/.bin/<name>`.
-// In a git worktree, third-party binaries live in the main checkout's
-// node_modules (an ancestor dir), not the worktree's own — so a hardcoded
-// path under REPO_ROOT misses them.
-function resolveBin(name) {
-  let dir = DESKTOP_DIR;
-  for (;;) {
-    const candidate = join(dir, 'node_modules', '.bin', name);
+// In a git worktree the electron binary lives in the main checkout's
+// node_modules (an ancestor dir), not the worktree's own — so walk up to the
+// nearest node_modules/.bin rather than assuming REPO_ROOT.
+function resolveElectronBin() {
+  for (let dir = DESKTOP_DIR; ; dir = dirname(dir)) {
+    const candidate = join(dir, 'node_modules', '.bin', 'electron');
     if (existsSync(candidate)) return candidate;
-    const parent = dirname(dir);
-    if (parent === dir) return name; // fall back to PATH
-    dir = parent;
+    if (dirname(dir) === dir) return 'electron'; // fall back to PATH
   }
 }
 
-const VITE_BIN = resolveBin('vite');
-const ELECTRON_BIN = resolveBin('electron');
-const EXTRA_ELECTRON_ARGS = process.argv.slice(2);
-const STARTUP_TIMEOUT_MS = 60_000;
-// Vite prints e.g. "  ➜  Local:   http://localhost:5173/"; capture the
-// actual port since Vite falls forward when 5173 is taken.
-const DEV_URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1):\d+)\/?/i;
+// Run from the desktop package so Vite loads apps/desktop/vite.config.ts and
+// resolves its `root` (src/renderer) exactly as the `vite` CLI would.
+process.chdir(DESKTOP_DIR);
+const server = await createServer();
+await server.listen();
+server.printUrls();
 
-let electron = null;
-let started = false;
+const devUrl = server.resolvedUrls?.local?.[0]?.replace(/\/$/, '');
+if (!devUrl) {
+  console.error('[dev:hmr] vite did not report a local URL; aborting.');
+  await server.close();
+  process.exit(1);
+}
+
+console.log(`[dev:hmr] launching Electron against ${devUrl} (renderer HMR live)`);
+const electron = spawn(resolveElectronBin(), ['.', ...process.argv.slice(2)], {
+  cwd: DESKTOP_DIR,
+  stdio: 'inherit',
+  env: { ...process.env, VITE_DEV_SERVER_URL: devUrl },
+});
+
 let shuttingDown = false;
-
-const vite = spawn(VITE_BIN, [], { cwd: DESKTOP_DIR, stdio: ['ignore', 'pipe', 'inherit'] });
-vite.on('error', (err) => {
-  console.error(`[dev:hmr] failed to start vite (${VITE_BIN}): ${err.message}`);
-  shutdown(1);
-});
-
-const startupTimeout = setTimeout(() => {
-  if (!started) {
-    console.error('[dev:hmr] vite did not report a dev URL within 60s; aborting.');
-    shutdown(1);
-  }
-}, STARTUP_TIMEOUT_MS);
-
-vite.stdout.on('data', (chunk) => {
-  const text = chunk.toString();
-  process.stdout.write(text); // surface Vite logs to the user
-  if (started) return;
-  const match = DEV_URL_RE.exec(text);
-  if (match) {
-    started = true;
-    clearTimeout(startupTimeout);
-    launchElectron(match[1]);
-  }
-});
-
-vite.on('exit', (code) => {
-  if (!shuttingDown) {
-    console.error('[dev:hmr] vite exited unexpectedly; stopping.');
-    shutdown(code ?? 1);
-  }
-});
-
-function launchElectron(devUrl) {
-  console.log(`[dev:hmr] vite ready at ${devUrl} — launching Electron (renderer HMR live)`);
-  electron = spawn(ELECTRON_BIN, ['.', ...EXTRA_ELECTRON_ARGS], {
-    cwd: DESKTOP_DIR,
-    stdio: 'inherit',
-    env: { ...process.env, VITE_DEV_SERVER_URL: devUrl },
-  });
-  electron.on('error', (err) => {
-    console.error(`[dev:hmr] failed to start electron (${ELECTRON_BIN}): ${err.message}`);
-    shutdown(1);
-  });
-  electron.on('exit', (code) => {
-    console.log(`[dev:hmr] Electron exited (${code ?? 0}); stopping vite.`);
-    shutdown(code ?? 0);
-  });
-}
-
-function shutdown(code) {
+async function shutdown(code) {
   if (shuttingDown) return;
   shuttingDown = true;
-  if (electron && !electron.killed) electron.kill('SIGTERM');
-  if (vite && !vite.killed) vite.kill('SIGTERM');
-  setTimeout(() => process.exit(code), 200);
+  if (!electron.killed) electron.kill('SIGTERM');
+  await server.close().catch(() => {});
+  process.exit(code);
 }
 
+electron.on('exit', (code) => shutdown(code ?? 0));
+electron.on('error', (err) => {
+  console.error(`[dev:hmr] failed to start Electron: ${err.message}`);
+  shutdown(1);
+});
 process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
