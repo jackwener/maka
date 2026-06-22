@@ -40,6 +40,11 @@ interface PiUsageTotals {
   sawCost: boolean;
 }
 
+interface PiMappedLine {
+  frames: PiAgentFrame[];
+  sawAgentEnd: boolean;
+}
+
 type PiTokenUsageFrame = {
   type: 'token_usage';
   input: number;
@@ -66,7 +71,7 @@ export class PiCliJsonTransport implements PiAgentTransport {
   async *send(input: PiAgentSendInput): AsyncIterable<PiAgentFrame> {
     const child = this.input.spawn(this.input.command, this.args(), {
       cwd: input.cwd,
-      env: { ...process.env, ...(this.input.env ?? {}) },
+      env: this.input.env ?? process.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.child = child;
@@ -90,6 +95,7 @@ export class PiCliJsonTransport implements PiAgentTransport {
     }
     let closed = false;
     let buffer = '';
+    let sawAgentEnd = false;
 
     try {
       const stdout = child.stdout[Symbol.asyncIterator]();
@@ -101,11 +107,15 @@ export class PiCliJsonTransport implements PiAgentTransport {
         const lines = buffer.split(/\r?\n/);
         buffer = lines.pop() ?? '';
         for (const line of lines) {
-          for (const frame of framesFromLine(line)) yield frame;
+          const mapped = framesFromLine(line);
+          if (mapped.sawAgentEnd) sawAgentEnd = true;
+          for (const frame of mapped.frames) yield frame;
         }
       }
       if (buffer.trim()) {
-        for (const frame of framesFromLine(buffer)) yield frame;
+        const mapped = framesFromLine(buffer);
+        if (mapped.sawAgentEnd) sawAgentEnd = true;
+        for (const frame of mapped.frames) yield frame;
       }
 
       const result = await close;
@@ -115,6 +125,7 @@ export class PiCliJsonTransport implements PiAgentTransport {
         const details = await stderr;
         throw new Error(`pi exited with code ${result.code ?? 'signal'}${details ? `: ${details}` : ''}`);
       }
+      if (!sawAgentEnd) throw new Error('pi exited before agent_end');
       yield { type: 'complete' };
     } finally {
       if (!closed) {
@@ -155,8 +166,8 @@ async function collectStderr(stderr: Readable): Promise<string> {
   return output.trim();
 }
 
-function framesFromLine(line: string): PiAgentFrame[] {
-  if (!line.trim()) return [];
+function framesFromLine(line: string): PiMappedLine {
+  if (!line.trim()) return { frames: [], sawAgentEnd: false };
   const event = parseJsonObject(line);
 
   switch (event.type) {
@@ -165,7 +176,7 @@ function framesFromLine(line: string): PiAgentFrame[] {
     case 'turn_start':
     case 'turn_end':
     case 'message_start':
-      return [];
+      return { frames: [], sawAgentEnd: false };
 
     case 'message_update': {
       const assistantEvent = record(event.assistantMessageEvent);
@@ -177,16 +188,16 @@ function framesFromLine(line: string): PiAgentFrame[] {
         case 'text_start':
         case 'text_end':
         case 'toolcall_start':
-          return [];
+          return { frames: [], sawAgentEnd: false };
         case 'text_delta': {
           const textDelta = stringValue(assistantEvent.delta);
           if (textDelta === undefined) throw new Error('pi text_delta missing string delta');
-          return [{ type: 'text_delta', text: textDelta }];
+          return { frames: [{ type: 'text_delta', text: textDelta }], sawAgentEnd: false };
         }
         case 'toolcall_end': {
           const toolCalls = toolCallsFromPartial(assistantEvent.partial);
           if (toolCalls.length === 0) throw new Error('pi toolcall_end missing valid tool call');
-          return toolCalls;
+          return { frames: toolCalls, sawAgentEnd: false };
         }
         default:
           throw new Error(`pi emitted unsupported assistant event: ${assistantEvent.type ?? '<missing type>'}`);
@@ -195,20 +206,20 @@ function framesFromLine(line: string): PiAgentFrame[] {
 
     case 'message_end': {
       const message = record(event.message);
-      if (message?.role !== 'toolResult') return [];
+      if (message?.role !== 'toolResult') return { frames: [], sawAgentEnd: false };
       const toolUseId = stringValue(message.toolCallId);
       if (!toolUseId) throw new Error('pi toolResult message_end missing toolCallId');
-      return [{
+      return { frames: [{
         type: 'tool_result',
         toolUseId,
         isError: message.isError === true,
         content: { kind: 'text', text: textFromPiContent(message.content) },
-      }];
+      }], sawAgentEnd: false };
     }
 
     case 'agent_end': {
       const usage = usageFromAgentEnd(event);
-      return usage ? [usage] : [];
+      return { frames: usage ? [usage] : [], sawAgentEnd: true };
     }
 
     default:

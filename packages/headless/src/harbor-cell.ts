@@ -209,7 +209,7 @@ export async function runHarborCellFromEnv(
               command: env.MAKA_PI_COMMAND ?? 'pi',
               ...(piProvider ? { provider: piProvider } : {}),
               model,
-              env: env as NodeJS.ProcessEnv,
+              env: buildPiCliEnv(env, piProvider),
             }),
           }),
         );
@@ -356,6 +356,70 @@ function shellErrorMessage(error: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function buildPiCliEnv(env: RunHarborCellEnv, provider: string | undefined): NodeJS.ProcessEnv {
+  const result: NodeJS.ProcessEnv = {};
+  copyEnv(result, { ...process.env, ...env }, [
+    'PATH',
+    'HOME',
+    'USER',
+    'TMPDIR',
+    'TMP',
+    'TEMP',
+    'SHELL',
+    'SystemRoot',
+    'COMSPEC',
+  ]);
+  copyPrefixedEnv(result, env, 'PI_');
+
+  const normalizedProvider = provider?.toLowerCase() ?? '';
+  if (normalizedProvider.includes('volcengine')) {
+    copyPrefixedEnv(result, env, 'XIAOMI_');
+    copyPrefixedEnv(result, env, 'VOLCENGINE_');
+  } else if (normalizedProvider.includes('deepseek')) {
+    copyEnv(result, env, ['DEEPSEEK_API_KEY', 'DEEPSEEK_API_KEY_FILE', 'DEEPSEEK_BASE_URL']);
+  } else if (normalizedProvider.includes('openai')) {
+    copyEnv(result, env, ['OPENAI_API_KEY', 'OPENAI_API_KEY_FILE', 'OPENAI_BASE_URL']);
+  } else if (normalizedProvider.includes('anthropic') || normalizedProvider.includes('claude')) {
+    copyEnv(result, env, ['ANTHROPIC_API_KEY', 'ANTHROPIC_API_KEY_FILE']);
+  } else if (normalizedProvider.includes('google') || normalizedProvider.includes('gemini')) {
+    copyEnv(result, env, [
+      'GOOGLE_API_KEY',
+      'GOOGLE_API_KEY_FILE',
+      'GEMINI_API_KEY',
+      'GOOGLE_GENERATIVE_AI_API_KEY',
+      'GOOGLE_APPLICATION_CREDENTIALS',
+      'GOOGLE_CLOUD_PROJECT',
+      'GOOGLE_CLOUD_LOCATION',
+      'GOOGLE_GENAI_USE_VERTEXAI',
+    ]);
+  } else if (normalizedProvider.includes('moonshot') || normalizedProvider.includes('kimi')) {
+    copyEnv(result, env, ['MOONSHOT_API_KEY', 'MOONSHOT_API_KEY_FILE', 'MOONSHOT_BASE_URL']);
+  } else if (normalizedProvider.includes('zai')) {
+    copyEnv(result, env, [
+      'ZAI_API_KEY',
+      'ZAI_API_KEY_FILE',
+      'ZAI_CODING_CN_API_KEY',
+      'ZAI_CODING_CN_API_KEY_FILE',
+      'ZAI_BASE_URL',
+    ]);
+  }
+
+  return result;
+}
+
+function copyPrefixedEnv(target: NodeJS.ProcessEnv, source: RunHarborCellEnv, prefix: string): void {
+  for (const [key, value] of Object.entries(source)) {
+    if (key.startsWith(prefix) && value !== undefined) target[key] = value;
+  }
+}
+
+function copyEnv(target: NodeJS.ProcessEnv, source: RunHarborCellEnv, keys: string[]): void {
+  for (const key of keys) {
+    const value = source[key];
+    if (value !== undefined) target[key] = value;
+  }
 }
 
 export function resolveHarborCellAiSdkEnv(input: {

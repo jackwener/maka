@@ -483,6 +483,47 @@ console.log(JSON.stringify({ type: 'agent_end', messages: [{ role: 'assistant', 
     });
   });
 
+  test('env entrypoint passes only Pi provider env to the Pi CLI child', async () => {
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const piCommand = join(outputDir, 'fake-pi-env.mjs');
+      await writeFile(
+        piCommand,
+        `#!/usr/bin/env node
+import { writeFileSync } from 'node:fs';
+writeFileSync('pi-env.json', JSON.stringify({
+  openai: process.env.OPENAI_API_KEY,
+  anthropic: process.env.ANTHROPIC_API_KEY,
+  google: process.env.GOOGLE_API_KEY,
+  xiaomi: process.env.XIAOMI_TOKEN_PLAN_CN_API_KEY,
+}));
+console.log(JSON.stringify({ type: 'agent_end', messages: [{ role: 'assistant', usage: { input: 5, output: 2, totalTokens: 7 } }] }));
+`,
+        'utf8',
+      );
+      await chmod(piCommand, 0o755);
+
+      const result = await runHarborCellFromEnv({
+        MAKA_BACKEND: 'pi-agent',
+        MAKA_INSTRUCTION: 'solve through scoped pi env',
+        MAKA_MODEL: 'pi-test',
+        MAKA_PI_COMMAND: piCommand,
+        MAKA_PI_PROVIDER: 'volcengine-plan',
+        OPENAI_API_KEY: 'openai-key',
+        ANTHROPIC_API_KEY: 'anthropic-key',
+        GOOGLE_API_KEY: 'google-key',
+        XIAOMI_TOKEN_PLAN_CN_API_KEY: 'xiaomi-key',
+        MAKA_WORKDIR: workspaceDir,
+        MAKA_OUTPUT_DIR: outputDir,
+        MAKA_STORAGE_ROOT: storageRoot,
+      });
+
+      assert.equal(result.output.status, 'completed');
+      assert.deepEqual(JSON.parse(await readFile(join(workspaceDir, 'pi-env.json'), 'utf8')), {
+        xiaomi: 'xiaomi-key',
+      });
+    });
+  });
+
   test('env entrypoint fails the Pi CLI cell on non-JSON stdout', async () => {
     await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
       const piCommand = join(outputDir, 'fake-pi-noisy.mjs');
@@ -512,6 +553,51 @@ console.log('not json');
         /pi emitted non-JSON stdout: not json/,
       );
     });
+  });
+
+  test('env entrypoint fails the Pi CLI cell when stdout ends before agent_end', async () => {
+    const cases = [
+      { name: 'empty', body: '' },
+      {
+        name: 'wrapper-only',
+        body: `
+console.log(JSON.stringify({ type: 'session', id: 'session-1' }));
+console.log(JSON.stringify({ type: 'turn_start' }));
+`,
+      },
+      {
+        name: 'text-without-terminal',
+        body: `
+console.log(JSON.stringify({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: 'partial' } }));
+`,
+      },
+    ];
+
+    for (const scenario of cases) {
+      await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+        const piCommand = join(outputDir, `fake-pi-${scenario.name}.mjs`);
+        await writeFile(piCommand, `#!/usr/bin/env node\n${scenario.body}`, 'utf8');
+        await chmod(piCommand, 0o755);
+
+        const result = await runHarborCellFromEnv({
+          MAKA_BACKEND: 'pi-agent',
+          MAKA_INSTRUCTION: `solve through incomplete pi transport: ${scenario.name}`,
+          MAKA_MODEL: 'pi-test',
+          MAKA_PI_COMMAND: piCommand,
+          MAKA_WORKDIR: workspaceDir,
+          MAKA_OUTPUT_DIR: outputDir,
+          MAKA_STORAGE_ROOT: storageRoot,
+        });
+
+        assert.equal(result.output.status, 'failed', scenario.name);
+        assert.equal(result.output.errorClass, 'pi_agent_transport_error', scenario.name);
+        assert.match(
+          await readFile(join(outputDir, HARBOR_CELL_RUNTIME_EVENTS_FILENAME), 'utf8'),
+          /pi exited before agent_end/,
+          scenario.name,
+        );
+      });
+    }
   });
 
   test('env entrypoint passes long Pi instructions through stdin instead of argv', async () => {
