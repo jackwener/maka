@@ -11,6 +11,7 @@ import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { glob as nodeGlob } from 'node:fs/promises'; // Node 22+ stable glob
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { computeEditedSource } from './edit-replace.js';
 
 // Single source of truth for tool shape. AiSdkBackend exports them; we just
 // re-export here for back-compat with external callers that imported from
@@ -81,7 +82,11 @@ export function buildBuiltinTools(): MakaTool[] {
     {
       name: 'Edit',
       description:
-        'Replace an exact string in a file. Errors if old_string is not unique or not found.',
+        'Replace old_string with new_string in a file. Prefers an exact, unique match; '
+        + 'if exact fails it tolerates limited whitespace/indentation/escape drift in old_string, '
+        + 'but only when the match is unambiguous (otherwise it errors — re-read and retry with exact text). '
+        + 'new_string is written verbatim, so provide the exact final text/indentation you want. '
+        + 'Errors if old_string is not found or not unique.',
       parameters: z.object({
         path: z.string(),
         old_string: z.string(),
@@ -91,14 +96,16 @@ export function buildBuiltinTools(): MakaTool[] {
       impl: async ({ path, old_string, new_string }, { cwd }) => {
         const abs = await resolveExistingInsideCwd(cwd, path, 'Edit');
         const current = await fs.readFile(abs, 'utf8');
-        const count = current.split(old_string).length - 1;
-        if (count === 0) throw new Error(`old_string not found in ${path}`);
-        if (count > 1) {
-          throw new Error(`old_string is not unique in ${path} (${count} matches)`);
-        }
-        const next = current.replace(old_string, new_string);
-        await fs.writeFile(abs, next, 'utf8');
-        return { ok: true, path: abs, replacements: 1 };
+        const result = computeEditedSource(current, old_string, new_string, path);
+        await fs.writeFile(abs, result.content, 'utf8');
+        return {
+          ok: true,
+          path: abs,
+          replacements: 1,
+          matchedVia: result.matchedVia,
+          startLine: result.startLine,
+          endLine: result.endLine,
+        };
       },
     },
     {
