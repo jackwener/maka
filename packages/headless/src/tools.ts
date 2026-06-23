@@ -622,31 +622,38 @@ if [ -n "$input_path" ]; then
 else
   start=$root
 fi
-# Prefer ripgrep: gitignore-aware, skips binaries and hidden files, fast, and a
-# far richer regex than awk. Output stays "<relpath>:<line>:<text>" and the
-# per-file (50) / total (200) caps are preserved. When rg is not on PATH (minimal
-# task images) fall back to the POSIX find/awk walk, which searches every file.
-# existing_target above already enforced the inside-workspace + no-symlink-escape
-# invariant for the search root in both paths; input_path is workspace-relative
-# so rg, run from root, emits workspace-relative paths to match the contract.
-if command -v rg >/dev/null 2>&1; then
-  # --no-ignore --hidden: search the same file set as the find/awk fallback, so
-  # results do not depend on whether rg happens to be installed. rg still skips
-  # binaries and brings a far richer regex than awk, which are the real wins.
+# Prefer ripgrep for the common case: gitignore-aware, skips binaries and hidden
+# files, fast, and a far richer regex than awk. Output stays "<relpath>:<line>:
+# <text>" and the per-file (50) / total (200) caps are preserved. rg is used only
+# when no glob is requested — its gitignore-style --glob is a different dialect
+# from the fallback's ERE, so routing every glob through the single fallback path
+# keeps results identical with or without rg installed — and otherwise the POSIX
+# find/awk walk runs. existing_target above already enforced the inside-workspace
+# + no-symlink-escape invariant for the search root in both paths; input_path is
+# workspace-relative so rg, run from root, emits workspace-relative paths.
+if [ -z "$glob" ] && command -v rg >/dev/null 2>&1; then
+  # --no-config: ignore RIPGREP_CONFIG_PATH so a host-set rg config cannot inject
+  #   flags (e.g. --follow) that would break the no-workspace-escape invariant.
+  # --no-follow: never traverse symlinks, matching the find/awk fallback (find
+  #   without -L), so a workspace-internal symlink cannot leak external files.
+  # --no-ignore --hidden: search the same file set as the fallback, so results do
+  #   not depend on whether rg happens to be installed. rg still skips binaries
+  #   and brings a far richer regex than awk, which are the real wins.
   # --with-filename keeps the filename on single-file searches so the
   # "<relpath>:<line>:<text>" contract holds in every case.
-  set -- --line-number --no-heading --with-filename --color never --no-ignore --hidden --max-count 50
-  [ -n "$glob" ] && set -- "$@" --glob "$glob"
+  set -- --no-config --no-follow --line-number --no-heading --with-filename --color never --no-ignore --hidden --max-count 50
   set -- "$@" -e "$grep_pattern"
   # Always pass an explicit path: with none, rg reads from its (never-closing)
   # stdin pipe and hangs. "." searches the whole workspace; rg prefixes those
   # hits with "./", stripped below to the bare relative-path contract.
   search=$input_path
   [ -n "$search" ] || search=.
-  matches=$(rg "$@" -- "$search" 2>/dev/null)
+  # Capture only stdout; rg's stderr flows through to the script's stderr so a
+  # real error is surfaced to the agent (via the executor) instead of swallowed.
+  # rg exit: 0 = matched, 1 = no match (-> empty result), >1 = a real error (bad
+  # regex, I/O) that must surface instead of masquerading as "no hits".
+  matches=$(rg "$@" -- "$search")
   rc=$?
-  # rg exit: 0 = matched, 1 = no match (-> empty result), >1 = a real error
-  # (bad regex/glob, I/O) that must surface instead of masquerading as "no hits".
   [ "$rc" -gt 1 ] && { echo "ripgrep failed (exit $rc)" >&2; exit "$rc"; }
   printf '%s\n' "$matches" | sed 's#^\\./##' | awk 'NR <= 200'
 else

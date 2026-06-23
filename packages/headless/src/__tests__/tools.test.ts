@@ -499,6 +499,100 @@ describe('isolated headless tools', () => {
     );
   });
 
+  test('Grep with rg ignores RIPGREP_CONFIG_PATH and will not follow a symlink out of the workspace', async (t) => {
+    try {
+      await execAsync('rg --version', { env: process.env });
+    } catch {
+      t.skip('ripgrep not installed');
+      return;
+    }
+    const cwd = await mkdtemp(join(tmpdir(), 'maka-headless-grep-cfg-'));
+    await mkdir(join(cwd, 'src'));
+    await writeFile(join(cwd, 'src', 'file.txt'), 'hello\nneedle\n', 'utf8');
+    // A file OUTSIDE the workspace, reachable only by following a symlink.
+    const outside = await mkdtemp(join(tmpdir(), 'maka-headless-grep-outside-'));
+    await writeFile(join(outside, 'secret.txt'), 'needle\n', 'utf8');
+    await symlink(join(outside, 'secret.txt'), join(cwd, 'src', 'evil.txt'));
+    // An rg config that turns symlink-following ON. --no-config must make rg
+    // ignore it; without --no-config rg would read it, follow src/evil.txt, and
+    // leak the external file — exactly the workspace-escape this guards against.
+    const rgConfig = join(await mkdtemp(join(tmpdir(), 'maka-headless-rgcfg-')), 'rg.conf');
+    await writeFile(rgConfig, '--follow\n', 'utf8');
+    const tools = buildIsolatedHeadlessTools({
+      async exec(input) {
+        try {
+          const { stdout, stderr } = await execAsync(input.command, {
+            cwd: input.cwd,
+            env: { ...process.env, RIPGREP_CONFIG_PATH: rgConfig }, // host passes it through (childProcessEnv)
+            maxBuffer: 1024 * 1024,
+          });
+          return { exitCode: 0, stdout, stderr };
+        } catch (error: any) {
+          return {
+            exitCode: typeof error?.code === 'number' ? error.code : 1,
+            stdout: typeof error?.stdout === 'string' ? error.stdout : '',
+            stderr: typeof error?.stderr === 'string' ? error.stderr : String(error),
+          };
+        }
+      },
+    });
+
+    const result = (await tool(tools, 'Grep').impl({ pattern: 'needle' }, toolCtx(cwd))) as { matches: string[] };
+    assert.ok(result.matches.includes('src/file.txt:2:needle'), 'the in-workspace match is still returned');
+    assert.ok(
+      !result.matches.some((m) => m.includes('evil.txt')),
+      'the symlink out of the workspace is not followed despite RIPGREP_CONFIG_PATH=--follow',
+    );
+  });
+
+  test('Grep routes glob filters through the fallback dialect, not ripgrep --glob (parity with/without rg)', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'maka-headless-grep-glob-'));
+    // Three root files all containing the needle. The glob "{a,c}.txt" diverges by
+    // dialect: ripgrep's --glob brace-expands it to a.txt/c.txt, while the
+    // fallback's globPatternToEre treats { } , as literals and matches only the
+    // file literally named "{a,c}.txt". The fix routes every glob through the
+    // fallback, so the result is the literal file in BOTH rg-present and
+    // rg-absent environments — this assertion fails if rg ever handles the glob.
+    await writeFile(join(cwd, 'a.txt'), 'needle\n', 'utf8');
+    await writeFile(join(cwd, 'c.txt'), 'needle\n', 'utf8');
+    await writeFile(join(cwd, '{a,c}.txt'), 'needle\n', 'utf8');
+    const tools = buildIsolatedHeadlessTools({
+      async exec(input) {
+        try {
+          const { stdout, stderr } = await execAsync(input.command, {
+            cwd: input.cwd,
+            env: process.env, // full PATH: if rg is installed, it is a candidate
+            maxBuffer: 1024 * 1024,
+          });
+          return { exitCode: 0, stdout, stderr };
+        } catch (error: any) {
+          return {
+            exitCode: typeof error?.code === 'number' ? error.code : 1,
+            stdout: typeof error?.stdout === 'string' ? error.stdout : '',
+            stderr: typeof error?.stderr === 'string' ? error.stderr : String(error),
+          };
+        }
+      },
+    });
+
+    const result = (await tool(tools, 'Grep').impl({ pattern: 'needle', glob: '{a,c}.txt' }, toolCtx(cwd))) as { matches: string[] };
+    assert.deepEqual(result.matches, ['{a,c}.txt:1:needle'], 'glob uses the literal fallback dialect, not rg brace-expansion');
+  });
+
+  test('the ripgrep Grep invocation pins --no-config and --no-follow (non-skippable safety net)', async () => {
+    let captured = '';
+    const tools = buildIsolatedHeadlessTools({
+      async exec(input) {
+        captured = input.command;
+        return { exitCode: 0, stdout: '', stderr: '' };
+      },
+    });
+    await tool(tools, 'Grep').impl({ pattern: 'needle' }, toolCtx('/workspace'));
+    // Pin the exact rg arg prefix (not just a comment mention) so the config- and
+    // symlink-escape guards cannot be silently dropped — runs with or without rg.
+    assert.match(captured, /set -- --no-config --no-follow /);
+  });
+
   test('command-backed Edit runs the shared fuzzy matcher via node -e', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'maka-headless-tools-edit-'));
     await mkdir(join(cwd, 'src'));
