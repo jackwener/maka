@@ -22,6 +22,7 @@ import {
   appendPromptAcceptanceDecision,
   calibratePromptAcceptanceBaseline,
   decidePromptAcceptance,
+  heldInGateReason,
   selectStablePromptTasks,
   type PromptAcceptanceBaseline,
   type PromptAcceptanceBaselineRun,
@@ -225,6 +226,16 @@ export async function runPromptOptimizationLoop(
   // 1. Baseline calibration — repeated sweeps of the unchanged prompt.
   const baselineRunsData: PromptAcceptanceBaselineRun[] = [];
   for (let index = 0; index < baselineRunCount; index += 1) {
+    // Do not start another baseline sweep once a guard trips: a budget exhausted
+    // before calibration even finishes cannot produce a valid noise band, so this
+    // is a hard configuration failure, not a partial run.
+    const baselineGuard = stopGuard();
+    if (baselineGuard) {
+      throw new Error(
+        `${baselineGuard} during baseline calibration (completed ${index} of ${baselineRunCount} sweeps); `
+        + 'raise the budget or lower baselineRuns',
+      );
+    }
     const roundId = `baseline-${index}`;
     const heldIn = await sweep(roundId, input.heldInTasks, input.heldInResultsTsvPath);
     const heldOut = await sweep(roundId, input.heldOutTasks, input.heldOutResultsTsvPath);
@@ -327,9 +338,39 @@ export async function runPromptOptimizationLoop(
     });
 
     const heldIn = await sweep(roundId, roundHeldInTasks, input.heldInResultsTsvPath);
-    const heldOut = await sweep(roundId, roundHeldOutTasks, input.heldOutResultsTsvPath);
     accumulate(heldIn);
-    accumulate(heldOut);
+    const rewardHackScan = await scanHeldIn(heldIn.events);
+
+    // #64 LOOP steps 8-10: only spend the held-out sweep when held-in clears the
+    // gate (improved beyond noise, coverage intact, no reward-hack quarantine). A
+    // candidate that cannot KEEP on held-in evidence is discarded without ever
+    // running held-out — saving cost, time, and infra exposure.
+    const heldInGate = heldInGateReason({
+      heldInTaskIds: stableHeldInTaskIds,
+      lastKeptHeldInEvents,
+      candidateHeldInEvents: heldIn.events,
+      previousHeldInReferencePassEligibleRate: heldInReference,
+      heldInPassRateNoiseBand: baseline.heldIn.noiseBand,
+      rewardHackScan,
+    });
+
+    let heldOutEvents: readonly FixedPromptTaskWalEvent[] = [];
+    if (heldInGate === null) {
+      // Held-in cleared, but the held-in sweep itself can have exhausted the
+      // budget. Do not start the held-out sweep if a guard already trips: the
+      // candidate would be unverifiable on held-out, so revert it and stop
+      // without a decision — a half-run round is not a decision, exactly like the
+      // round-start guard above.
+      const preHeldOutGuard = stopGuard();
+      if (preHeldOutGuard) {
+        await input.git.rollbackCommit(candidate.commitSha);
+        stopReason = preHeldOutGuard;
+        break;
+      }
+      const heldOut = await sweep(roundId, roundHeldOutTasks, input.heldOutResultsTsvPath);
+      accumulate(heldOut);
+      heldOutEvents = heldOut.events;
+    }
 
     const result = decidePromptAcceptance({
       runId: input.runId,
@@ -345,8 +386,8 @@ export async function runPromptOptimizationLoop(
       heldOutPassRateNoiseBand: baseline.heldOut.noiseBand,
       originalEvents: originalHeldOutEvents,
       lastKeptEvents: lastKeptHeldInEvents,
-      candidateEvents: [...heldIn.events, ...heldOut.events],
-      rewardHackScan: await scanHeldIn(heldIn.events),
+      candidateEvents: [...heldIn.events, ...heldOutEvents],
+      rewardHackScan,
     });
     if (result.decision === 'discard') {
       // Revert the candidate commit BEFORE persisting the decision; HEAD has not

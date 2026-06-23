@@ -431,43 +431,31 @@ function promptCandidateDecisionEvent(
   };
 }
 
-function acceptanceReason(
-  metrics: PromptAcceptanceMetrics,
+/**
+ * Held-in gate (#64 LOOP steps 8-9, plus the reward-hack and coverage vetoes).
+ * Returns a discard reason if the candidate cannot KEEP on held-in evidence
+ * alone, or `null` if held-in clears and held-out is worth running. This is the
+ * single source of truth for "should we spend the held-out sweep?": the loop
+ * calls {@link heldInGateReason} with the held-in events, and {@link acceptanceReason}
+ * calls this first so the final decision can never diverge from the gate.
+ */
+function heldInGateReasonFromSummaries(
+  heldInCandidate: PromptAcceptancePartitionSummary,
+  heldInReference: PromptAcceptancePartitionSummary,
   input: {
     previousHeldInReferencePassEligibleRate: number | null;
-    originalHeldOutPassEligibleRate: number | null;
     heldInPassRateNoiseBand: number;
-    heldOutPassRateNoiseBand: number;
     rewardHackScan: PromptCandidateRewardHackScan;
   },
-): PromptAcceptanceReason {
-  const heldInCandidate = metrics.candidate.heldIn;
-  const heldInReference = metrics.lastKept.heldIn;
-  const heldOutCandidate = metrics.candidate.heldOut;
-  const heldOutReference = metrics.original.heldOut;
-
+): PromptAcceptanceReason | null {
   if (input.rewardHackScan.decision === 'quarantine') {
     return PROMPT_REWARD_HACK_QUARANTINE_REASON;
   }
-  if (
-    hasBlockingTaskFailure(heldInReference)
-    || hasBlockingTaskFailure(heldOutReference)
-    || hasBlockingTaskFailure(heldInCandidate)
-    || hasBlockingTaskFailure(heldOutCandidate)
-  ) {
+  if (hasBlockingTaskFailure(heldInReference) || hasBlockingTaskFailure(heldInCandidate)) {
     return 'coverage_regressed';
   }
   if (coverageRegressed(heldInCandidate.coverageRate, heldInReference.coverageRate)) {
     return 'coverage_regressed';
-  }
-  if (coverageRegressed(heldOutCandidate.coverageRate, heldOutReference.coverageRate)) {
-    return 'coverage_regressed';
-  }
-  if (heldOutCandidate.taskCount > 0 && input.originalHeldOutPassEligibleRate === null) {
-    return 'coverage_regressed';
-  }
-  if (regressed(heldOutCandidate.passEligibleRate, input.originalHeldOutPassEligibleRate, input.heldOutPassRateNoiseBand)) {
-    return 'held_out_regressed';
   }
   if (
     improved(
@@ -476,7 +464,7 @@ function acceptanceReason(
       input.heldInPassRateNoiseBand,
     )
   ) {
-    return 'held_in_improved';
+    return null; // held-in cleared → run held-out
   }
   if (
     regressed(
@@ -488,6 +476,78 @@ function acceptanceReason(
     return 'held_in_regressed';
   }
   return 'held_in_within_noise';
+}
+
+/** Held-out gate (#64 LOOP step 10). Only meaningful once held-in has cleared.
+ * Returns a discard reason, or `null` if held-out clears and the candidate KEEPs. */
+function heldOutGateReasonFromSummaries(
+  heldOutCandidate: PromptAcceptancePartitionSummary,
+  heldOutReference: PromptAcceptancePartitionSummary,
+  input: {
+    originalHeldOutPassEligibleRate: number | null;
+    heldOutPassRateNoiseBand: number;
+  },
+): PromptAcceptanceReason | null {
+  if (hasBlockingTaskFailure(heldOutReference) || hasBlockingTaskFailure(heldOutCandidate)) {
+    return 'coverage_regressed';
+  }
+  if (coverageRegressed(heldOutCandidate.coverageRate, heldOutReference.coverageRate)) {
+    return 'coverage_regressed';
+  }
+  if (heldOutCandidate.taskCount > 0 && input.originalHeldOutPassEligibleRate === null) {
+    return 'coverage_regressed';
+  }
+  if (regressed(heldOutCandidate.passEligibleRate, input.originalHeldOutPassEligibleRate, input.heldOutPassRateNoiseBand)) {
+    return 'held_out_regressed';
+  }
+  return null; // held-out cleared → keep
+}
+
+/**
+ * Evaluate only the held-in gate from the candidate + last-kept held-in events.
+ * The loop uses this after the held-in sweep to decide whether to spend the
+ * held-out sweep at all — `null` means "held-in cleared, run held-out".
+ */
+export function heldInGateReason(input: {
+  heldInTaskIds: readonly string[];
+  lastKeptHeldInEvents: readonly FixedPromptTaskWalEvent[];
+  candidateHeldInEvents: readonly FixedPromptTaskWalEvent[];
+  previousHeldInReferencePassEligibleRate: number | null;
+  heldInPassRateNoiseBand: number;
+  rewardHackScan?: PromptCandidateRewardHackScan;
+}): PromptAcceptanceReason | null {
+  return heldInGateReasonFromSummaries(
+    summarizePromptAcceptancePartition(input.candidateHeldInEvents, input.heldInTaskIds),
+    summarizePromptAcceptancePartition(input.lastKeptHeldInEvents, input.heldInTaskIds),
+    {
+      previousHeldInReferencePassEligibleRate: input.previousHeldInReferencePassEligibleRate,
+      heldInPassRateNoiseBand: input.heldInPassRateNoiseBand,
+      rewardHackScan: normalizeRewardHackScan(input.rewardHackScan),
+    },
+  );
+}
+
+function acceptanceReason(
+  metrics: PromptAcceptanceMetrics,
+  input: {
+    previousHeldInReferencePassEligibleRate: number | null;
+    originalHeldOutPassEligibleRate: number | null;
+    heldInPassRateNoiseBand: number;
+    heldOutPassRateNoiseBand: number;
+    rewardHackScan: PromptCandidateRewardHackScan;
+  },
+): PromptAcceptanceReason {
+  const heldIn = heldInGateReasonFromSummaries(metrics.candidate.heldIn, metrics.lastKept.heldIn, {
+    previousHeldInReferencePassEligibleRate: input.previousHeldInReferencePassEligibleRate,
+    heldInPassRateNoiseBand: input.heldInPassRateNoiseBand,
+    rewardHackScan: input.rewardHackScan,
+  });
+  if (heldIn !== null) return heldIn;
+  const heldOut = heldOutGateReasonFromSummaries(metrics.candidate.heldOut, metrics.original.heldOut, {
+    originalHeldOutPassEligibleRate: input.originalHeldOutPassEligibleRate,
+    heldOutPassRateNoiseBand: input.heldOutPassRateNoiseBand,
+  });
+  return heldOut ?? 'held_in_improved';
 }
 
 function normalizeRewardHackScan(scan: PromptCandidateRewardHackScan | undefined): PromptCandidateRewardHackScan {

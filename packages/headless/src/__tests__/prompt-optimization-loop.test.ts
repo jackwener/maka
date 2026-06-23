@@ -94,6 +94,87 @@ describe('runPromptOptimizationLoop', () => {
     });
   });
 
+  test('skips the held-out sweep for a candidate that does not clear the held-in gate', async () => {
+    await withHarness(async (harness) => {
+      const heldInTasks = makeTasks('hin', 2);
+      const heldOutTasks = makeTasks('hout', 2);
+      // Held-in flat at 0.5 (within the wide two-task noise band) every candidate
+      // round, so no candidate clears the held-in gate.
+      const rewardFor = (_roundId: string, taskId: string): number => {
+        if (taskId.startsWith('hout-')) return 1;
+        return taskIndex(taskId) === 0 ? 1 : 0;
+      };
+
+      const result = await runLoop(harness, {
+        heldInTasks,
+        heldOutTasks,
+        rewardFor,
+        rounds: 2,
+        baselineRuns: 2,
+      });
+
+      assert.deepEqual(result.decisions.map((decision) => decision.decision), ['discard', 'discard']);
+      assert.equal(result.decisions[0]?.reason, 'held_in_within_noise');
+
+      // #64 two-stage gate: a candidate that cannot KEEP on held-in must never
+      // spend the held-out sweep — no held-out task event under any candidate round.
+      const events = (await readFile(harness.resultsJsonlPath, 'utf8'))
+        .split('\n').filter(Boolean).map((line) => JSON.parse(line));
+      const isHeldOut = (e: { taskId?: unknown }) => typeof e.taskId === 'string' && e.taskId.startsWith('hout-');
+      const candidateHeldOut = events.filter((e) =>
+        typeof e.roundId === 'string' && e.roundId.startsWith('round-') && isHeldOut(e));
+      assert.equal(candidateHeldOut.length, 0);
+      // Held-out baseline events still exist (calibration runs held-out), proving
+      // the check above is about candidate rounds, not broken held-out wiring.
+      const baselineHeldOut = events.filter((e) =>
+        typeof e.roundId === 'string' && e.roundId.startsWith('baseline-') && isHeldOut(e));
+      assert.ok(baselineHeldOut.length > 0);
+    });
+  });
+
+  test('stops before the held-out sweep when the budget is hit after held-in', async () => {
+    await withHarness(async (harness) => {
+      const originalHead = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: harness.repoDir })).stdout.trim();
+      const heldInTasks = makeTasks('hin', 20);
+      const heldOutTasks = makeTasks('hout', 8);
+      // Held-in jumps 0.5 -> 1.0 in round-0, so it clears the gate and held-out
+      // WOULD run; held-out stays flat at 0.5.
+      const rewardFor = (roundId: string, taskId: string): number => {
+        const index = taskIndex(taskId);
+        if (taskId.startsWith('hout-')) return index < 4 ? 1 : 0;
+        if (roundId.startsWith('baseline-')) return index < 10 ? 1 : 0;
+        return 1;
+      };
+
+      // baseline (2 sweeps) = 2*(20+8)*0.02 = 1.12; round-0 held-in adds 20*0.02 =
+      // 0.40 -> 1.52, tripping a 1.5 ceiling BETWEEN held-in and held-out.
+      const result = await runLoop(harness, {
+        heldInTasks,
+        heldOutTasks,
+        rewardFor,
+        rounds: 2,
+        baselineRuns: 2,
+        costCeilingUsd: 1.5,
+      });
+
+      assert.equal(result.stopReason, 'cost_ceiling_exceeded');
+      assert.equal(result.decisions.length, 0); // round-0 broke before a decision
+      assert.equal(result.keptCount, 0);
+      assert.ok(result.totalCostUsd >= 1.5);
+
+      // Held-out never ran for round-0, and the candidate commit was reverted.
+      const events = (await readFile(harness.resultsJsonlPath, 'utf8'))
+        .split('\n').filter(Boolean).map((line) => JSON.parse(line));
+      const candidateHeldOut = events.filter((e) =>
+        typeof e.roundId === 'string' && e.roundId.startsWith('round-')
+        && typeof e.taskId === 'string' && e.taskId.startsWith('hout-'));
+      assert.equal(candidateHeldOut.length, 0);
+      const head = (await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: harness.repoDir })).stdout.trim();
+      assert.equal(head, originalHead);
+      assert.equal(await readFile(harness.systemPromptPath, 'utf8'), 'original prompt\n');
+    });
+  });
+
   test('refuses to run when the held-out TSV would be visible inside the agent cwd', async () => {
     await withHarness(async (harness) => {
       await assert.rejects(
