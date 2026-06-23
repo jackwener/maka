@@ -874,8 +874,12 @@ button:active {
   -webkit-app-region: no-drag;
   padding: 3px 6px;
   text-align: left;
-  font-size: 13px;
-  line-height: 1.25;
+  /* PR-NAV-NEW-TASK-WEIGHT-0 (2026-06-23): reference-atlas §2 type
+     scale uses text-sm (14px / 20px line-height) for sidebar nav
+     rows. Maka was sitting at 13px / 1.25 (≈16.25px line-height),
+     a half-step smaller that read tighter than the reference. */
+  font-size: 14px;
+  line-height: 1.43;
   transition:
     background 150ms var(--ease-out-strong),
     color 150ms var(--ease-out-strong);
@@ -906,8 +910,13 @@ button:active {
 }
 
 .maka-nav-new-task {
+  /* PR-NAV-NEW-TASK-WEIGHT-0 (2026-06-23): "新任务" should not render
+     bold by default — the active-state already carries weight: 600,
+     and a permanently-bold idle entry reads as "this is the active
+     page" even when nothing is selected. Reference nav rows are all
+     normal weight at rest; the create-action stays a normal-weight
+     row with the SquarePen glyph carrying the affordance. */
   color: var(--foreground);
-  font-weight: 600;
 }
 
 .maka-nav-new-task .maka-nav-icon {
