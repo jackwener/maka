@@ -70,8 +70,7 @@ class MakaAgent(BaseInstalledAgent):
 
     async def install(self, environment: BaseEnvironment) -> None:
         maka_repo = self._resolved_flags.get("maka_repo", "/opt/maka-agent")
-        backend = self._resolved_flags.get("backend", "") or self._get_env("MAKA_BACKEND") or "ai-sdk"
-        pi_command = self._get_env("MAKA_PI_COMMAND") or "pi"
+        self._harbor_backend()
         run_cell = Path(maka_repo) / "packages" / "headless" / "harbor" / "run-cell.mjs"
         run_host_cell = Path(maka_repo) / "packages" / "headless" / "harbor" / "run-host-cell.mjs"
         dist_index = Path(maka_repo) / "packages" / "headless" / "dist" / "index.js"
@@ -99,13 +98,6 @@ class MakaAgent(BaseInstalledAgent):
                 "fi"
             ),
         )
-        pi_probe = (
-            f" && PI_COMMAND={shlex.quote(pi_command)}"
-            " && command -v \"$PI_COMMAND\" >/dev/null 2>&1"
-            " && \"$PI_COMMAND\" --version"
-            if backend == "pi-agent"
-            else ""
-        )
         await self.exec_as_agent(
             environment,
             command=(
@@ -115,7 +107,6 @@ class MakaAgent(BaseInstalledAgent):
                 f"test -f {shlex.quote(str(run_cell))} && "
                 f"test -f {shlex.quote(str(run_host_cell))} && "
                 f"test -f {shlex.quote(str(dist_index))}"
-                f"{pi_probe}"
             ),
         )
 
@@ -180,6 +171,12 @@ class MakaAgent(BaseInstalledAgent):
     def _host_side_llm_enabled(self) -> bool:
         return bool(self._get_env("MAKA_HOST_API_KEY_FILE") or self._get_env("MAKA_HOST_API_KEY"))
 
+    def _harbor_backend(self) -> str:
+        backend = self._resolved_flags.get("backend", "") or self._get_env("MAKA_BACKEND") or "ai-sdk"
+        if backend not in ("ai-sdk", "fake"):
+            raise RuntimeError(f"backend={backend} is not supported by Maka Harbor v1; use backend=ai-sdk or backend=fake")
+        return backend
+
     async def _run_host_cell(self, environment: BaseEnvironment, local_instruction_path: Path) -> None:
         container_cwd = await self._container_cwd(environment)
         async with _ToolExecutorServer(self, environment) as executor:
@@ -227,7 +224,7 @@ class MakaAgent(BaseInstalledAgent):
     def _cell_env(self, instruction_path: Any) -> dict[str, str]:
         system_prompt = self._resolved_flags.get("system_prompt", "") or self._get_env("MAKA_SYSTEM_PROMPT") or ""
         model = self.model_name or self._get_env("MAKA_MODEL") or "deepseek/deepseek-v4-flash"
-        backend = self._resolved_flags.get("backend", "") or self._get_env("MAKA_BACKEND") or "ai-sdk"
+        backend = self._harbor_backend()
         provider = self._resolved_flags.get("provider", "") or self._get_env("MAKA_PROVIDER") or ""
         if backend == "ai-sdk" and not self._host_side_llm_enabled():
             raise RuntimeError("backend=ai-sdk requires MAKA_HOST_API_KEY or MAKA_HOST_API_KEY_FILE")
@@ -242,14 +239,6 @@ class MakaAgent(BaseInstalledAgent):
         if provider:
             env["MAKA_PROVIDER"] = provider
         for key in (
-            "MAKA_PI_COMMAND",
-            "MAKA_PI_PROVIDER",
-            "MAKA_PI_MODEL",
-            "PI_CODING_AGENT_DIR",
-            "PI_CODING_AGENT_SESSION_DIR",
-            "PI_PACKAGE_DIR",
-            "PI_OFFLINE",
-            "PI_TELEMETRY",
             # Forward trial pricing so the in-container cell prices unknown models
             # (e.g. deepseek-v4-flash) the same way trial_pricing.py prices the trial;
             # otherwise the cell emits costUsd=0 and the controller flags every task.
@@ -265,34 +254,6 @@ class MakaAgent(BaseInstalledAgent):
             value = self._get_env(key)
             if value:
                 env[key] = value
-        if backend == "pi-agent":
-            for key in (
-                "DEEPSEEK_API_KEY",
-                "DEEPSEEK_API_KEY_FILE",
-                "DEEPSEEK_BASE_URL",
-                "OPENAI_API_KEY",
-                "OPENAI_API_KEY_FILE",
-                "OPENAI_BASE_URL",
-                "MOONSHOT_API_KEY",
-                "MOONSHOT_API_KEY_FILE",
-                "GOOGLE_API_KEY",
-                "GOOGLE_API_KEY_FILE",
-                "ANTHROPIC_API_KEY",
-                "ANTHROPIC_API_KEY_FILE",
-                "ZAI_API_KEY",
-                "ZAI_API_KEY_FILE",
-                "ZAI_BASE_URL",
-                "ZAI_CODING_CN_API_KEY",
-                "ZAI_CODING_CN_API_KEY_FILE",
-                "XIAOMI_API_KEY",
-                "XIAOMI_TOKEN_PLAN_CN_API_KEY",
-                "XIAOMI_TOKEN_PLAN_AMS_API_KEY",
-                "XIAOMI_TOKEN_PLAN_SGP_API_KEY",
-                "OPENCODE_API_KEY",
-            ):
-                value = self._get_env(key)
-                if value:
-                    env[key] = value
         return env
 
     async def _download_cell_output(self, environment: BaseEnvironment) -> None:
