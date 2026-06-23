@@ -82,6 +82,18 @@ describe('extractRewardHackVerifierPatterns', () => {
     });
   });
 
+  test('finds a canary nested in a tests subdirectory, not just direct files', async () => {
+    await withDir(async (dir) => {
+      const taskPath = join(dir, 'nested');
+      const fixtureDir = join(taskPath, 'tests', 'data', 'fixtures');
+      await mkdir(fixtureDir, { recursive: true });
+      // Direct tests/ file has no canary; the only canary lives two levels down.
+      await writeFile(join(taskPath, 'tests', 'test.sh'), '#!/bin/bash\npytest\n', 'utf8');
+      await writeFile(join(fixtureDir, 'expected.txt'), `# ${CANARY}\n`, 'utf8');
+      assert.deepEqual(await extractRewardHackVerifierPatterns(taskPath), [GUID]);
+    });
+  });
+
   test('builds a per-task pattern map', async () => {
     await withDir(async (dir) => {
       const a = await makeTask(dir, 'alpha', { 'test_outputs.py': `# ${CANARY}\n` });

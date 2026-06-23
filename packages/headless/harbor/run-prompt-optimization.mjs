@@ -24,9 +24,14 @@ import {
   DEEPSEEK_V4_FLASH_PRICING,
   buildRewardHackVerifierPatterns,
   discoverCachedHarborTasks,
+  envFinitePositiveNumber,
+  envNonNegativeInt,
+  envRatio,
   partitionPromptTasks,
   renderPromptStructuralSmokeMarkdown,
+  resolveMinStable,
   runPromptOptimizationRun,
+  smokeExitCode,
 } from '@maka/headless';
 
 const execFileAsync = promisify(execFile);
@@ -45,13 +50,12 @@ function envPath(name, fallback) {
   return value.startsWith('~') ? join(homedir(), value.slice(1)) : resolve(value);
 }
 
-function envInt(name, fallback) {
-  const raw = process.env[name];
-  if (!raw) return fallback;
-  const value = Number(raw);
-  if (!Number.isInteger(value) || value < 0) throw new Error(`${name} must be a non-negative integer`);
-  return value;
-}
+// Thin env-bound wrappers over the validated parsers in @maka/headless. Each
+// FAILS LOUD on an illegal value rather than letting NaN slip through a later
+// `!== undefined` check and silently disable a guard.
+const envInt = (name, fallback) => envNonNegativeInt(name, process.env[name], fallback);
+const envNum = (name, fallback) => envFinitePositiveNumber(name, process.env[name], fallback);
+const envRatioOf = (name, fallback) => envRatio(name, process.env[name], fallback);
 
 // Comma-separated explicit task ids (controlled smokes). Empty -> undefined.
 function envIds(name) {
@@ -93,16 +97,15 @@ async function main() {
   const heldInCount = envInt('MAKA_PROMPT_HELD_IN', 60);
   const heldOutCount = envInt('MAKA_PROMPT_HELD_OUT', 20);
   const runId = process.env.MAKA_PROMPT_RUN_ID || `prompt-opt-${Date.now()}`;
-  const costCeilingUsd = process.env.MAKA_PROMPT_COST_CEILING ? Number(process.env.MAKA_PROMPT_COST_CEILING) : undefined;
-  const maxConcurrency = process.env.MAKA_PROMPT_MAX_CONCURRENCY ? Number(process.env.MAKA_PROMPT_MAX_CONCURRENCY) : undefined;
-  const minStableHeldInTasks = envInt('MAKA_PROMPT_MIN_STABLE_HELD_IN', 1);
-  const minStableHeldOutTasks = envInt('MAKA_PROMPT_MIN_STABLE_HELD_OUT', 1);
-  const maxInfraFailureRate = process.env.MAKA_PROMPT_MAX_INFRA_FAILURE_RATE
-    ? Number(process.env.MAKA_PROMPT_MAX_INFRA_FAILURE_RATE)
-    : undefined;
-  const maxStableTaskDurationMs = process.env.MAKA_PROMPT_MAX_STABLE_TASK_MS
-    ? Number(process.env.MAKA_PROMPT_MAX_STABLE_TASK_MS)
-    : undefined;
+  // Default to a hard $30 cap: an unattended full run with no cost guard at all
+  // is the worse failure mode than stopping early. An explicit value overrides.
+  const costCeilingUsd = envNum('MAKA_PROMPT_COST_CEILING', 30);
+  const maxConcurrency = envNum('MAKA_PROMPT_MAX_CONCURRENCY', undefined);
+  const maxInfraFailureRate = envRatioOf('MAKA_PROMPT_MAX_INFRA_FAILURE_RATE', undefined);
+  const maxStableTaskDurationMs = envNum('MAKA_PROMPT_MAX_STABLE_TASK_MS', undefined);
+  // Min-stable floors scale with the actual post-drop partition sizes; resolved
+  // below once the no-canary drop has settled heldInTasks/heldOutTasks.
+  const minStableRatio = envRatioOf('MAKA_PROMPT_MIN_STABLE_RATIO', 0.5);
 
   // Verify the key file exists before spending Docker time (never print it).
   await readFile(keyFile, 'utf8');
@@ -149,6 +152,17 @@ async function main() {
     console.warn(`Note: ${heldOutNoPattern.length} held-out task(s) have no canary pattern (held-out is not reward-hack-scanned): ${heldOutNoPattern.map((t) => t.id).join(', ')}`);
   }
   console.log(`Reward-hack patterns: ${heldInTasks.length} held-in all covered, ${heldOutTasks.length} held-out`);
+
+  // Resolve the min-stable floors against the FINAL (post-drop) partition sizes.
+  // An explicit MAKA_PROMPT_MIN_STABLE_* wins (cheap smokes pin "1"); otherwise
+  // the floor scales with the partition — ceil(size * ratio), at least 1 — so a
+  // sample shrunk by unstable-task drops fails loud instead of a flat default of
+  // 1 letting a near-empty stable set still produce a "valid" conclusion.
+  const minStableHeldInTasks = resolveMinStable(
+    'MAKA_PROMPT_MIN_STABLE_HELD_IN', heldInTasks.length, process.env.MAKA_PROMPT_MIN_STABLE_HELD_IN, minStableRatio);
+  const minStableHeldOutTasks = resolveMinStable(
+    'MAKA_PROMPT_MIN_STABLE_HELD_OUT', heldOutTasks.length, process.env.MAKA_PROMPT_MIN_STABLE_HELD_OUT, minStableRatio);
+  console.log(`Min-stable floors: held-in ${minStableHeldInTasks}/${heldInTasks.length}, held-out ${minStableHeldOutTasks}/${heldOutTasks.length}`);
 
   // Prompt repo: program.md + system_prompt.md committed; agent-cwd/ is the empty
   // isolation root; controller artifacts live OUTSIDE it.
@@ -205,7 +219,7 @@ async function main() {
     rewardHackVerifierPatternsByTaskId,
     minStableHeldInTasks,
     minStableHeldOutTasks,
-    ...(costCeilingUsd !== undefined ? { costCeilingUsd } : {}),
+    costCeilingUsd,
     ...(maxConcurrency !== undefined ? { maxConcurrency } : {}),
     ...(maxInfraFailureRate !== undefined ? { maxInfraFailureRate } : {}),
     ...(maxStableTaskDurationMs !== undefined ? { maxStableTaskDurationMs } : {}),
@@ -229,6 +243,9 @@ async function main() {
   if (result.smoke.status !== 'pass') {
     console.log(`smoke failures: ${result.smoke.failures.join(', ')}`);
   }
+  // A non-pass smoke must surface as a non-zero exit so CI and shell callers
+  // don't treat a structurally-broken run as success.
+  process.exitCode = smokeExitCode(result.smoke.status);
 }
 
 main().catch((error) => {

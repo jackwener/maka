@@ -118,19 +118,33 @@ const CANARY_PATTERN = /terminal-bench-canary GUID ([0-9a-fA-F-]{8,})/g;
  * during the run — the canary scan catches the case where verifier material leaks
  * in anyway. */
 export async function extractRewardHackVerifierPatterns(taskPath: string): Promise<string[]> {
-  const testsDir = join(taskPath, 'tests');
   const patterns = new Set<string>();
+  await collectCanaryPatterns(join(taskPath, 'tests'), patterns);
+  return [...patterns].sort();
+}
+
+/** Recursively scan a directory tree, accumulating canary GUIDs from every file.
+ * Canary material commonly lives in nested test fixtures (e.g. tests/data/…), so a
+ * shallow scan of tests/ would miss it and misjudge the task as having no verifier
+ * pattern — which then silently drops the task from held-in. Symlinks are not
+ * followed (isDirectory/isFile are false for them), which also avoids cycles. */
+async function collectCanaryPatterns(dir: string, patterns: Set<string>): Promise<void> {
   let entries;
   try {
-    entries = await readdir(testsDir, { withFileTypes: true });
+    entries = await readdir(dir, { withFileTypes: true });
   } catch {
-    return [];
+    return;
   }
   for (const entry of entries) {
+    const entryPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await collectCanaryPatterns(entryPath, patterns);
+      continue;
+    }
     if (!entry.isFile()) continue;
     let content;
     try {
-      content = await readFile(join(testsDir, entry.name), 'utf8');
+      content = await readFile(entryPath, 'utf8');
     } catch {
       continue;
     }
@@ -138,7 +152,6 @@ export async function extractRewardHackVerifierPatterns(taskPath: string): Promi
       if (match[1]) patterns.add(match[1]);
     }
   }
-  return [...patterns].sort();
 }
 
 export async function buildRewardHackVerifierPatterns(

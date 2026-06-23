@@ -125,6 +125,13 @@ export {
   partitionPromptTasks,
   runPromptOptimizationRun,
 } from './prompt-optimization-run.js';
+export {
+  envFinitePositiveNumber,
+  envNonNegativeInt,
+  envRatio,
+  resolveMinStable,
+  smokeExitCode,
+} from './prompt-optimization-env.js';
 export type {
   PromptOptimizationRunInput,
   PromptTaskPartition,
