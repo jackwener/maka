@@ -7068,13 +7068,15 @@ button:active {
 .settingsNavItem[data-active="true"] {
   /* PR-SETTINGS-NAV-FOCUS-0 (round 14/15): bump the active state from
      the muted `--settings-nav-row-selected-bg` token to a slightly
-     more visible 6.5% foreground overlay + 500 weight. The previous
-     fill was reading as "muted disabled" against the now-bigger
-     nav row typography. */
+     more visible 6.5% foreground overlay + 500 weight.
+     PR-SETTINGS-MOTION-TYPO-TOKENS-0 (round 15/15): add 3px inset
+     accent bar on the LEFT edge — Redesign-Skill recipe. Carries
+     brand into the most-used surface without recoloring the fill.
+     Inset shadow (not actual border) so the 38px row geometry stays. */
   background: oklch(from var(--foreground) l c h / 0.065);
   color: var(--foreground);
   font-weight: 500;
-  box-shadow: none !important;
+  box-shadow: inset 3px 0 0 var(--accent) !important;
 }
 
 .settingsNavItem:focus-visible {
@@ -7342,30 +7344,31 @@ button:active {
 }
 
 .settingsPageHeader h2 {
-  /* PR-SETTINGS-PAGE-HEADER-POLISH-0 (round 12/15, WAWQAQ msg
-     `f7e9d166`): tighten the h2 with negative tracking + slightly
-     softer weight. 28 / 700 was too loud; 26 / 650 reads as
-     authoritative without shouting. Add a touch of `-0.012em`
-     tracking like reference's display face. */
+  /* PR-SETTINGS-PAGE-HEADER-POLISH-0 (round 12/15): tighten the h2
+     with negative tracking + slightly softer weight.
+     PR-SETTINGS-MOTION-TYPO-TOKENS-0 (round 15/15): `text-wrap:
+     balance` so 1-2 word titles don't orphan on long pages and
+     2-word titles like 「记忆与回顾」don't break across an awkward
+     line. */
   margin: 0;
   color: var(--foreground);
   font-size: 26px;
   font-weight: 650;
   letter-spacing: -0.012em;
   line-height: 1.2;
+  text-wrap: balance;
 }
 
-/* PR-SETTINGS-PAGE-SUBTITLE-0 (round 4/15): one-line page description
-   below the h2 — matches reference's per-tab meta line.
-   PR-SETTINGS-PAGE-HEADER-POLISH-0 (round 12/15): cap width so long
-   descriptions don't span the full 768px column — caps at 56ch which
-   keeps the meta-line readable. */
+/* PR-SETTINGS-PAGE-SUBTITLE-0 (round 4/15) + round 12/15 cap +
+   round 15/15 `text-wrap: pretty` so the last line isn't a single
+   orphan word (per baseline-ui typography rule). */
 .settingsPageHeaderDescription {
   margin: 0;
   max-width: 56ch;
   color: var(--foreground-55);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 14px;
+  line-height: 1.5;
+  text-wrap: pretty;
 }
 
 .settingsPageContent {
@@ -7395,6 +7398,19 @@ button:active {
   max-width: 768px;
   margin: 0 auto;
   padding: 40px 24px 64px;
+}
+
+/* PR-SETTINGS-MOTION-TYPO-TOKENS-0 (round 15/15, WAWQAQ msg
+   `f7e9d166` + UI-skill deep read 2026-06-23): shared motion tokens
+   for the settings surface so timing/easing stay consistent across
+   nav rows, form rows, switches, and inputs. `--motion-fast` is the
+   default for state changes; `--motion-ease-out` is the cubic-bezier
+   recommended by Taste-Skill + 12-principles. */
+.settingsSurface,
+.settingsMainPane,
+.settingsSidebar {
+  --motion-fast: 160ms;
+  --motion-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* PR-SETTINGS-NO-PANE-BORDER-0 (WAWQAQ msg `d0e7dfb3`): nested
@@ -7484,6 +7500,29 @@ button:active {
   background: oklch(from var(--foreground) l c h / 0.025);
 }
 
+/* PR-SETTINGS-MOTION-TYPO-TOKENS-0 (round 15/15) — tactile press
+   feedback. 12-principles `physics-active-state` + Taste-Skill +
+   UIDB all converge on `:active { scale(0.98) }` as the cheapest way
+   to make UI feel handled vs simulated. Applied only when reduced-
+   motion is not preferred — the @media block above already strips
+   transition; here we keep `transform` declarations so the
+   `:active` *snap* still fires (it's instant, not animated). */
+.settingsFormRow:active,
+.settingsRow:active,
+.settingsBackButton:active,
+.settingsNavItem:active {
+  transform: scale(0.985);
+  transition: transform 100ms var(--motion-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+@media (prefers-reduced-motion: reduce) {
+  .settingsFormRow:active,
+  .settingsRow:active,
+  .settingsBackButton:active,
+  .settingsNavItem:active {
+    transform: none;
+  }
+}
+
 /* PR-SETTINGS-A11Y-POLISH-0 (round 11/15) — keyboard-only focus ring
    on settings rows + inputs. Reference's settings cards use a 2px
    ring on focus-visible; maka had no visible affordance. Use the
@@ -7566,8 +7605,11 @@ button:active {
   display: block;
   margin-top: 6px;
   color: var(--foreground-55);
-  font-size: 13px;
-  line-height: 1.45;
+  /* PR-SETTINGS-MOTION-TYPO-TOKENS-0 (round 15/15): 13 → 14 to clear
+     the 14px legibility floor cited by baseline-ui + UIDB + Impeccable
+     `/typeset`. Hint is the most-read body text on the page. */
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .settingsFieldWarning {
@@ -9907,9 +9949,14 @@ button:active {
 }
 
 .settingsRow > span {
+  /* PR-SETTINGS-MOTION-TYPO-TOKENS-0 (round 15/15): `tabular-nums` so
+     numeric values (version strings, model IDs, counts) align cleanly
+     when stacked vertically. baseline-ui + /typeset both require this
+     for any numeric data. */
   min-width: 0;
   color: var(--foreground-60);
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
   text-align: right;
 }
