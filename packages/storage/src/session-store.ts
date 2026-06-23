@@ -229,7 +229,7 @@ class FileSessionStore implements SessionStore {
       .map((line, index) => ({ line, lineNumber: index + 1 }))
       .filter((entry) => entry.line.trim().length > 0);
     if (lines.length === 0 || !lines[0]) throw new Error(`Session ${sessionId} is empty`);
-    const header = migrateHeader(JSON.parse(lines[0].line) as StoredSessionHeader);
+    const header = migrateHeader(JSON.parse(lines[0].line) as StoredSessionHeader, sessionId);
     const messages: StoredMessage[] = [];
     const lastLineNumber = lines.at(-1)?.lineNumber;
     for (const entry of lines.slice(1)) {
@@ -296,7 +296,7 @@ function createJsonlCorruptionNote(header: SessionHeader, lineNumber: number, er
   };
 }
 
-function migrateHeader(header: StoredSessionHeader): SessionHeader {
+function migrateHeader(header: StoredSessionHeader, sessionId: string): SessionHeader {
   const permissionMode = isPermissionMode(header.permissionMode) ? header.permissionMode : 'ask';
   const model = typeof header.model === 'string' && header.model.length > 0 ? header.model : 'default';
   const status = resolveMigratedStatus(header);
@@ -309,27 +309,67 @@ function migrateHeader(header: StoredSessionHeader): SessionHeader {
     statusUpdatedAt: header.statusUpdatedAt ?? header.archivedAt ?? header.lastMessageAt ?? header.lastUsedAt ?? header.createdAt,
   };
   if (header.backend === 'claude') {
-    return { ...header, ...statusFields, backend: 'ai-sdk', model, permissionMode };
+    return normalizeMigratedHeader({ ...header, ...statusFields, backend: 'ai-sdk', model, permissionMode }, sessionId);
   }
   if (header.backend === 'pi-agent') {
-    return { ...header, ...statusFields, backend: 'pi-agent', model, permissionMode };
+    return normalizeMigratedHeader({ ...header, ...statusFields, backend: 'pi-agent', model, permissionMode }, sessionId);
   }
   if (header.backend === 'pi') {
-    return { ...header, ...statusFields, backend: 'pi-agent', model, permissionMode };
+    return normalizeMigratedHeader({ ...header, ...statusFields, backend: 'pi-agent', model, permissionMode }, sessionId);
   }
-  return {
+  return normalizeMigratedHeader({
     ...header,
     ...statusFields,
     backend: header.backend === 'ai-sdk' ? 'ai-sdk' : 'fake',
     model,
     permissionMode,
-  };
+  }, sessionId);
 }
 
 function resolveMigratedStatus(header: StoredSessionHeader): SessionHeader['status'] {
   if (header.isArchived) return 'archived';
   if (isSessionStatus(header.status) && header.status !== 'archived') return header.status;
   return 'active';
+}
+
+function normalizeMigratedHeader(header: SessionHeader, sessionId: string): SessionHeader {
+  const valid = header.id === sessionId &&
+    typeof header.workspaceRoot === 'string' &&
+    typeof header.cwd === 'string' &&
+    isFiniteNumber(header.createdAt) &&
+    isFiniteNumber(header.lastUsedAt) &&
+    (header.lastMessageAt === undefined || isFiniteNumber(header.lastMessageAt)) &&
+    typeof header.name === 'string' &&
+    typeof header.isFlagged === 'boolean' &&
+    Array.isArray(header.labels) &&
+    header.labels.every((label) => typeof label === 'string') &&
+    typeof header.isArchived === 'boolean' &&
+    (header.archivedAt === undefined || isFiniteNumber(header.archivedAt)) &&
+    isSessionStatus(header.status) &&
+    (header.blockedReason === undefined || isSessionBlockedReason(header.blockedReason)) &&
+    (header.statusUpdatedAt === undefined || isFiniteNumber(header.statusUpdatedAt)) &&
+    (header.parentSessionId === undefined || typeof header.parentSessionId === 'string') &&
+    (header.branchOfTurnId === undefined || typeof header.branchOfTurnId === 'string') &&
+    (header.lastReadMessageId === undefined || typeof header.lastReadMessageId === 'string') &&
+    typeof header.hasUnread === 'boolean' &&
+    isBackendKind(header.backend) &&
+    typeof header.llmConnectionSlug === 'string' &&
+    typeof header.connectionLocked === 'boolean' &&
+    typeof header.model === 'string' &&
+    isPermissionMode(header.permissionMode) &&
+    header.schemaVersion === 1;
+  if (!valid) {
+    throw new Error(`Invalid session header for session ${sessionId}: malformed fields`);
+  }
+  return header;
+}
+
+function isBackendKind(value: unknown): value is SessionHeader['backend'] {
+  return value === 'ai-sdk' || value === 'fake' || value === 'pi-agent';
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function toSummary(header: SessionHeader, messages: StoredMessage[] = []): SessionSummary {

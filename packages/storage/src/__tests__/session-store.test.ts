@@ -116,6 +116,67 @@ describe('FileSessionStore CRUD', () => {
     });
   });
 
+  test('rejects malformed session headers instead of returning partial records', async () => {
+    await withStore(async (store, workspaceRoot) => {
+      const sessionId = 'malformed-header';
+      const sessionDir = join(workspaceRoot, 'sessions', sessionId);
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(
+        join(sessionDir, 'session.jsonl'),
+        JSON.stringify({
+          ...makeRawHeader({ id: sessionId, workspaceRoot, name: 'Broken labels' }),
+          labels: 'not-an-array',
+        }) + '\n',
+        'utf8',
+      );
+
+      await assert.rejects(
+        () => store.readHeader(sessionId),
+        /Invalid session header for session malformed-header: malformed fields/,
+      );
+      assert.deepEqual(await store.list(), []);
+    });
+  });
+
+  test('rejects malformed session headers on write paths without overwriting bytes', async () => {
+    await withStore(async (store, workspaceRoot) => {
+      const sessionId = 'malformed-write';
+      const sessionDir = join(workspaceRoot, 'sessions', sessionId);
+      const sessionPath = join(sessionDir, 'session.jsonl');
+      const invalid = JSON.stringify({
+        ...makeRawHeader({ id: sessionId, workspaceRoot, name: 'Broken timestamp' }),
+        lastUsedAt: 'soon',
+      }) + '\n';
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(sessionPath, invalid, 'utf8');
+
+      await assert.rejects(
+        () => store.setFlagged(sessionId, true),
+        /Invalid session header for session malformed-write: malformed fields/,
+      );
+      assert.equal(await readFile(sessionPath, 'utf8'), invalid);
+    });
+  });
+
+  test('rejects session headers whose id does not match the directory', async () => {
+    await withStore(async (store, workspaceRoot) => {
+      const sessionId = 'header-id-mismatch';
+      const sessionDir = join(workspaceRoot, 'sessions', sessionId);
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(
+        join(sessionDir, 'session.jsonl'),
+        JSON.stringify(makeRawHeader({ id: 'other-session', workspaceRoot })) + '\n',
+        'utf8',
+      );
+
+      await assert.rejects(
+        () => store.readMessages(sessionId),
+        /Invalid session header for session header-id-mismatch: malformed fields/,
+      );
+      assert.deepEqual(await store.list(), []);
+    });
+  });
+
   test('migrates legacy headers without permissionMode to ask', async () => {
     await withStore(async (store, workspaceRoot) => {
       const sessionId = 'legacy-session';
