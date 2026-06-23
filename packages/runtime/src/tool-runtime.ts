@@ -93,7 +93,6 @@ export const DEFAULT_PERMISSION_TIMEOUT_MS = 300_000;
  * never trips it — only a true no-progress loop does.
  */
 export const LOOP_GATE_IDENTICAL_THRESHOLD = 3;
-const LOOP_GATE_HISTORY_MAX = 8;
 
 const SUBAGENT_TOOL_LIMIT_MESSAGE = '只读探索并发过多：同一轮最多 5 个子代理。请等待已有探索完成后再继续。';
 
@@ -131,10 +130,13 @@ export class ToolRuntime {
    */
   private gating?: ToolGating;
   /**
-   * Recent tool-call signatures this turn (tool name + canonical args), newest
-   * last, capped. Drives the loop-gate; reset each turn.
+   * Loop-gate state: the previous tool call's signature (tool + canonical args)
+   * and how many byte-identical calls have run back-to-back, including the most
+   * recent. Only a consecutive count is needed, so two fields suffice. Reset each
+   * turn.
    */
-  private recentToolCallSignatures: string[] = [];
+  private lastToolCallSignature: string | undefined;
+  private identicalToolCallStreak = 0;
 
   constructor(private readonly input: ToolRuntimeInput) {}
 
@@ -162,7 +164,8 @@ export class ToolRuntime {
   resetTurnState(): void {
     this.activeSubagentToolCount = 0;
     this.gating = undefined;
-    this.recentToolCallSignatures = [];
+    this.lastToolCallSignature = undefined;
+    this.identicalToolCallStreak = 0;
   }
 
   async writeSyntheticToolResult(
@@ -235,16 +238,17 @@ export class ToolRuntime {
       ...(tool.categoryHint !== undefined ? { categoryHint: tool.categoryHint } : {}),
     });
 
-    // Loop-gate bookkeeping: record every attempt's signature (tool + canonical
-    // args) up front — before the guards below that can early-return — so that
-    // any different tool or args, even a guard-rejected one, breaks an
-    // identical-call streak. The block decision happens after the guards, so a
-    // not-yet-loaded or gated tool gets its own (more actionable) message first.
+    // Loop-gate bookkeeping: update the identical-call streak up front — before
+    // the guards below that can early-return — so that any different tool or
+    // args, even a guard-rejected one, breaks the streak. The block decision
+    // happens after the guards, so a not-yet-loaded or gated tool gets its own
+    // (more actionable) message first.
     const callSignature = `${tool.name} ${loopGateArgsKey(args, toolUseId)}`;
-    const trailingIdentical = countTrailingEqual(this.recentToolCallSignatures, callSignature);
-    this.recentToolCallSignatures.push(callSignature);
-    if (this.recentToolCallSignatures.length > LOOP_GATE_HISTORY_MAX) {
-      this.recentToolCallSignatures.shift();
+    if (callSignature === this.lastToolCallSignature) {
+      this.identicalToolCallStreak += 1;
+    } else {
+      this.lastToolCallSignature = callSignature;
+      this.identicalToolCallStreak = 1;
     }
 
     // Tool-availability execute-boundary guard (Codex Δ5). Uses the step-start
@@ -271,7 +275,7 @@ export class ToolRuntime {
     // (recorded above, even for a guard-rejected call) breaks the streak, so
     // iterate-then-retry (edit a file, then re-run the same test) is never gated.
     // Recoverable: the model is told to change its approach.
-    if (trailingIdentical >= LOOP_GATE_IDENTICAL_THRESHOLD - 1) {
+    if (this.identicalToolCallStreak >= LOOP_GATE_IDENTICAL_THRESHOLD) {
       const reason = formatLoopGateText(tool.name);
       await this.writeSyntheticToolResult(toolUseId, turnId, reason, queue);
       trace?.emit('tool', 'tool_failed', 'Loop-gate blocked a repeated identical call', {
@@ -656,10 +660,10 @@ export function formatDeferredNotLoadedText(toolName: string): string {
 /**
  * Canonical key for a tool call's args; order-independent so identical calls
  * match. Hashed, not the raw args, so large Write/Edit payloads are not retained
- * (the signature history keeps the last few of these per turn). Args that cannot
- * be canonicalized (cyclic / throwing getters — impossible for JSON tool args,
- * but be safe) fall back to the unique call id, so distinct calls never collapse
- * into one signature and trip a false block, and no raw args are retained.
+ * (only the last signature is kept per turn). Args that cannot be canonicalized
+ * (cyclic / throwing getters — impossible for JSON tool args, but be safe) fall
+ * back to the unique call id, so distinct calls never collapse into one signature
+ * and trip a false block, and no raw args are retained.
  */
 function loopGateArgsKey(args: unknown, callId: string): string {
   try {
@@ -667,13 +671,6 @@ function loopGateArgsKey(args: unknown, callId: string): string {
   } catch {
     return `unhashable:${callId}`;
   }
-}
-
-/** How many of the most recent history entries equal `value` (counting from the end). */
-function countTrailingEqual(history: readonly string[], value: string): number {
-  let count = 0;
-  for (let i = history.length - 1; i >= 0 && history[i] === value; i--) count++;
-  return count;
 }
 
 /**
