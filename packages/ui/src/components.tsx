@@ -4000,25 +4000,40 @@ interface PermissionModeMeta {
   tone: 'info' | 'accent' | 'caution';
 }
 
+/**
+ * PR-MOVE-PERMISSION-MODE (WAWQAQ msgs 47fe0d0e / 21993dcc / a667cf6c
+ * 2026-06-23): the user-facing permission-mode picker is now a
+ * two-option dropdown sitting in the composer left-controls instead
+ * of a 3-chip switcher at the chat header. The `explore` (read-only)
+ * mode was retired from the picker — for an agent that can't write
+ * or run anything, the mode is "not useful". Internally `explore`
+ * still exists in the `PermissionMode` enum because Deep Research
+ * sessions and Bot-incoming guards use it as their default; the
+ * picker collapses those sessions to display `询问权限` so the user
+ * sees a coherent option.
+ *
+ * Labels follow WAWQAQ's a667cf6c renaming — direct, action-led copy
+ * instead of engineering shorthand.
+ */
 const PERMISSION_MODE_META: Record<PermissionMode, PermissionModeMeta> = {
   explore: {
-    label: '只读',
-    hint: '只读模式：读取、列表、搜索直通，写入或网络仍需明确确认。',
+    label: '只读模式',
+    hint: '只读模式：读取、列表、搜索直通，写入或网络仍需明确确认。Deep Research 默认走这档；不再出现在用户切换里。',
     tone: 'info',
   },
   ask: {
-    label: '确认',
-    hint: '平衡模式：敏感工具调用前必须允许或拒绝。',
+    label: '询问权限',
+    hint: '每次工具调用前都弹出对话框让你确认。最稳健，适合需要盯着 agent 干活的场景。',
     tone: 'accent',
   },
   execute: {
-    label: '执行',
-    hint: '执行模式：信任的工具调用直通；破坏性操作仍会拦截。',
+    label: '自动执行',
+    hint: 'Agent 自跑全部工具，不打断你。等价于 reference 的 Bypass permissions — 适合让 agent 长时间独立完成任务。',
     tone: 'caution',
   },
 };
 
-const PERMISSION_MODE_ORDER: PermissionMode[] = ['explore', 'ask', 'execute'];
+const PERMISSION_MODE_ORDER: PermissionMode[] = ['ask', 'execute'];
 
 export interface ChatHeaderAlert {
   /** Visual tone — drives badge color in the chat header. */
@@ -4199,8 +4214,6 @@ export function ChatView(props: {
   onBranchBannerClick?: (parentSessionId: string) => void;
   onNew(): void;
   onPromptSuggestion?(prompt: string): void;
-  permissionModePending?: boolean;
-  onPermissionModeChange?(mode: PermissionMode): void | Promise<void>;
 }) {
   // chat + storedTools survive for the empty-state and streaming-bubble
   // paths; the main message log is now driven by `turns` (per @kenji UI-04
@@ -4333,18 +4346,6 @@ export function ChatView(props: {
     );
   }
 
-  const streaming = props.streamingText.length > 0;
-  const permissionModeDisabledReason = props.permissionModePending
-    ? '权限模式正在切换，完成后再继续操作。'
-    : streaming
-      ? '当前对话正在流式输出，等结束后再切换权限模式。'
-      : props.activeSession?.status === 'running'
-        ? '当前对话正在运行，等结束后再切换权限模式。'
-        : props.activeSession?.status === 'waiting_for_user'
-          ? '当前有工具调用正在等待确认，处理后再切换权限模式。'
-          : undefined;
-  const switcherDisabled = Boolean(permissionModeDisabledReason) || !props.activeSession || !props.onPermissionModeChange;
-
   if (!props.activeSession) {
     return (
       <main className="maka-main detailPane agents-chat-panel agents-chat-view-root">
@@ -4354,9 +4355,12 @@ export function ChatView(props: {
             the new-task button at the top of the sidebar is the
             canonical create-session entry point. The chat header
             keeps the permission-mode switcher only. */}
+        {/* PR-MOVE-PERMISSION-MODE: chat header no longer carries the
+            permission-mode chips — the picker lives inside the composer's
+            left controls so the new-session screen and active-session
+            screen share the same "create / pick mode / send" rhythm. */}
         <header className="maka-chat-header" data-empty="true">
           <span className="maka-chat-header-spacer" />
-          <PermissionModeSwitcher mode="ask" disabled disabledReason="新建对话后再切换模式。" />
         </header>
         <OverlayScrollArea
           className="maka-chat messages"
@@ -4409,13 +4413,9 @@ export function ChatView(props: {
         {props.sessionStatusBadge && <SessionStatusBadge badge={props.sessionStatusBadge} />}
         {props.connectionAlert && <ChatHeaderAlertBadge alert={props.connectionAlert} />}
         {props.eventStreamAlert && <ChatHeaderAlertBadge alert={props.eventStreamAlert} />}
-        <PermissionModeSwitcher
-          mode={props.activeSession.permissionMode}
-          disabled={switcherDisabled}
-          disabledReason={permissionModeDisabledReason}
-          pending={props.permissionModePending}
-          onChange={props.onPermissionModeChange}
-        />
+        {/* PR-MOVE-PERMISSION-MODE: switcher relocated into the
+            composer left-controls. Header keeps the per-session status
+            chips only. */}
       </header>
       {isLocalSimulationBackend && (
         <Alert variant="info" className="maka-fake-backend-banner" role="status">
@@ -5252,89 +5252,12 @@ function ChatHeaderAlertBadge(props: { alert: ChatHeaderAlert }) {
   );
 }
 
-function PermissionModeSwitcher(props: {
-  mode: PermissionMode;
-  disabled?: boolean;
-  disabledReason?: string;
-  pending?: boolean;
-  onChange?(mode: PermissionMode): void | Promise<void>;
-}) {
-  const active = PERMISSION_MODE_META[props.mode];
-  const changeModeByKeyboard = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (props.pending || props.disabled || !props.onChange) return;
-    const currentIndex = PERMISSION_MODE_ORDER.indexOf(props.mode);
-    if (currentIndex === -1) return;
-    let nextIndex: number | null = null;
-    switch (event.key) {
-      case 'ArrowRight':
-      case 'ArrowDown':
-        nextIndex = (currentIndex + 1) % PERMISSION_MODE_ORDER.length;
-        break;
-      case 'ArrowLeft':
-      case 'ArrowUp':
-        nextIndex = (currentIndex - 1 + PERMISSION_MODE_ORDER.length) % PERMISSION_MODE_ORDER.length;
-        break;
-      case 'Home':
-        nextIndex = 0;
-        break;
-      case 'End':
-        nextIndex = PERMISSION_MODE_ORDER.length - 1;
-        break;
-      default:
-        return;
-    }
-    event.preventDefault();
-    const group = event.currentTarget;
-    const nextMode = PERMISSION_MODE_ORDER[nextIndex];
-    if (!nextMode || nextMode === props.mode) return;
-    props.onChange(nextMode);
-    requestAnimationFrame(() => {
-      group
-        .querySelector<HTMLButtonElement>(`[data-mode="${nextMode}"]`)
-        ?.focus({ preventScroll: true });
-    });
-  };
-  return (
-    <div
-      className="maka-mode-switcher"
-      role="radiogroup"
-      aria-label="权限模式"
-      data-disabled={props.disabled || undefined}
-      data-pending={props.pending ? 'true' : undefined}
-      aria-busy={props.pending ? 'true' : undefined}
-      title={props.pending ? '权限模式正在切换，完成后再继续操作。' : props.disabledReason ?? active.hint}
-      onKeyDown={changeModeByKeyboard}
-    >
-      {PERMISSION_MODE_ORDER.map((mode) => {
-        const meta = PERMISSION_MODE_META[mode];
-        const isActive = mode === props.mode;
-        return (
-          <UiButton
-            key={mode}
-            type="button"
-            role="radio"
-            aria-checked={isActive}
-            disabled={props.pending || props.disabled || !props.onChange}
-            data-active={isActive}
-            data-mode={mode}
-            data-tone={meta.tone}
-            className="maka-mode-switcher-option"
-            variant="quiet"
-            size="sm"
-            onClick={() => {
-              if (!props.pending && !props.disabled && props.onChange && mode !== props.mode) {
-                props.onChange(mode);
-              }
-            }}
-            title={meta.hint}
-          >
-            {meta.label}
-          </UiButton>
-        );
-      })}
-    </div>
-  );
-}
+// PR-MOVE-PERMISSION-MODE: the chat-header `PermissionModeSwitcher`
+// radiogroup was deleted. Mode picking now lives inside the composer's
+// left-controls dropdown (see Composer + maka-composer-mode-chip / -menu)
+// so the picker sits where you actually start typing, matching the
+// reference product. The `radiogroup` keyboard contract was traded for
+// base-ui Menu's built-in arrow/Home/End handling.
 
 function createAbsoluteTimeFormat(): Intl.DateTimeFormat {
   if (typeof Intl === 'undefined' || typeof Intl.DateTimeFormat !== 'function') {
@@ -6346,6 +6269,19 @@ export const Composer = forwardRef<
       branch?: string | null;
       onOpen(): void;
     };
+    /**
+     * PR-MOVE-PERMISSION-MODE (WAWQAQ 47fe0d0e + a667cf6c): the
+     * permission mode picker lives inside the composer left-controls
+     * instead of the chat header. Composer renders a dropdown labelled
+     * by the current mode (询问权限 / 自动执行); selecting an option
+     * fires `onPermissionModeChange`. When the active session is in
+     * the legacy `explore` mode the picker collapses to display
+     * 询问权限 — explore is internal-only now and won't surface here.
+     */
+    permissionMode?: PermissionMode;
+    permissionModePending?: boolean;
+    permissionModeDisabledReason?: string;
+    onPermissionModeChange?(mode: PermissionMode): void | Promise<void>;
   }
 >(function Composer(props, ref) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -6709,10 +6645,67 @@ export const Composer = forwardRef<
                 <Plus size={15} strokeWidth={1.85} aria-hidden="true" />
               </UiButton>
             ) : null}
-            <span className="maka-composer-role-chip" aria-label="通用助手">
-              通用
-              <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
-            </span>
+            {/* PR-MOVE-PERMISSION-MODE: the static "通用" role chip
+                was replaced by the permission-mode dropdown — that
+                spot is where the reference Settings expects users to
+                pick "Ask permissions" / "Auto mode" / etc. Maka
+                exposes the two user-facing modes only (`ask` /
+                `execute`); `explore` collapses to `ask` in the
+                display because Deep Research sessions use it
+                internally but it's not a useful runtime toggle for
+                normal chat. */}
+            {props.onPermissionModeChange ? (() => {
+              const rawMode = props.permissionMode ?? 'ask';
+              const displayMode: PermissionMode = rawMode === 'explore' ? 'ask' : rawMode;
+              const meta = PERMISSION_MODE_META[displayMode];
+              const triggerDisabled = props.permissionModePending === true || Boolean(props.permissionModeDisabledReason);
+              return (
+                <Menu>
+                  <MenuTrigger
+                    render={(triggerProps) => (
+                      <button
+                        {...triggerProps}
+                        type="button"
+                        className="maka-composer-mode-chip"
+                        data-mode={displayMode}
+                        data-tone={meta.tone}
+                        data-pending={props.permissionModePending ? 'true' : undefined}
+                        disabled={triggerDisabled}
+                        aria-label={`权限模式：${meta.label}`}
+                        title={props.permissionModeDisabledReason ?? meta.hint}
+                      >
+                        <span className="maka-composer-mode-chip-label">{meta.label}</span>
+                        <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
+                      </button>
+                    )}
+                  />
+                  <MenuPopup className="maka-composer-mode-menu" align="start">
+                    {PERMISSION_MODE_ORDER.map((mode) => {
+                      const optionMeta = PERMISSION_MODE_META[mode];
+                      return (
+                        <MenuItem
+                          key={mode}
+                          onClick={() => {
+                            if (mode === displayMode) return;
+                            void props.onPermissionModeChange?.(mode);
+                          }}
+                          data-active={mode === displayMode}
+                          data-tone={optionMeta.tone}
+                        >
+                          <div className="maka-composer-mode-menu-item">
+                            <span className="maka-composer-mode-menu-label">{optionMeta.label}</span>
+                            <span className="maka-composer-mode-menu-hint">{optionMeta.hint}</span>
+                          </div>
+                          {mode === displayMode ? (
+                            <Check size={12} strokeWidth={2} aria-hidden="true" />
+                          ) : null}
+                        </MenuItem>
+                      );
+                    })}
+                  </MenuPopup>
+                </Menu>
+              );
+            })() : null}
           </div>
           <span className="maka-composer-status-slot">
             {props.disabled ? (

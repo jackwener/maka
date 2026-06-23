@@ -3008,8 +3008,6 @@ function AppShell() {
                 }
                 onNew={createSession}
                 onPromptSuggestion={(prompt) => composerRef.current?.appendText(prompt)}
-                permissionModePending={activeId ? pendingPermissionModeBySession[activeId] === true : false}
-                onPermissionModeChange={(mode) => setPermissionMode(mode)}
               />
               <Composer
                 ref={composerRef}
@@ -3044,6 +3042,20 @@ function AppShell() {
                     void selectProjectDirectory();
                   },
                 }}
+                permissionMode={activeSessionForView?.permissionMode}
+                permissionModePending={activeId ? pendingPermissionModeBySession[activeId] === true : false}
+                permissionModeDisabledReason={
+                  activeId && pendingPermissionModeBySession[activeId] === true
+                    ? '权限模式正在切换，完成后再继续操作。'
+                    : activeStreaming.length > 0
+                      ? '当前对话正在流式输出，等结束后再切换权限模式。'
+                      : activeSessionForView?.status === 'running'
+                        ? '当前对话正在运行，等结束后再切换权限模式。'
+                        : activeSessionForView?.status === 'waiting_for_user'
+                          ? '当前有工具调用正在等待确认，处理后再切换权限模式。'
+                          : undefined
+                }
+                onPermissionModeChange={(mode) => setPermissionMode(mode)}
               />
             </div>
             {activeId && liveBrowserSessionIds.includes(activeId) && (

@@ -6225,6 +6225,68 @@ button:active {
   max-width: min(190px, 30vw);
 }
 
+/* PR-MOVE-PERMISSION-MODE (WAWQAQ 2026-06-23): permission-mode chip
+   in the composer left-controls + its dropdown menu. The chip reuses
+   the shared `.maka-composer-role-chip` / `.maka-composer-mode-chip`
+   geometry (h-24 pill, foreground-65 ink); only the menu styling
+   below is new. */
+.maka-composer-mode-chip {
+  font-variant-numeric: tabular-nums;
+}
+.maka-composer-mode-chip[data-tone="accent"] {
+  border-color: oklch(from var(--accent) l c h / 0.32);
+  color: oklch(from var(--accent) l c h);
+}
+.maka-composer-mode-chip[data-tone="caution"] {
+  border-color: oklch(from var(--success) l c h / 0.32);
+  color: oklch(from var(--success) l c h);
+}
+.maka-composer-mode-chip[data-tone="info"] {
+  border-color: oklch(from var(--info) l c h / 0.32);
+  color: oklch(from var(--info) l c h);
+}
+.maka-composer-mode-chip[data-pending="true"] {
+  opacity: 0.7;
+}
+.maka-composer-mode-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.maka-composer-mode-menu {
+  min-width: 280px;
+  padding: 4px;
+  border-radius: 8px;
+}
+.maka-composer-mode-menu [role="menuitem"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+.maka-composer-mode-menu-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.maka-composer-mode-menu-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+.maka-composer-mode-menu-hint {
+  font-size: 11px;
+  color: var(--foreground-55);
+  line-height: 1.4;
+  white-space: normal;
+}
+.maka-composer-mode-menu [data-active="true"] .maka-composer-mode-menu-label {
+  color: oklch(from var(--accent) l c h);
+}
+
 .maka-composer-right-controls .maka-model-switcher {
   margin: 0;
   max-width: min(190px, 30vw);
