@@ -212,6 +212,8 @@ export interface PromptOptimizationRunInput {
 export async function runPromptOptimizationRun(
   input: PromptOptimizationRunInput,
 ): Promise<PromptOptimizationRunResult> {
+  assertValidPromptTaskPartitions(input.heldInTasks, input.heldOutTasks);
+
   const modelId = input.model.includes('/')
     ? input.model.slice(input.model.indexOf('/') + 1)
     : input.model;
@@ -274,4 +276,31 @@ export async function runPromptOptimizationRun(
     ...(input.now ? { now: input.now } : {}),
     ...(input.newId ? { newId: input.newId } : {}),
   });
+}
+
+function assertValidPromptTaskPartitions(
+  heldInTasks: readonly FixedPromptTask[],
+  heldOutTasks: readonly FixedPromptTask[],
+): void {
+  const heldInTaskIds = heldInTasks.map((task) => task.id);
+  const heldOutTaskIds = heldOutTasks.map((task) => task.id);
+  assertUniqueTaskIds('held-in', heldInTaskIds);
+  assertUniqueTaskIds('held-out', heldOutTaskIds);
+  const heldIn = new Set(heldInTaskIds);
+  const overlap = [...new Set(heldOutTaskIds.filter((taskId) => heldIn.has(taskId)))].sort();
+  if (overlap.length > 0) {
+    throw new Error(`held-in and held-out tasks overlap: ${overlap.join(', ')}`);
+  }
+}
+
+function assertUniqueTaskIds(label: string, taskIds: readonly string[]): void {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const taskId of taskIds) {
+    if (seen.has(taskId)) duplicates.add(taskId);
+    seen.add(taskId);
+  }
+  if (duplicates.size > 0) {
+    throw new Error(`${label} tasks contain duplicate id(s): ${[...duplicates].sort().join(', ')}`);
+  }
 }

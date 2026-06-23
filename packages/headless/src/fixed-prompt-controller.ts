@@ -187,6 +187,7 @@ export async function runFixedPromptController(
   // silently disable the guard (maxConcurrency is checked in normalizeMaxConcurrency).
   if (input.costCeilingUsd !== undefined) assertFinitePositive('costCeilingUsd', input.costCeilingUsd);
   if (input.maxInfraFailureRate !== undefined) assertRatio('maxInfraFailureRate', input.maxInfraFailureRate);
+  assertUniqueTaskIds(input.tasks.map((task) => task.id));
   const systemPrompt = await readFile(input.systemPromptPath, 'utf8');
   const expectedPromptHash = hashSystemPrompt(systemPrompt);
   const config = { ...input.config, systemPrompt };
@@ -249,6 +250,18 @@ export async function runFixedPromptController(
     resultsTsvPath: input.resultsTsvPath,
     ...(stopReason ? { stopReason } : {}),
   };
+}
+
+function assertUniqueTaskIds(taskIds: readonly string[]): void {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const taskId of taskIds) {
+    if (seen.has(taskId)) duplicates.add(taskId);
+    seen.add(taskId);
+  }
+  if (duplicates.size > 0) {
+    throw new Error(`tasks contain duplicate id(s): ${[...duplicates].sort().join(', ')}`);
+  }
 }
 
 export async function readFixedPromptWal(path: string): Promise<FixedPromptWalEvent[]> {

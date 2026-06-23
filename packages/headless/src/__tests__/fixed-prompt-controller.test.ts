@@ -423,6 +423,37 @@ describe('fixed prompt controller', () => {
     });
   });
 
+  test('rejects duplicate task ids before running Harbor', async () => {
+    await withDir(async (dir) => {
+      const systemPromptPath = join(dir, 'system_prompt.md');
+      await writeFile(systemPromptPath, 'fixed prompt\n', 'utf8');
+      const calls: string[] = [];
+
+      await assert.rejects(
+        runFixedPromptController({
+          runId: 'run-1',
+          roundId: 'round-1',
+          config,
+          systemPromptPath,
+          resultsJsonlPath: join(dir, 'results.jsonl'),
+          resultsTsvPath: join(dir, 'results.tsv'),
+          tasks: [
+            { id: 'task-a', path: '/bench/task-a' },
+            { id: 'task-a', path: '/bench/task-a-copy' },
+          ],
+          harborRunner: async ({ task }) => {
+            calls.push(task.id);
+            return harborOutput({ taskId: task.id });
+          },
+          now: () => 100,
+          newId: idFactory(),
+        }),
+        /tasks contain duplicate id\(s\): task-a/,
+      );
+      assert.deepEqual(calls, []);
+    });
+  });
+
   test('preserves infra stop after WAL resume', async () => {
     await withDir(async (dir) => {
       const systemPromptPath = join(dir, 'system_prompt.md');

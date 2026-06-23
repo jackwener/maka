@@ -41,9 +41,10 @@ import { assertFinitePositive, assertPositiveInt, assertRatio } from './numeric-
  *   1. baseline calibration — sweep the held-in and held-out partitions a few
  *      times on the unchanged prompt to learn each partition's noise band;
  *   2. for each round: ask the meta-agent for a candidate prompt (commits it),
- *      sweep both partitions on the candidate, scan held-in trajectories for
- *      reward-hacking, then run the acceptance policy and KEEP (advance the
- *      lineage) or DISCARD (roll the candidate commit back);
+ *      sweep held-in first, scan held-in trajectories for reward-hacking and
+ *      coverage/noise gates, then run held-out only for candidates that can
+ *      still keep; the acceptance policy then either KEEP (advance the lineage)
+ *      or DISCARD (roll the candidate commit back);
  *   3. a structural smoke report over the whole write-ahead log.
  *
  * Every expensive edge is injected: `harborRunner` (Docker/Harbor) and
@@ -168,6 +169,9 @@ export async function runPromptOptimizationLoop(
 
   const heldInTaskIds = input.heldInTasks.map((task) => task.id);
   const heldOutTaskIds = input.heldOutTasks.map((task) => task.id);
+  assertUniqueTaskIds('held-in', heldInTaskIds);
+  assertUniqueTaskIds('held-out', heldOutTaskIds);
+  assertDisjointTaskIds(heldInTaskIds, heldOutTaskIds);
 
   let totalCostUsd = 0;
   let infraFailed = 0;
@@ -258,8 +262,15 @@ export async function runPromptOptimizationLoop(
     }
     const roundId = `baseline-${index}`;
     const heldIn = await sweep(roundId, input.heldInTasks, input.heldInResultsTsvPath);
-    const heldOut = await sweep(roundId, input.heldOutTasks, input.heldOutResultsTsvPath);
     accumulate(heldIn);
+    const postHeldInGuard = stopGuard();
+    if (postHeldInGuard) {
+      throw new Error(
+        `${postHeldInGuard} during baseline calibration (completed ${index} of ${baselineRunCount} sweeps); `
+        + 'raise the budget or lower baselineRuns',
+      );
+    }
+    const heldOut = await sweep(roundId, input.heldOutTasks, input.heldOutResultsTsvPath);
     accumulate(heldOut);
     baselineRunsData.push({ heldInEvents: heldIn.events, heldOutEvents: heldOut.events });
   }
@@ -455,4 +466,24 @@ export async function runPromptOptimizationLoop(
     droppedHeldInTaskIds,
     droppedHeldOutTaskIds,
   };
+}
+
+function assertUniqueTaskIds(label: string, taskIds: readonly string[]): void {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const taskId of taskIds) {
+    if (seen.has(taskId)) duplicates.add(taskId);
+    seen.add(taskId);
+  }
+  if (duplicates.size > 0) {
+    throw new Error(`${label} tasks contain duplicate id(s): ${[...duplicates].sort().join(', ')}`);
+  }
+}
+
+function assertDisjointTaskIds(heldInTaskIds: readonly string[], heldOutTaskIds: readonly string[]): void {
+  const heldIn = new Set(heldInTaskIds);
+  const overlap = [...new Set(heldOutTaskIds.filter((taskId) => heldIn.has(taskId)))].sort();
+  if (overlap.length > 0) {
+    throw new Error(`held-in and held-out tasks overlap: ${overlap.join(', ')}`);
+  }
 }

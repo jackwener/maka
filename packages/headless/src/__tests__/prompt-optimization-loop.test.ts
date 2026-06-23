@@ -175,6 +175,25 @@ describe('runPromptOptimizationLoop', () => {
     });
   });
 
+  test('aborts baseline before held-out when the budget is exhausted after held-in', async () => {
+    await withHarness(async (harness) => {
+      const calls: string[] = [];
+      await assert.rejects(
+        runLoop(harness, {
+          heldInTasks: makeTasks('hin', 2),
+          heldOutTasks: makeTasks('hout', 2),
+          rewardFor: () => 1,
+          rounds: 1,
+          baselineRuns: 1,
+          costCeilingUsd: 0.03,
+          onTaskRun: (roundId, taskId) => calls.push(`${roundId}:${taskId}`),
+        }),
+        /cost_ceiling_exceeded during baseline calibration \(completed 0 of 1 sweeps\); raise the budget or lower baselineRuns/,
+      );
+      assert.deepEqual(calls, ['baseline-0:hin-0', 'baseline-0:hin-1']);
+    });
+  });
+
   test('refuses to run when the held-out TSV would be visible inside the agent cwd', async () => {
     await withHarness(async (harness) => {
       await assert.rejects(
@@ -210,6 +229,43 @@ describe('runPromptOptimizationLoop', () => {
       await assert.rejects(runLoop(harness, { ...base, costCeilingUsd: NaN }), /costCeilingUsd must be a finite positive number/);
       await assert.rejects(runLoop(harness, { ...base, minStableHeldInTasks: 0 }), /minStableHeldInTasks must be a positive integer/);
       await assert.rejects(runLoop(harness, { ...base, maxInfraFailureRate: 1.5 }), /maxInfraFailureRate must be a number in \(0, 1\]/);
+    });
+  });
+
+  test('rejects duplicate held-in task ids at the public API boundary', async () => {
+    await withHarness(async (harness) => {
+      await assert.rejects(
+        runLoop(harness, {
+          heldInTasks: [
+            { id: 'dup-task', path: '/tasks/a' },
+            { id: 'dup-task', path: '/tasks/b' },
+          ],
+          heldOutTasks: makeTasks('hout', 1),
+          rewardFor: () => {
+            throw new Error('harbor must not run when task ids are invalid');
+          },
+          rounds: 1,
+          baselineRuns: 1,
+        }),
+        /held-in tasks contain duplicate id\(s\): dup-task/,
+      );
+    });
+  });
+
+  test('rejects held-in and held-out task id overlap at the public API boundary', async () => {
+    await withHarness(async (harness) => {
+      await assert.rejects(
+        runLoop(harness, {
+          heldInTasks: [{ id: 'shared-task', path: '/tasks/train' }],
+          heldOutTasks: [{ id: 'shared-task', path: '/tasks/exam' }],
+          rewardFor: () => {
+            throw new Error('harbor must not run when task partitions overlap');
+          },
+          rounds: 1,
+          baselineRuns: 1,
+        }),
+        /held-in and held-out tasks overlap: shared-task/,
+      );
     });
   });
 
@@ -366,6 +422,7 @@ interface RunLoopOptions {
   shouldFail?: (roundId: string, taskId: string) => boolean;
   /** Per-task baseline duration (ms); defaults to 10. Exercises the too-slow cap. */
   durationMsFor?: (roundId: string, taskId: string) => number;
+  onTaskRun?: (roundId: string, taskId: string) => void;
 }
 
 async function runLoop(harness: Harness, options: RunLoopOptions) {
@@ -387,7 +444,7 @@ async function runLoop(harness: Harness, options: RunLoopOptions) {
     heldInTasks: options.heldInTasks,
     heldOutTasks: options.heldOutTasks,
     config: CONFIG,
-    harborRunner: fakeHarborRunner(harness.eventsDir, options.rewardFor, options.shouldFail, options.durationMsFor),
+    harborRunner: fakeHarborRunner(harness.eventsDir, options.rewardFor, options.shouldFail, options.durationMsFor, options.onTaskRun),
     metaAgent: fakeMetaAgent(),
     git: createCliPromptCandidateGit({ cwd: harness.repoDir, systemPromptPath: harness.systemPromptPath }),
     originalCommitSha: harness.originalCommitSha,
@@ -417,8 +474,10 @@ function fakeHarborRunner(
   rewardFor: (roundId: string, taskId: string) => number,
   shouldFail?: (roundId: string, taskId: string) => boolean,
   durationMsFor?: (roundId: string, taskId: string) => number,
+  onTaskRun?: (roundId: string, taskId: string) => void,
 ): (input: HarborTaskRunInput) => Promise<HarborTaskRunOutput> {
   return async ({ roundId, task, systemPrompt }) => {
+    onTaskRun?.(roundId, task.id);
     const runtimeEventsPath = join(eventsDir, `${roundId}__${task.id}.jsonl`);
     await writeFile(runtimeEventsPath, `${JSON.stringify(modelVisibleEvent())}\n`, 'utf8');
     // A non-completed cell with a correct hash and real (non-zero) cost: scored
