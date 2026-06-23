@@ -117,7 +117,11 @@ async function main() {
   const outDir = envPath('MAKA_PROMPT_OUT_DIR');
   const keyFile = envPath('MAKA_PROMPT_KEY_FILE', join(homedir(), '.local/maka-eval/secrets/deepseek-key'));
   const tasksRoot = envPath('MAKA_PROMPT_TASKS_ROOT', join(homedir(), '.cache/harbor/tasks'));
-  const model = process.env.MAKA_PROMPT_MODEL || 'deepseek/deepseek-v4-flash';
+  // Model is pinned, not env-overridable: the RSI loop is contractually a
+  // deepseek-v4-flash run, and DEEPSEEK_V4_FLASH_PRICING below is tied to it.
+  // Allowing an override would let cost/smoke accounting silently use the wrong
+  // rates. Provider/baseUrl stay overridable — those don't change the pricing.
+  const model = 'deepseek/deepseek-v4-flash';
   const provider = process.env.MAKA_PROMPT_PROVIDER || 'deepseek';
   const baseUrl = process.env.MAKA_PROMPT_BASE_URL || 'https://api.deepseek.com';
   // Rounds must be >= 1: a 0-round run is baseline-only and would trivially pass
@@ -128,10 +132,14 @@ async function main() {
   const heldInCount = envInt('MAKA_PROMPT_HELD_IN', 60);
   const heldOutCount = envInt('MAKA_PROMPT_HELD_OUT', 20);
   const runId = process.env.MAKA_PROMPT_RUN_ID || `prompt-opt-${Date.now()}`;
-  // Default to a hard $30 cap: an unattended full run with no cost guard at all
+  // Default to a $30 ceiling: an unattended full run with no cost guard at all
   // is the worse failure mode than stopping early. An explicit value overrides.
+  // This is a round/sweep-boundary ceiling, not a hard mid-task cap: the loop
+  // checks the budget before each baseline sweep and before the held-out sweep,
+  // so a single in-flight sweep can still complete past the ceiling before the
+  // loop stops. It bounds overshoot to one sweep, it does not abort tasks.
   const costCeilingUsd = envNum('MAKA_PROMPT_COST_CEILING', 30);
-  const maxConcurrency = envNum('MAKA_PROMPT_MAX_CONCURRENCY', undefined);
+  const maxConcurrency = envPosInt('MAKA_PROMPT_MAX_CONCURRENCY', undefined);
   const maxInfraFailureRate = envRatioOf('MAKA_PROMPT_MAX_INFRA_FAILURE_RATE', undefined);
   const maxStableTaskDurationMs = envNum('MAKA_PROMPT_MAX_STABLE_TASK_MS', undefined);
   // Min-stable floors scale with the actual post-drop partition sizes; resolved

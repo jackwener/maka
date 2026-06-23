@@ -19,9 +19,16 @@ export function envNonNegativeInt(name: string, raw: string | undefined, fallbac
 
 /** Parse a positive integer (>= 1); throw on 0, negative, or non-integer. Used
  * for counts that are meaningless at 0 — e.g. full-run rounds, where 0 would make
- * a baseline-only run trivially pass the structural smoke (minimumRounds 0). */
-export function envPositiveInt(name: string, raw: string | undefined, fallback: number): number {
-  const value = envNonNegativeInt(name, raw, fallback);
+ * a baseline-only run trivially pass the structural smoke (minimumRounds 0), and
+ * max-concurrency, where a fractional value must fail loud rather than be floored.
+ * Returns `fallback` (which may be undefined) when unset. */
+export function envPositiveInt(
+  name: string,
+  raw: string | undefined,
+  fallback: number | undefined,
+): number | undefined {
+  if (raw === undefined || raw === '') return fallback;
+  const value = envNonNegativeInt(name, raw, 0);
   if (value < 1) {
     throw new Error(`${name} must be a positive integer (got "${raw}")`);
   }

@@ -28,9 +28,10 @@ describe('envNonNegativeInt', () => {
 });
 
 describe('envPositiveInt', () => {
-  test('returns the fallback when unset', () => {
+  test('returns the fallback (which may be undefined) when unset', () => {
     assert.equal(envPositiveInt('N', undefined, 10), 10);
     assert.equal(envPositiveInt('N', '', 10), 10);
+    assert.equal(envPositiveInt('N', undefined, undefined), undefined);
   });
 
   test('parses a positive integer', () => {
