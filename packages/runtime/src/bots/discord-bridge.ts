@@ -115,13 +115,21 @@ export function buildDiscordSendBody(
   chunkIndex: number,
 ): Record<string, unknown> {
   const body: Record<string, unknown> = { content: text };
-  if (chunkIndex === 0 && options?.replyToMessageId) {
+  const replyToMessageId = normalizeDiscordReplyToMessageId(options?.replyToMessageId);
+  if (chunkIndex === 0 && replyToMessageId !== undefined) {
     body.message_reference = {
-      message_id: options.replyToMessageId,
+      message_id: replyToMessageId,
       fail_if_not_exists: false,
     };
   }
   return body;
+}
+
+function normalizeDiscordReplyToMessageId(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  if (!/^[1-9]\d*$/.test(trimmed)) return undefined;
+  return trimmed;
 }
 
 /**
@@ -591,6 +599,7 @@ export const __TEST__ = {
   decideDiscordClose,
   reconnectBackoffMs,
   buildDiscordSendBody,
+  normalizeDiscordReplyToMessageId,
   classifyDiscordSendResponse,
   discordMessageToEvent,
   splitDiscordContent,

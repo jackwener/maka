@@ -7,6 +7,7 @@ const {
   decideDiscordClose,
   reconnectBackoffMs,
   buildDiscordSendBody,
+  normalizeDiscordReplyToMessageId,
   classifyDiscordSendResponse,
   discordMessageToEvent,
   splitDiscordContent,
@@ -73,6 +74,36 @@ describe('buildDiscordSendBody', () => {
   it('does NOT thread continuation chunks (chunkIndex > 0)', () => {
     const body = buildDiscordSendBody('tail', { replyToMessageId: '123' }, 1);
     assert.deepEqual(body, { content: 'tail' });
+  });
+
+  it('trims valid reply ids before threading the first chunk', () => {
+    const body = buildDiscordSendBody('hello', { replyToMessageId: ' 123 ' }, 0);
+    assert.deepEqual(body.message_reference, {
+      message_id: '123',
+      fail_if_not_exists: false,
+    });
+  });
+
+  it('omits invalid reply ids rather than sending malformed message_reference', () => {
+    for (const replyToMessageId of ['abc', '  ', '0', '-1', '1.5']) {
+      const body = buildDiscordSendBody('hello', { replyToMessageId }, 0);
+      assert.deepEqual(body, { content: 'hello' }, replyToMessageId);
+    }
+  });
+});
+
+describe('normalizeDiscordReplyToMessageId', () => {
+  it('trims and accepts positive decimal snowflake strings', () => {
+    assert.equal(normalizeDiscordReplyToMessageId(' 123456789012345678 '), '123456789012345678');
+  });
+
+  it('rejects missing, non-decimal, zero, and negative values', () => {
+    assert.equal(normalizeDiscordReplyToMessageId(undefined), undefined);
+    assert.equal(normalizeDiscordReplyToMessageId(''), undefined);
+    assert.equal(normalizeDiscordReplyToMessageId('abc'), undefined);
+    assert.equal(normalizeDiscordReplyToMessageId('0'), undefined);
+    assert.equal(normalizeDiscordReplyToMessageId('-1'), undefined);
+    assert.equal(normalizeDiscordReplyToMessageId('1.5'), undefined);
   });
 });
 
