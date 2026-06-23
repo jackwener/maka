@@ -76,8 +76,8 @@ function makeTool(name: string, impl: string[]): MakaTool {
 }
 
 let callSeq = 0;
-function call(h: Harness, t: MakaTool, args: unknown): Promise<unknown> {
-  const exec = h.runtime.wrapToolExecute(t, 'turn-1', { push: (e) => h.pushed.push(e) });
+function call(h: Harness, t: MakaTool, args: unknown, turnId = 'turn-1'): Promise<unknown> {
+  const exec = h.runtime.wrapToolExecute(t, turnId, { push: (e) => h.pushed.push(e) });
   return exec(args, { toolCallId: `tc-${++callSeq}`, abortSignal: new AbortController().signal });
 }
 
@@ -142,6 +142,33 @@ describe('loop-gate for repeated identical tool calls', () => {
 
     await call(h, read, { path: 'x' });
     assert.ok(h.impl.includes('Read:{"path":"x"}'), 'a different call after a block runs normally');
+  });
+
+  test('the streak is per-turn: a turn reset clears it so a new turn is not falsely blocked', async () => {
+    const h = makeHarness();
+    const t = makeTool('Edit', h.impl);
+    const args = { path: 'a.ts', old_string: 'x', new_string: 'y' };
+
+    // Two identical calls in the first turn — the streak builds but stays under
+    // the gate, so both run.
+    await call(h, t, args, 'turn-1');
+    await call(h, t, args, 'turn-1');
+    assert.equal(h.impl.length, 2, 'both first-turn calls ran');
+
+    // ToolRuntime state is per-instance, not auto-keyed on turnId: a third
+    // identical call carrying a NEW turn id but with no reset is still the 3rd
+    // back-to-back repeat and is blocked. This is exactly why send() must reset
+    // per turn rather than relying on the turn id alone.
+    const withoutReset = await call(h, t, args, 'turn-2');
+    assert.deepEqual(withoutReset, { error: formatLoopGateText('Edit') }, 'without a reset the streak leaks across turns');
+
+    // send() resets ToolRuntime at each turn boundary (at turn start, and via
+    // cleanupAfterTurn at turn end). After the reset, the same call is the first
+    // of a fresh turn and runs — not mistaken for a 3rd repeat.
+    h.runtime.resetTurnState();
+    const afterReset = await call(h, t, args, 'turn-3');
+    assert.deepEqual(afterReset, { ok: true }, 'after the per-turn reset the identical call runs again');
+    assert.equal(h.impl.length, 3, 'the post-reset call ran');
   });
 
   test('a guard-rejected call between identical calls still breaks the streak', async () => {

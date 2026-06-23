@@ -504,6 +504,13 @@ export class AiSdkBackend implements AgentBackend {
     // current step's snapshot so a group loaded mid-turn is repairable on the
     // step it becomes active, not routed to `invalid`.
     const currentRepairToolNames = plan.currentRepairToolNames;
+    // Establish clean per-turn ToolRuntime state at the START of the turn, then
+    // install this turn's gating. cleanupAfterTurn() also resets at turn end, but
+    // that runs in send()'s finally and so depends on the consumer draining (or
+    // .return()-ing) the generator; resetting here makes each turn's state — the
+    // loop-gate streak, subagent count, gating — depend only on this turn, not on
+    // the previous turn's teardown.
+    this.toolRuntime.resetTurnState();
     if (plan.gating) {
       this.toolRuntime.setGating(plan.gating);
     }
