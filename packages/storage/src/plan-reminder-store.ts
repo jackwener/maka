@@ -236,9 +236,7 @@ class FilePlanReminderStore implements PlanReminderStore {
       if (!Array.isArray(parsed)) {
         throw new Error('Invalid plan reminders file: expected an array');
       }
-      return parsed
-        .map(normalizePersistedPlanReminder)
-        .filter((reminder): reminder is PlanReminder => Boolean(reminder));
+      return parsed.map((value, index) => normalizePersistedPlanReminder(value, index));
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
       throw error;
@@ -291,8 +289,13 @@ function nextPlanReminderResumeRunAt(schedule: PlanReminder['schedule'], now: nu
   return undefined;
 }
 
-function normalizePersistedPlanReminder(value: unknown): PlanReminder | null {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+function normalizePersistedPlanReminder(value: unknown, index: number): PlanReminder {
+  const invalid = (reason: string): never => {
+    throw new Error(`Invalid plan reminders file: entry ${index + 1} ${reason}`);
+  };
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    invalid('is not an object');
+  }
   const record = value as Partial<PlanReminder>;
   const valid = typeof record.id === 'string' &&
     typeof record.title === 'string' &&
@@ -303,19 +306,29 @@ function normalizePersistedPlanReminder(value: unknown): PlanReminder | null {
     typeof record.createdAt === 'number' &&
     typeof record.updatedAt === 'number' &&
     typeof record.runCount === 'number';
-  if (!valid) return null;
+  if (!valid) invalid('is malformed');
   const delivery = normalizePlanReminderDeliveryTarget((record as { delivery?: unknown }).delivery);
-  if (!delivery.ok) return null;
-  const runs = Array.isArray(record.runs)
-    ? record.runs.filter(isPersistedPlanReminderRunRecord)
-    : [];
-  if (runs.length === 0 && isPersistedPlanReminderRunRecord(record.lastRun)) {
+  const deliveryValue = delivery.ok ? delivery.value : invalid('has invalid delivery');
+  const runs: PlanReminderRunRecord[] = [];
+  if (record.runs !== undefined) {
+    if (!Array.isArray(record.runs)) invalid('has malformed runs');
+    for (const [runIndex, run] of record.runs.entries()) {
+      if (!isPersistedPlanReminderRunRecord(run)) {
+        invalid(`has malformed run record ${runIndex + 1}`);
+      }
+      runs.push(run);
+    }
+  }
+  if (record.lastRun !== undefined && !isPersistedPlanReminderRunRecord(record.lastRun)) {
+    invalid('has malformed lastRun');
+  }
+  if (runs.length === 0 && record.lastRun !== undefined) {
     runs.push(record.lastRun);
   }
   return {
     ...record,
     schedule: record.schedule,
-    delivery: delivery.value,
+    delivery: deliveryValue,
     runs,
     ...(isPersistedPlanReminderRunRecord(record.lastRun)
       ? { lastRun: record.lastRun }

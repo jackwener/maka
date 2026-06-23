@@ -345,6 +345,87 @@ describe('PlanReminderStore', () => {
     assert.equal(await readFile(filePath, 'utf8'), invalid);
   });
 
+  it('rejects malformed reminder entries instead of filtering them out on write', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'maka-plan-reminders-'));
+    const filePath = join(root, 'plan-reminders.json');
+    const runAt = Date.now() + 60_000;
+    const invalid = JSON.stringify([
+      {
+        id: 'valid',
+        title: '保留提醒',
+        note: '',
+        schedule: { kind: 'once', runAt },
+        delivery: { channel: 'local' },
+        status: 'scheduled',
+        enabled: true,
+        createdAt: runAt - 1000,
+        updatedAt: runAt - 1000,
+        nextRunAt: runAt,
+        runs: [],
+        runCount: 0,
+      },
+      {
+        id: 'corrupt',
+        title: '坏提醒',
+        note: '',
+        schedule: { kind: 'once', runAt },
+        delivery: { channel: 'local' },
+        status: 'scheduled',
+        enabled: true,
+        createdAt: runAt - 1000,
+        updatedAt: runAt - 1000,
+        nextRunAt: runAt,
+      },
+    ], null, 2) + '\n';
+    await writeFile(filePath, invalid, 'utf8');
+
+    const store = createPlanReminderStore(root);
+    await assert.rejects(
+      () => store.list(),
+      /entry 2 is malformed/,
+    );
+    await assert.rejects(
+      () => store.create({ title: '新提醒', runAt: runAt + 60_000 }),
+      /entry 2 is malformed/,
+    );
+    assert.equal(await readFile(filePath, 'utf8'), invalid);
+  });
+
+  it('rejects malformed reminder run history instead of dropping bad run records', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'maka-plan-reminders-'));
+    const filePath = join(root, 'plan-reminders.json');
+    const runAt = Date.now() + 60_000;
+    const invalid = JSON.stringify([{
+      id: 'run-history',
+      title: '历史提醒',
+      note: '',
+      schedule: { kind: 'recurring', startAt: runAt, recurrence: 'daily' },
+      delivery: { channel: 'local' },
+      status: 'scheduled',
+      enabled: true,
+      createdAt: runAt - 1000,
+      updatedAt: runAt - 1000,
+      nextRunAt: runAt,
+      runs: [
+        { id: 'run-1', at: runAt - 1000, status: 'triggered', message: '已触发' },
+        { id: 'run-2', at: runAt, status: 'unknown', message: '坏历史' },
+      ],
+      runCount: 2,
+    }], null, 2) + '\n';
+    await writeFile(filePath, invalid, 'utf8');
+
+    const store = createPlanReminderStore(root);
+    await assert.rejects(
+      () => store.list(),
+      /entry 1 has malformed run record 2/,
+    );
+    await assert.rejects(
+      () => store.update('run-history', { title: '改名' }),
+      /entry 1 has malformed run record 2/,
+    );
+    assert.equal(await readFile(filePath, 'utf8'), invalid);
+  });
+
   it('rejects invalid creates before writing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'maka-plan-reminders-'));
     const store = createPlanReminderStore(root);
