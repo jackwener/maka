@@ -6881,14 +6881,19 @@ button:active {
 }
 
 .settingsNavGroupLabel {
+  /* PR-SETTINGS-SHELL-ALIGN (2026-06-23): match the reference Settings
+     nav group label voice — quaternary text tier, smaller size, no
+     uppercase. The previous `foreground-45` + 12 px / 600 read as a
+     subsection title; the new tier reads as a "muted divider" so the
+     nav items themselves carry the visual weight. */
   display: flex;
   align-items: center;
-  font-size: 12px;
+  font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0;
+  letter-spacing: 0.04em;
   text-transform: none;
-  color: var(--foreground-45);
-  padding: 7px 10px 3px;
+  color: var(--foreground-35);
+  padding: 9px 10px 2px;
 }
 
 .settingsNavGroupLabel::after {
