@@ -193,6 +193,21 @@ describe('runPromptOptimizationLoop', () => {
     });
   });
 
+  test('rejects rounds below 1 so a baseline-only run cannot pass the structural smoke', async () => {
+    await withHarness(async (harness) => {
+      await assert.rejects(
+        runLoop(harness, {
+          heldInTasks: makeTasks('hin', 2),
+          heldOutTasks: makeTasks('hout', 1),
+          rewardFor: () => 1,
+          rounds: 0,
+          baselineRuns: 1,
+        }),
+        /rounds must be at least 1/,
+      );
+    });
+  });
+
   test('stops the loop once the cumulative cost ceiling is reached', async () => {
     await withHarness(async (harness) => {
       const heldInTasks = makeTasks('hin', 20);

@@ -144,7 +144,11 @@ export async function runPromptOptimizationLoop(
   const newId = input.newId ?? randomUUID;
   const baselineRunCount = input.baselineRuns ?? 3;
   if (baselineRunCount < 1) throw new Error('baselineRuns must be at least 1');
-  if (input.rounds < 0) throw new Error('rounds must be non-negative');
+  // rounds must be >= 1: a 0-round run is baseline-only and would trivially pass
+  // the structural smoke (minimumRounds 0), so it must not share the normal
+  // structural-pass semantics. The runner enforces this too, but the public API
+  // is callable directly, so the invariant lives here.
+  if (input.rounds < 1) throw new Error('rounds must be at least 1');
 
   const heldInTaskIds = input.heldInTasks.map((task) => task.id);
   const heldOutTaskIds = input.heldOutTasks.map((task) => task.id);
