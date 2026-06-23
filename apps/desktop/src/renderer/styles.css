@@ -6977,19 +6977,18 @@ button:active {
 }
 
 .settingsNavGroupLabel {
-  /* PR-SETTINGS-SHELL-ALIGN (2026-06-23): match the reference Settings
-     nav group label voice — quaternary text tier, smaller size, no
-     uppercase. The previous `foreground-45` + 12 px / 600 read as a
-     subsection title; the new tier reads as a "muted divider" so the
-     nav items themselves carry the visual weight. */
+  /* PR-SETTINGS-SIDEBAR-SPACIOUS-0 (WAWQAQ msg `f7e9d166` round 2/15):
+     reference group labels are softer + more spaced out. Larger
+     leading top padding so each group reads as its own visual zone
+     instead of jamming against the prior item. */
   display: flex;
   align-items: center;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   text-transform: none;
-  color: var(--foreground-35);
-  padding: 9px 10px 2px;
+  color: var(--foreground-40);
+  padding: 18px 12px 6px;
 }
 
 .settingsNavGroupLabel::after {
@@ -6997,22 +6996,26 @@ button:active {
 }
 
 .settingsNavItem {
+  /* PR-SETTINGS-SIDEBAR-SPACIOUS-0: roomier nav row matching reference.
+     Height 32→38, icon column 20→24, label gap 8→12, side padding
+     8→12, label font 13→14. */
   width: calc(100% - 8px);
-  height: 32px;
-  min-height: 32px;
+  height: 38px;
+  min-height: 38px;
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 7px;
   background: transparent;
   box-shadow: none;
   color: var(--foreground-70);
   margin-inline: 4px;
-  padding: 4px 8px;
+  padding: 6px 12px;
   text-align: left;
   justify-content: initial;
+  font-size: 14px;
   transition: background-color 150ms var(--ease-out-strong), color 150ms var(--ease-out-strong);
 }
 
@@ -7045,16 +7048,18 @@ button:active {
 }
 
 .settingsNavGlyph {
-  width: 20px;
-  height: 20px;
+  /* PR-SETTINGS-SIDEBAR-SPACIOUS-0: slightly bigger glyph track + svg
+     so the icon doesn't read as a tiny dot. */
+  width: 24px;
+  height: 24px;
   display: grid;
   place-items: center;
   color: var(--foreground-60);
 }
 
 .settingsNavGlyph svg {
-  width: 14px;
-  height: 14px;
+  width: 17px;
+  height: 17px;
 }
 
 /* PR-UI-11 (@yuejing 2026-05-22): inactive glyph stays muted; active
