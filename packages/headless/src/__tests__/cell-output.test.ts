@@ -5,7 +5,7 @@ import type { InvocationResult } from '@maka/runtime';
 import {
   buildHarborCellOutput,
   validateHarborCellOutput,
-} from '../index.js';
+} from '../cell-output.js';
 
 describe('Harbor cell output contract', () => {
   test('summarizes runtime outcome, prompt hash, token cost, and event path', () => {
