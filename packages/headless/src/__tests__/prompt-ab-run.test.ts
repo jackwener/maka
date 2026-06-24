@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
@@ -128,6 +128,53 @@ describe('prompt A/B run manifest', () => {
     });
   });
 });
+
+describe('prompt A/B source fingerprints', () => {
+  test('rejects dirty subject repos unless an explicit subject id is provided', async () => {
+    const { buildSubjectFingerprint } = await import(promptAbScriptUrl);
+    const gitWithStatus = (status: string) => async (_repoPath: string, args: readonly string[]): Promise<string> => {
+      const command = args.join(' ');
+      if (command === 'rev-parse --show-toplevel') return '/repo';
+      if (command === 'rev-parse HEAD') return 'abc123';
+      if (command === 'status --porcelain=v1 --untracked-files=normal') return status;
+      throw new Error(`unexpected git command: ${command}`);
+    };
+    const trackedDirtyGit = gitWithStatus(' M src/runtime.ts');
+    const untrackedDirtyGit = gitWithStatus('?? scratch.txt');
+
+    await assert.rejects(
+      buildSubjectFingerprint('/repo', undefined, trackedDirtyGit),
+      /must be clean/,
+    );
+    await assert.rejects(
+      buildSubjectFingerprint('/repo', undefined, untrackedDirtyGit),
+      /must be clean/,
+    );
+
+    await assert.doesNotReject(
+      buildSubjectFingerprint('/repo', 'dirty-subject-snapshot-1', untrackedDirtyGit),
+    );
+  });
+
+  test('hashes non-task.toml files inside selected task directories', async () => {
+    const { buildTaskSourceFingerprint } = await import(promptAbScriptUrl);
+    await withDir(async (dir) => {
+      const tasksRoot = join(dir, 'tasks');
+      const taskPath = join(tasksRoot, 'task-a');
+      await mkdir(taskPath, { recursive: true });
+      await writeFile(join(taskPath, 'task.toml'), 'id = "task-a"\n', 'utf8');
+      await writeFile(join(taskPath, 'Dockerfile'), 'FROM ubuntu:24.04\n', 'utf8');
+
+      const first = await buildTaskSourceFingerprint(tasksRoot, [{ id: 'task-a', path: taskPath }]);
+      await writeFile(join(taskPath, 'Dockerfile'), 'FROM ubuntu:26.04\n', 'utf8');
+      const second = await buildTaskSourceFingerprint(tasksRoot, [{ id: 'task-a', path: taskPath }]);
+
+      assert.notEqual(first, second);
+    });
+  });
+});
+
+const promptAbScriptUrl = new URL('../../harbor/run-prompt-ab.mjs', import.meta.url).href;
 
 describe('summarizePromptAbComparison', () => {
   test('summarizes fixed A/B as task-level deltas without RSI acceptance semantics', () => {

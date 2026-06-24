@@ -10,9 +10,9 @@
 
 import { createHash } from 'node:crypto';
 import { execFile as execFileCallback } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readdir, readFile, readlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { BENCHMARK_BASE_SYSTEM_PROMPT } from '@maka/headless';
@@ -76,6 +76,10 @@ function hashSystemPrompt(systemPrompt) {
   return `sha256:${createHash('sha256').update(systemPrompt).digest('hex')}`;
 }
 
+function hashBytes(bytes) {
+  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
+
 function hashPayload(payload) {
   return `sha256:${createHash('sha256').update(canonicalJson(payload)).digest('hex')}`;
 }
@@ -99,7 +103,7 @@ async function gitOutput(repoPath, args) {
   return stdout.trimEnd();
 }
 
-async function buildSubjectFingerprint(repoPath, explicitSubjectId) {
+export async function buildSubjectFingerprint(repoPath, explicitSubjectId, readGitOutput = gitOutput) {
   if (explicitSubjectId && explicitSubjectId.trim().length > 0) {
     return hashPayload({
       kind: 'prompt-ab-subject',
@@ -111,32 +115,33 @@ async function buildSubjectFingerprint(repoPath, explicitSubjectId) {
   let status;
   try {
     [gitRoot, head, status] = await Promise.all([
-      gitOutput(repoPath, ['rev-parse', '--show-toplevel']),
-      gitOutput(repoPath, ['rev-parse', 'HEAD']),
-      gitOutput(repoPath, ['status', '--porcelain=v1', '--untracked-files=normal']),
+      readGitOutput(repoPath, ['rev-parse', '--show-toplevel']),
+      readGitOutput(repoPath, ['rev-parse', 'HEAD']),
+      readGitOutput(repoPath, ['status', '--porcelain=v1', '--untracked-files=normal']),
     ]);
   } catch (error) {
     throw new Error(`MAKA_PROMPT_AB_MAKA_REPO must be a git checkout or MAKA_PROMPT_AB_SUBJECT_ID must be set: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  if (status.length > 0) {
+    throw new Error(`MAKA_PROMPT_AB_MAKA_REPO must be clean for resume-safe prompt A/B runs. Commit/stash the changes, or set MAKA_PROMPT_AB_SUBJECT_ID to an explicit content identity. Dirty git status:\n${status}`);
   }
   return hashPayload({
     kind: 'prompt-ab-subject',
     path: resolve(repoPath),
     gitRoot: resolve(gitRoot),
     head,
-    dirty: status.length > 0,
+    dirty: false,
     statusHash: hashPayload({ status }),
   });
 }
 
-async function buildTaskSourceFingerprint(tasksRoot, tasks) {
+export async function buildTaskSourceFingerprint(tasksRoot, tasks) {
   const taskEntries = [];
   for (const task of tasks) {
-    const taskTomlPath = join(task.path, 'task.toml');
-    const taskToml = await readFile(taskTomlPath, 'utf8');
     taskEntries.push({
       id: task.id,
       path: resolve(task.path),
-      taskTomlHash: hashSystemPrompt(taskToml),
+      entries: await hashTaskDirectory(task.path),
     });
   }
   return hashPayload({
@@ -144,6 +149,38 @@ async function buildTaskSourceFingerprint(tasksRoot, tasks) {
     tasksRoot: resolve(tasksRoot),
     tasks: taskEntries,
   });
+}
+
+async function hashTaskDirectory(taskPath) {
+  const root = resolve(taskPath);
+  const entries = [];
+  await walkTaskDirectory(root, root, entries);
+  return entries;
+}
+
+async function walkTaskDirectory(root, dir, entries) {
+  const children = await readdir(dir, { withFileTypes: true });
+  children.sort((a, b) => a.name.localeCompare(b.name));
+  for (const child of children) {
+    const path = join(dir, child.name);
+    const stats = await lstat(path);
+    const entryPath = relative(root, path).split('\\').join('/');
+    if (child.isDirectory()) {
+      entries.push({ path: entryPath, type: 'directory' });
+      await walkTaskDirectory(root, path, entries);
+    } else if (child.isSymbolicLink()) {
+      entries.push({ path: entryPath, type: 'symlink', target: await readlink(path) });
+    } else if (child.isFile()) {
+      entries.push({
+        path: entryPath,
+        type: 'file',
+        executable: (stats.mode & 0o111) !== 0,
+        hash: hashBytes(await readFile(path)),
+      });
+    } else {
+      entries.push({ path: entryPath, type: 'other' });
+    }
+  }
 }
 
 async function main() {
@@ -212,15 +249,7 @@ async function main() {
     throw new Error('no evaluation tasks available for prompt A/B');
   }
 
-  await mkdir(controllerDir, { recursive: true });
-  await mkdir(jobsDir, { recursive: true });
-  await mkdir(promptsDir, { recursive: true });
-  const baselinePromptPath = join(promptsDir, 'maka-baseline.md');
-  const candidatePromptPath = join(promptsDir, `candidate-${basename(candidatePromptSourcePath)}`);
   const baselinePrompt = `${BENCHMARK_BASE_SYSTEM_PROMPT}\n`;
-  await writeFile(baselinePromptPath, baselinePrompt, 'utf8');
-  await writeFile(candidatePromptPath, candidatePrompt, 'utf8');
-
   const runManifest = buildPromptAbRunManifest({
     baselinePromptHash: hashSystemPrompt(baselinePrompt),
     candidatePromptHash: hashSystemPrompt(candidatePrompt),
@@ -241,6 +270,14 @@ async function main() {
     targetEvaluationTaskCount: targetEvaluationTaskCount ?? null,
   });
   await ensurePromptAbRunManifest(join(runRoot, 'prompt-ab-manifest.json'), runManifest);
+
+  await mkdir(controllerDir, { recursive: true });
+  await mkdir(jobsDir, { recursive: true });
+  await mkdir(promptsDir, { recursive: true });
+  const baselinePromptPath = join(promptsDir, 'maka-baseline.md');
+  const candidatePromptPath = join(promptsDir, `candidate-${basename(candidatePromptSourcePath)}`);
+  await writeFile(baselinePromptPath, baselinePrompt, 'utf8');
+  await writeFile(candidatePromptPath, candidatePrompt, 'utf8');
 
   const config = {
     id: 'prompt-ab',
@@ -358,7 +395,9 @@ function renderPromptAbRunManifestMarkdown(manifest) {
   ].join('\n');
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}
