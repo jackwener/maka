@@ -10,6 +10,7 @@ import {
   CalendarDays,
   Cpu,
   Database,
+  IconifyIcon,
   Info,
   Mic,
   Monitor,
@@ -268,21 +269,38 @@ function groupedNav(): Array<{ group: SettingsNavGroup; items: SettingsNavItem[]
 }
 
 /**
- * PR-BOT-SETTINGS-UI-0 (WAWQAQ msg `51c7b4ff`): per-platform brand
- * presentation. The glyph is a single-character monogram tinted with
- * the brand color so the platform is recognizable at a glance without
- * embedding upstream platform logo SVGs (license/asset hygiene).
+ * Per-platform brand presentation.
+ *
+ * History:
+ * - PR-BOT-SETTINGS-UI-0 (WAWQAQ msg `51c7b4ff`) shipped single-char
+ *   monograms (T / 飞 / 企 / 微 / D / 钉 / Q) tinted with the brand color
+ *   as a license/asset-hygiene compromise.
+ * - WAWQAQ msg `c8a9fc6f` 2026-06-25 reversed this: "IM 的渠道，这一些
+ *   显然应该用真实的图标，而不是用字。就像现在模型的这一些图标都是
+ *   用的真实对应公司的图标。" → swap the monogram for the real brand
+ *   icon, the same way model providers already use their actual logos.
+ *
+ * Implementation: `iconifyId` references a Simple Icons entry on the
+ * Iconify CDN. `@iconify/react` lazy-fetches on first render and caches
+ * thereafter; no new bundled collection needed (we don't ship
+ * `@iconify-json/simple-icons` because it would balloon the dep tree
+ * for 7 used icons). `glyph` stays as the offline fallback while the
+ * icon is in flight.
+ *
  * `configDocUrl` is the official developer doc surfaced inline as a
  * "查看配置文档 →" link.
  */
-const BOT_BRAND: Record<BotProvider, { color: string; glyph: string; configDocUrl?: string }> = {
-  telegram: { color: '#229ED9', glyph: 'T', configDocUrl: 'https://core.telegram.org/bots/tutorial' },
-  feishu:   { color: '#00C6B7', glyph: '飞', configDocUrl: 'https://open.feishu.cn/document/server-docs/bot-v3' },
-  wecom:    { color: '#0089FF', glyph: '企', configDocUrl: 'https://developer.work.weixin.qq.com/document/' },
-  wechat:   { color: '#07C160', glyph: '微', configDocUrl: 'https://developers.weixin.qq.com/doc/offiaccount/Getting_Started/Overview.html' },
-  discord:  { color: '#5865F2', glyph: 'D', configDocUrl: 'https://discord.com/developers/docs/intro' },
-  dingtalk: { color: '#1372FB', glyph: '钉', configDocUrl: 'https://open.dingtalk.com/document/' },
-  qq:       { color: '#EB1923', glyph: 'Q', configDocUrl: 'https://bot.q.qq.com/wiki/' },
+const BOT_BRAND: Record<
+  BotProvider,
+  { color: string; glyph: string; iconifyId: string; configDocUrl?: string }
+> = {
+  telegram: { color: '#229ED9', glyph: 'T', iconifyId: 'simple-icons:telegram', configDocUrl: 'https://core.telegram.org/bots/tutorial' },
+  feishu:   { color: '#00C6B7', glyph: '飞', iconifyId: 'simple-icons:lark', configDocUrl: 'https://open.feishu.cn/document/server-docs/bot-v3' },
+  wecom:    { color: '#0089FF', glyph: '企', iconifyId: 'simple-icons:wechat', configDocUrl: 'https://developer.work.weixin.qq.com/document/' },
+  wechat:   { color: '#07C160', glyph: '微', iconifyId: 'simple-icons:wechat', configDocUrl: 'https://developers.weixin.qq.com/doc/offiaccount/Getting_Started/Overview.html' },
+  discord:  { color: '#5865F2', glyph: 'D', iconifyId: 'simple-icons:discord', configDocUrl: 'https://discord.com/developers/docs/intro' },
+  dingtalk: { color: '#1372FB', glyph: '钉', iconifyId: 'simple-icons:dingtalk', configDocUrl: 'https://open.dingtalk.com/document/' },
+  qq:       { color: '#EB1923', glyph: 'Q', iconifyId: 'simple-icons:tencentqq', configDocUrl: 'https://bot.q.qq.com/wiki/' },
 };
 
 // PR-BOT-WECHAT-SCAN-LOGIN-0 (WAWQAQ msg `2fa6ada6`): help copy
@@ -372,7 +390,18 @@ function BotBrandLogo(props: {
       aria-hidden="true"
       style={{ ['--bot-brand-color' as string]: brand.color }}
     >
-      {brand.glyph}
+      {/* WAWQAQ msg `c8a9fc6f` 2026-06-25: real brand icon (Iconify
+          `simple-icons` set, lazy-loaded from the Iconify CDN). The
+          monogram (`brand.glyph`) stays as the `IconifyIcon` `fallback`
+          so the tile isn't blank during the first paint while the
+          remote SVG is in flight. */}
+      <IconifyIcon
+        icon={brand.iconifyId}
+        width="60%"
+        height="60%"
+        aria-hidden="true"
+        fallback={<>{brand.glyph}</>}
+      />
       {props.support !== 'planned' && (
         <span className="settingsBotLogoStatusDot" data-tone={copy.tone} aria-hidden="true" />
       )}

@@ -39,6 +39,20 @@ import type { ComponentType } from 'react';
 // `<Icon icon="ph:…">` renders synchronously without a CDN fetch.
 addCollection(phData);
 
+/**
+ * Re-export of `@iconify/react`'s `<Icon>` for cases where a caller
+ * needs to render an arbitrary Iconify id (e.g. `simple-icons:wechat`
+ * for the bot-settings brand logos) without taking a direct dependency
+ * on `@iconify/react` from the consuming workspace.
+ *
+ * Icons NOT pre-registered above (everything outside `ph:*`) are
+ * lazy-fetched from the Iconify CDN on first render and then cached by
+ * the Iconify runtime. Use this sparingly — pin a real brand icon
+ * collection (`@iconify-json/simple-icons` etc.) if a surface ends up
+ * needing many or needs offline rendering.
+ */
+export { Icon as IconifyIcon } from '@iconify/react';
+
 /** Phosphor weight options.
  *   `'thin'`    — `ph:gear-thin` (very light strokes)
  *   `'light'`   — `ph:gear-light` (matches old Lucide stroke ~1.5)
