@@ -1181,7 +1181,8 @@ function AppShell() {
   async function refreshShellSettings() {
     try {
       const next = await window.maka.settings.get();
-      const pref = next.appearance?.theme ?? 'auto';
+      const smoke = await window.maka.visualSmoke.getState();
+      const pref = smoke?.theme ?? next.appearance?.theme ?? 'auto';
       const palette = next.appearance?.palette ?? 'default';
       const name = next.personalization?.displayName ?? '';
       // PR-LANG-PREF-0: apply persisted UI locale preference to
