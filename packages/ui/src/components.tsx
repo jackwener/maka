@@ -4533,7 +4533,9 @@ const MessageBody = memo(function MessageBody(props: { role: string; text: strin
     // the right (so the right-anchor reads even for long messages), with a
     // quiet always-visible time + a copy affordance in a meta row beneath it.
     // The time is no longer hover-gated (was `opacity: 0` until hover, which
-    // hid it from touch + assistive tech); copy reuses MessageCopyButton.
+    // hid it from touch + assistive tech). Copy reuses MessageCopyButton in
+    // `footerStyle`, so it's the same quiet ghost action as the assistant
+    // turn footer's copy (same primitive + `.maka-turn-footer-action`).
     return (
       <>
         <div className="maka-bubble-user">
@@ -4543,7 +4545,7 @@ const MessageBody = memo(function MessageBody(props: { role: string; text: strin
           {props.ts !== undefined && (
             <RelativeTime ts={props.ts} className="maka-message-time-inline" />
           )}
-          <MessageCopyButton text={props.text} />
+          <MessageCopyButton text={props.text} footerStyle />
         </div>
       </>
     );
@@ -4557,7 +4559,7 @@ const MessageBody = memo(function MessageBody(props: { role: string; text: strin
   );
 });
 
-function MessageCopyButton(props: { text: string; label?: string }) {
+function MessageCopyButton(props: { text: string; label?: string; footerStyle?: boolean }) {
   const copyFeedback = useClipboardCopyFeedback(1400, { redact: false });
   const copyPhase = copyFeedback.phaseFor('message');
   const copyPending = copyPhase === 'pending';
@@ -4567,7 +4569,17 @@ function MessageCopyButton(props: { text: string; label?: string }) {
     await copyFeedback.copy('message', props.text);
   }
 
-  const baseLabel = props.label ?? '复制消息';
+  // `footerStyle` renders this copy as the SAME quiet ghost action the
+  // assistant turn footer uses (`.maka-turn-footer-action`, also a UiButton
+  // variant="quiet" size="sm" with icon + "复制"). The user-message copy and
+  // the assistant copy then read as one button by construction — same
+  // primitive, same class, same icon metrics — instead of a look-alike
+  // bespoke treatment.
+  const footer = props.footerStyle === true;
+  const visibleLabel = footer ? (props.label ?? '复制') : props.label;
+  const iconSize = footer ? 12 : 14;
+
+  const baseLabel = props.label ?? (footer ? '复制' : '复制消息');
   const actionLabel = copyPhase === 'pending'
     ? '复制中'
     : copyPhase === 'copied'
@@ -4578,9 +4590,9 @@ function MessageCopyButton(props: { text: string; label?: string }) {
   return (
     <UiButton
       type="button"
-      className="maka-message-copy"
+      className={footer ? 'maka-turn-footer-action' : 'maka-message-copy'}
       variant="quiet"
-      size="icon-sm"
+      size={footer ? 'sm' : 'icon-sm'}
       onClick={() => void copy()}
       aria-label={copyPhase ? `${actionLabel} · ${baseLabel}` : baseLabel}
       aria-busy={copyPending ? 'true' : undefined}
@@ -4588,10 +4600,10 @@ function MessageCopyButton(props: { text: string; label?: string }) {
       data-copied={copied}
       data-copy-feedback={copyPhase ?? undefined}
       data-pending={copyPending ? 'true' : undefined}
-      data-labelled={props.label ? 'true' : undefined}
+      data-labelled={(!footer && props.label) ? 'true' : undefined}
     >
-      {copied ? <Check size={14} strokeWidth={2} aria-hidden="true" /> : <Copy size={14} strokeWidth={1.75} aria-hidden="true" />}
-      {props.label && <span>{copyPhase === 'pending' ? '复制中…' : copyPhase === 'failed' ? '复制失败' : copied ? '已复制' : props.label}</span>}
+      {copied ? <Check size={iconSize} strokeWidth={2} aria-hidden="true" /> : <Copy size={iconSize} strokeWidth={footer ? 2 : 1.75} aria-hidden="true" />}
+      {visibleLabel && <span>{copyPhase === 'pending' ? '复制中…' : copyPhase === 'failed' ? '复制失败' : copied ? '已复制' : visibleLabel}</span>}
     </UiButton>
   );
 }
