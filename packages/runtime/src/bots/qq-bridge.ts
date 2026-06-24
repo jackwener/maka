@@ -274,6 +274,13 @@ export function pickQQSendRoute(chatId: string, text: string, options?: BotSendO
   return null;
 }
 
+export function pickQQTypingRoute(chatId: string): string | null {
+  if (!chatId.startsWith('channel:')) return null;
+  const channelId = chatId.slice('channel:'.length).trim();
+  if (!channelId) return null;
+  return `/channels/${channelId}/typing`;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -365,12 +372,12 @@ export class QQBotBridge extends BaseBotAdapter implements SendCapable {
    */
   async sendTypingIndicator(chatId: string): Promise<boolean> {
     if (this.platform !== 'qq' || !this.running) return false;
-    if (!chatId.startsWith('channel:')) return false;
+    const route = pickQQTypingRoute(chatId);
+    if (!route) return false;
     const token = await this.refreshTokenIfNeeded();
     if (!token) return false;
-    const channelId = chatId.slice('channel:'.length);
     try {
-      const response = await proxiedFetch(`${QQ_API}/channels/${channelId}/typing`, {
+      const response = await proxiedFetch(`${QQ_API}${route}`, {
         method: 'POST',
         headers: { Authorization: `QQBot ${token}` },
         timeoutMs: 5_000,
@@ -716,5 +723,6 @@ export const __TEST__ = {
   qqGroupMessageToEvent,
   qqC2CMessageToEvent,
   pickQQSendRoute,
+  pickQQTypingRoute,
   QQ_INTENTS,
 };

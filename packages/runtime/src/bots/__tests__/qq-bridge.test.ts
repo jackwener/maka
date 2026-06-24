@@ -11,6 +11,7 @@ const {
   qqGroupMessageToEvent,
   qqC2CMessageToEvent,
   pickQQSendRoute,
+  pickQQTypingRoute,
   QQ_INTENTS,
 } = __TEST__;
 
@@ -259,14 +260,16 @@ describe('QQ_INTENTS', () => {
 // messaging stack with no typing endpoint).
 describe('QQ sendTypingIndicator routing (PR-BOT-QQ-TYPING-INDICATOR-0)', () => {
   it('only routes channel: chatIds to the typing endpoint', () => {
-    // Re-check the same routing rule the bridge applies inline.
-    function shouldSendTyping(chatId: string): boolean {
-      return chatId.startsWith('channel:');
-    }
-    assert.equal(shouldSendTyping('channel:c-1'), true);
-    assert.equal(shouldSendTyping('group:g-1'), false);
-    assert.equal(shouldSendTyping('c2c:u-1'), false);
-    assert.equal(shouldSendTyping('dm:dm-1'), false);
-    assert.equal(shouldSendTyping(''), false);
+    assert.equal(pickQQTypingRoute('channel:c-1'), '/channels/c-1/typing');
+    assert.equal(pickQQTypingRoute('group:g-1'), null);
+    assert.equal(pickQQTypingRoute('c2c:u-1'), null);
+    assert.equal(pickQQTypingRoute('dm:dm-1'), null);
+    assert.equal(pickQQTypingRoute(''), null);
+  });
+
+  it('trims channel ids and skips empty typing targets', () => {
+    assert.equal(pickQQTypingRoute('channel: c-1 '), '/channels/c-1/typing');
+    assert.equal(pickQQTypingRoute('channel:'), null);
+    assert.equal(pickQQTypingRoute('channel:   '), null);
   });
 });
