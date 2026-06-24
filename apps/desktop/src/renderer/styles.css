@@ -851,20 +851,6 @@ button:active {
  * discoverability now lives in the Command Palette via the
  * `查看快捷键` entry. */
 
-.maka-nav-rail {
-  min-width: 0;
-  min-height: 0;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 4px 4px 8px;
-}
-
-.maka-nav-window span {
-  display: none;
-}
-
 .maka-session-panel[data-collapsed="true"] .maka-nav-primary {
   width: 28px;
   min-width: 28px;
@@ -1027,11 +1013,6 @@ button:active {
 
 .maka-session-panel[data-collapsed="true"] .maka-nav-tree {
   display: none;
-}
-
-.maka-list-header-actions svg {
-  width: 15px;
-  height: 15px;
 }
 
 .maka-list-stack {
@@ -1603,10 +1584,6 @@ button:active {
 }
 
 .maka-onboarding-eyebrow {
-  display: none;
-}
-
-.maka-onboarding-hero-icon {
   display: none;
 }
 
@@ -2285,14 +2262,6 @@ button:active {
  * the rule is gone so a future "let's bring snippet back" patch
  * lands as an explicit design discussion, not a silent regression.
  */
-
-.maka-skill-tools {
-  margin-left: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--foreground-60);
-}
 
 /* PR-SIDEBAR-IA-0 Phase 3: `.maka-list-row-preview` is no longer
  * rendered in the default DOM (see comment above). The
@@ -4608,15 +4577,6 @@ button:active {
   line-height: 1.25;
 }
 
-.maka-model-switcher-item-meta {
-  display: block;
-  margin-top: 2px;
-  color: var(--foreground-55, var(--foreground-50));
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.25;
-}
-
 /* Inline credential-lifecycle pill in the chat header. Clickable when the
  * caller provides onClick (jumps to Settings · 账号). Tone follows the
  * 6-state ConnectionUiStatus surface tokens for visual continuity. */
@@ -4709,74 +4669,6 @@ button:active {
   background: var(--foreground-5);
   color: var(--foreground-60);
   border-color: var(--border);
-}
-
-.maka-mode-switcher {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  margin-bottom: 7px;
-  padding: 2px;
-  border-radius: 999px;
-  background: var(--foreground-5);
-  border: 1px solid var(--border);
-  -webkit-app-region: no-drag;
-  /* Keep the pill at its intrinsic width when the header is tight (e.g. the
-     browser panel narrows the chat column). The flexible tab title absorbs the
-     squeeze and truncates; the mode labels never collapse into vertical text. */
-  flex: 0 0 auto;
-}
-
-.maka-mode-switcher[data-disabled] {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.maka-mode-switcher-option {
-  /* PR-CHAT-TOOLBAR-POLISH (2026-06-23): density tuned down so the
-     mode pill (只读 / 确认 / 执行) reads as a peer of the top-right
-     icon buttons (问题反馈 / 网格 / ? / 设置) instead of dominating
-     the chrome strip. -1 px font, -1 px vertical padding, slightly
-     tighter horizontal padding to match a 24-px chip rhythm. */
-  display: inline-flex;
-  align-items: center;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--foreground-60);
-  padding: 2px 9px;
-  font-size: 11.5px;
-  font-weight: 500;
-  white-space: nowrap;
-  letter-spacing: 0.005em;
-  transition: background 140ms var(--ease-out-strong), color 140ms var(--ease-out-strong);
-}
-
-.maka-mode-switcher-option:hover:not(:disabled):not([data-active="true"]) {
-  background: var(--foreground-5);
-  color: var(--foreground);
-}
-
-.maka-mode-switcher-option:disabled {
-  cursor: not-allowed;
-}
-
-.maka-mode-switcher-option[data-active="true"] {
-  background: var(--background);
-  color: var(--foreground);
-  box-shadow: var(--shadow-minimal-flat);
-}
-
-.maka-mode-switcher-option[data-active="true"][data-tone="info"] {
-  color: var(--info-text);
-}
-
-.maka-mode-switcher-option[data-active="true"][data-tone="accent"] {
-  color: var(--accent);
-}
-
-.maka-mode-switcher-option[data-active="true"][data-tone="caution"] {
-  color: var(--success-text);
 }
 
 .chatToolbar > div {
@@ -10293,8 +10185,7 @@ button:active {
     gap: 0;
   }
 
-  .maka-nav-rail,
-.mainColumn {
+  .mainColumn {
     border: 0;
     border-radius: 0;
   }
@@ -14259,70 +14150,6 @@ button:active {
   transform: none;
   min-height: 120px;
   align-content: center;
-}
-
-/* =============================================================================
-   Skeleton primitives — per design-taste-frontend rule 5 (Loading skeletons
-   matching layout sizes, no generic circular spinners) + minimalist-ui §7
-   (skeleton shimmer over 200ms cubic-bezier). Three building blocks:
-   .maka-skeleton-row (block placeholder), .maka-skeleton-text (line of text),
-   .maka-skeleton-circle (avatar / status dot placeholder). All inherit a
-   shared shimmer animation that scrubs an off-white highlight across a soft
-   foreground-tinted bar. Reduced-motion freezes the shimmer.
-============================================================================= */
-
-.maka-skeleton-row,
-.maka-skeleton-text,
-.maka-skeleton-circle {
-  display: block;
-  position: relative;
-  overflow: hidden;
-  background: oklch(from var(--foreground) l c h / 0.045);
-  border-radius: 4px;
-}
-
-@keyframes maka-skeleton-shimmer {
-  to { transform: translateX(100%); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .maka-skeleton-row::after,
-  .maka-skeleton-text::after,
-  .maka-skeleton-circle::after {
-    animation: none;
-    opacity: 0;
-  }
-}
-
-[data-maka-visual-smoke="true"] .maka-skeleton-row::after,
-[data-maka-visual-smoke="true"] .maka-skeleton-text::after,
-[data-maka-visual-smoke="true"] .maka-skeleton-circle::after {
-  animation: none;
-  opacity: 0;
-}
-
-/* Pre-composed list-row skeleton for session list / skill list / plan list
-   loading states. Lays out a circle + two text lines on a single 30px row
-   matching the dense .maka-list-row geometry. */
-.maka-skeleton-list-row {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 30px;
-  padding: 5px 8px;
-  border-radius: 6px;
-}
-
-.maka-skeleton-list-row .maka-skeleton-text:nth-child(2) {
-  grid-column: 2;
-  height: 11px;
-}
-
-.maka-skeleton-list-row .maka-skeleton-text:nth-child(3) {
-  grid-column: 3;
-  width: 28px;
-  height: 9px;
 }
 
 /* =============================================================================
