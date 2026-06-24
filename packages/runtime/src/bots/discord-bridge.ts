@@ -132,6 +132,12 @@ function normalizeDiscordReplyToMessageId(value: string | undefined): string | u
   return trimmed;
 }
 
+function normalizeDiscordChannelId(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!/^[1-9]\d*$/.test(trimmed)) return undefined;
+  return trimmed;
+}
+
 /**
  * Pure helper: classify a Discord HTTP send response so the caller
  * can route between done / retry / fatal. Discord's 429 returns a
@@ -263,15 +269,17 @@ export class DiscordBotBridge extends BaseBotAdapter implements SendCapable {
    */
   async sendMessage(chatId: string, text: string, options?: BotSendOptions): Promise<string | null> {
     if (this.platform !== 'discord' || !this.running) return null;
+    const channelId = normalizeDiscordChannelId(chatId);
+    if (!channelId) return null;
     const chunks = splitDiscordContent(text);
     let lastMessageId: string | null = null;
     for (let i = 0; i < chunks.length; i++) {
       const body = buildDiscordSendBody(chunks[i], options, i);
-      const first = await this.performSend(chatId, body);
+      const first = await this.performSend(channelId, body);
       let classification = first;
       if (first.kind === 'retry') {
         await sleep(first.delayMs);
-        classification = await this.performSend(chatId, body);
+        classification = await this.performSend(channelId, body);
       }
       if (classification.kind !== 'ok') {
         this.readiness = this.readiness === 'operational' ? 'degraded' : 'credentials_valid';
@@ -291,8 +299,10 @@ export class DiscordBotBridge extends BaseBotAdapter implements SendCapable {
 
   async sendTypingIndicator(chatId: string): Promise<boolean> {
     if (this.platform !== 'discord' || !this.running) return false;
+    const channelId = normalizeDiscordChannelId(chatId);
+    if (!channelId) return false;
     try {
-      const response = await proxiedFetch(`${DISCORD_API}/channels/${chatId}/typing`, {
+      const response = await proxiedFetch(`${DISCORD_API}/channels/${channelId}/typing`, {
         method: 'POST',
         headers: { Authorization: `Bot ${this.settings.token}` },
         timeoutMs: 5_000,
@@ -600,6 +610,7 @@ export const __TEST__ = {
   reconnectBackoffMs,
   buildDiscordSendBody,
   normalizeDiscordReplyToMessageId,
+  normalizeDiscordChannelId,
   classifyDiscordSendResponse,
   discordMessageToEvent,
   splitDiscordContent,

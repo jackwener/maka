@@ -8,6 +8,7 @@ const {
   reconnectBackoffMs,
   buildDiscordSendBody,
   normalizeDiscordReplyToMessageId,
+  normalizeDiscordChannelId,
   classifyDiscordSendResponse,
   discordMessageToEvent,
   splitDiscordContent,
@@ -104,6 +105,18 @@ describe('normalizeDiscordReplyToMessageId', () => {
     assert.equal(normalizeDiscordReplyToMessageId('0'), undefined);
     assert.equal(normalizeDiscordReplyToMessageId('-1'), undefined);
     assert.equal(normalizeDiscordReplyToMessageId('1.5'), undefined);
+  });
+});
+
+describe('normalizeDiscordChannelId', () => {
+  it('trims and accepts positive decimal snowflake strings', () => {
+    assert.equal(normalizeDiscordChannelId(' 123456789012345678 '), '123456789012345678');
+  });
+
+  it('rejects empty, non-decimal, zero, and negative values', () => {
+    for (const value of ['', '   ', 'abc', '0', '-1', '1.5']) {
+      assert.equal(normalizeDiscordChannelId(value), undefined, value);
+    }
   });
 });
 
