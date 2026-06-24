@@ -52,6 +52,13 @@ function envPath(name, fallback) {
 
 const envPosInt = (name, fallback) => envPositiveInt(name, process.env[name], fallback);
 
+function rejectUnsupportedProviderEnv(env) {
+  const raw = env.MAKA_PROMPT_AB_PROVIDER;
+  if (raw && raw.length > 0 && raw !== 'deepseek') {
+    throw new Error('MAKA_PROMPT_AB_PROVIDER is not supported by this DeepSeek-only prompt A/B runner; use MAKA_PROMPT_AB_BASE_URL only for DeepSeek endpoint overrides.');
+  }
+}
+
 function envIds(name) {
   const raw = process.env[name];
   if (!raw) return undefined;
@@ -132,6 +139,23 @@ export async function buildSubjectFingerprint(repoPath, explicitSubjectId, readG
     head,
     dirty: false,
     statusHash: hashPayload({ status }),
+    runtimeArtifactFingerprint: await buildRuntimeArtifactFingerprint(gitRoot),
+  });
+}
+
+async function buildRuntimeArtifactFingerprint(repoRoot) {
+  const artifactRoots = [
+    'packages/headless/dist',
+    'packages/core/dist',
+    'packages/runtime/dist',
+    'packages/storage/dist',
+  ];
+  return hashPayload({
+    kind: 'prompt-ab-runtime-artifacts',
+    artifacts: await Promise.all(artifactRoots.map(async (artifactPath) => ({
+      path: artifactPath,
+      entries: await hashOptionalDirectory(join(repoRoot, artifactPath)),
+    }))),
   });
 }
 
@@ -153,6 +177,19 @@ export async function buildTaskSourceFingerprint(tasksRoot, tasks) {
 
 async function hashTaskDirectory(taskPath) {
   const root = resolve(taskPath);
+  return await hashDirectory(root);
+}
+
+async function hashOptionalDirectory(path) {
+  try {
+    return await hashDirectory(resolve(path));
+  } catch (error) {
+    if (isNotFound(error)) return [{ path: '.', type: 'missing' }];
+    throw error;
+  }
+}
+
+async function hashDirectory(root) {
   const entries = [];
   await walkTaskDirectory(root, root, entries);
   return entries;
@@ -169,7 +206,7 @@ async function walkTaskDirectory(root, dir, entries) {
       entries.push({ path: entryPath, type: 'directory' });
       await walkTaskDirectory(root, path, entries);
     } else if (child.isSymbolicLink()) {
-      entries.push({ path: entryPath, type: 'symlink', target: await readlink(path) });
+      throw new Error(`task source symlink is not supported in prompt A/B fingerprints: ${entryPath} -> ${await readlink(path)}`);
     } else if (child.isFile()) {
       entries.push({
         path: entryPath,
@@ -183,7 +220,12 @@ async function walkTaskDirectory(root, dir, entries) {
   }
 }
 
+function isNotFound(error) {
+  return error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT';
+}
+
 async function main() {
+  rejectUnsupportedProviderEnv(process.env);
   const repoRoot = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
   const makaRepoPath = process.env.MAKA_PROMPT_AB_MAKA_REPO
     ? resolve(process.env.MAKA_PROMPT_AB_MAKA_REPO)
@@ -199,7 +241,7 @@ async function main() {
   const controllerDir = join(runRoot, 'controller');
   const jobsDir = join(runRoot, 'jobs');
   const promptsDir = join(runRoot, 'prompts');
-  const provider = process.env.MAKA_PROMPT_AB_PROVIDER || 'deepseek';
+  const provider = 'deepseek';
   const baseUrl = process.env.MAKA_PROMPT_AB_BASE_URL || 'https://api.deepseek.com';
   const model = 'deepseek/deepseek-v4-flash';
   const candidateLimit = envPosInt('MAKA_PROMPT_AB_CANDIDATE_LIMIT', undefined);
