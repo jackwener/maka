@@ -613,35 +613,32 @@ if [ -n "$search_cwd" ]; then
 else
   base=$root
 fi
-# Enumerate files with ripgrep when available (much faster than find on large
-# trees); fall back to find. --no-ignore --hidden keeps the file set identical
-# with or without rg, and the glob match stays the existing ERE, so membership
-# never depends on rg's glob dialect. Both branches search the SAME resolved base
-# (rel_base, derived from existing_target's symlink-resolved $base) and emit
-# root-relative paths, then sort under a fixed locale before the 200 cap, so the
-# truncated result is deterministic regardless of each tool's enumeration order.
-# rg gets an explicit relative path (so it never reads from its never-closing
-# stdin pipe) and runs from root so its output is root-relative; its "./" prefix
-# is stripped to match find's paths. --no-config makes rg hermetic: a stray
-# RIPGREP_CONFIG_PATH (e.g. a dev's global --follow/--sort/--glob) would
-# otherwise change rg's file set or output format while find is unaffected,
-# breaking the rg/find equivalence this script depends on.
+# Enumerate with ripgrep when present (fast), else POSIX find. Both branches emit
+# root-relative paths filtered by the shared ERE ($pattern_re) -- membership never
+# depends on rg's glob dialect -- and the merged output is sorted under a fixed
+# locale BEFORE the 200 cap, so a truncated result is the same set either way.
+# rg flags: --no-config keeps it hermetic (a host RIPGREP_CONFIG_PATH cannot
+# inject --follow/--glob); --no-ignore --hidden match find's file set; an explicit
+# path avoids rg's never-closing stdin; rc>1 surfaces a real error instead of
+# masquerading as "no files" (mirrors the Grep rg branch).
 rel_base=.
 [ "$base" != "$root" ] && rel_base=\${base#"$root"/}
-{
-  if command -v rg >/dev/null 2>&1; then
-    ( cd "$root" && rg --no-config --files --no-ignore --hidden -- "$rel_base" 2>/dev/null ) | sed 's#^\\./##' | awk -v re="$pattern_re" '$0 ~ re'
-  else
-    find "$base" -type f -print | awk -v root="$root" -v re="$pattern_re" '
-      BEGIN { prefix = root "/" }
-      {
-        rel = $0
-        if (index(rel, prefix) == 1) rel = substr(rel, length(prefix) + 1)
-        if (rel ~ re) print rel
-      }
-    '
-  fi
-} | LC_ALL=C sort | awk 'NR <= 200'
+if command -v rg >/dev/null 2>&1; then
+  raw=$( cd "$root" && rg --no-config --files --no-ignore --hidden -- "$rel_base" )
+  rc=$?
+  [ "$rc" -gt 1 ] && { echo "ripgrep failed (exit $rc)" >&2; exit "$rc"; }
+  files=$(printf '%s\n' "$raw" | sed 's#^\\./##' | awk -v re="$pattern_re" '$0 ~ re')
+else
+  files=$(find "$base" -type f -print | awk -v root="$root" -v re="$pattern_re" '
+    BEGIN { prefix = root "/" }
+    {
+      rel = $0
+      if (index(rel, prefix) == 1) rel = substr(rel, length(prefix) + 1)
+      if (rel ~ re) print rel
+    }
+  ')
+fi
+printf '%s\n' "$files" | LC_ALL=C sort | awk 'NR <= 200'
 `;
 
 const GREP_SCRIPT = `${COMMON_SHELL_HELPERS}

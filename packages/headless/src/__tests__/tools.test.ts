@@ -472,6 +472,57 @@ describe('isolated headless tools', () => {
     assert.equal(rgMany[199], 'many/f199.txt');
   });
 
+  test('the Glob rg branch pins its enumeration flags and checks rg exit (non-skippable safety net)', async () => {
+    let captured = '';
+    const tools = buildIsolatedHeadlessTools({
+      async exec(input) {
+        captured = input.command;
+        return { exitCode: 0, stdout: '', stderr: '' };
+      },
+    });
+    await tool(tools, 'Glob').impl({ pattern: '*.txt' }, toolCtx('/workspace'));
+    // Pin the exact rg enumeration so --no-config (hermetic against a host
+    // RIPGREP_CONFIG_PATH) and --no-ignore/--hidden (find parity) cannot be
+    // silently dropped. Asserts the script text, so it runs with or without rg.
+    assert.match(captured, /rg --no-config --files --no-ignore --hidden -- "\$rel_base"/);
+    // ...and rg's exit code must be inspected: rc>1 is a real error, not "no files".
+    assert.match(captured, /rc=\$\?/);
+    assert.match(captured, /\[ "\$rc" -gt 1 \] &&/);
+  });
+
+  test('Glob surfaces a ripgrep runtime error instead of returning an empty list', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'maka-headless-glob-rgfail-'));
+    await writeFile(join(cwd, 'real.txt'), '', 'utf8');
+    // rg present but failing at runtime (exit 2). Prepending a fake rg to PATH
+    // shadows the real one; the script must not swallow the failure into an empty
+    // result — it surfaces the error (mirrors the Grep rg branch).
+    const binDir = await mkdtemp(join(tmpdir(), 'maka-headless-fakerg-'));
+    await writeFile(join(binDir, 'rg'), '#!/bin/sh\necho "rg: simulated failure" >&2\nexit 2\n', 'utf8');
+    await chmod(join(binDir, 'rg'), 0o755);
+    const tools = buildIsolatedHeadlessTools({
+      async exec(input) {
+        try {
+          const { stdout, stderr } = await execAsync(input.command, {
+            cwd: input.cwd,
+            env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ''}` },
+            maxBuffer: 1024 * 1024,
+          });
+          return { exitCode: 0, stdout, stderr };
+        } catch (error: any) {
+          return {
+            exitCode: typeof error?.code === 'number' ? error.code : 1,
+            stdout: typeof error?.stdout === 'string' ? error.stdout : '',
+            stderr: typeof error?.stderr === 'string' ? error.stderr : String(error),
+          };
+        }
+      },
+    });
+    await assert.rejects(
+      () => tool(tools, 'Glob').impl({ pattern: '*.txt' }, toolCtx(cwd)) as Promise<unknown>,
+      /ripgrep failed \(exit 2\)/,
+    );
+  });
+
   test('Read (command path) numbers lines, caps by default, and guards binaries', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'maka-headless-read-'));
     await writeFile(join(cwd, 'big.txt'), Array.from({ length: 2500 }, (_, i) => `line${i + 1}`).join('\n') + '\n', 'utf8');
