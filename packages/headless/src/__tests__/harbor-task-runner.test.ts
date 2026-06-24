@@ -277,6 +277,26 @@ describe('createHarborTaskRunner', () => {
     });
   });
 
+  test('treats host cell timeout before verifier reward as budget exhausted', async () => {
+    await withRun(async ({ jobsDir, repo }) => {
+      const runner = createHarborTaskRunner({
+        makaRepoPath: repo,
+        jobsDir,
+        model: 'deepseek/deepseek-v4-flash',
+        runHarbor: fakeRunner({
+          cell: cellOutput(),
+          trialResult: {
+            exception_info: {
+              exception_type: 'RuntimeError',
+              exception_message: 'Maka host cell exceeded 1800s',
+            },
+          },
+        }),
+      });
+      await assert.rejects(runner(runInput()), FixedPromptBudgetExhaustedError);
+    });
+  });
+
   test('returns an unscored failed cell without throwing (model API failure path)', async () => {
     await withRun(async ({ jobsDir, repo }) => {
       const runner = createHarborTaskRunner({

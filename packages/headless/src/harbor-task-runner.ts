@@ -325,6 +325,12 @@ async function readReward(rewardPath: string, resultPath: string, taskId: string
   } catch (error) {
     const trialException = await readTrialException(resultPath);
     if (trialException) {
+      if (isHostCellBudgetExhaustedTrialException(trialException)) {
+        throw new FixedPromptBudgetExhaustedError(
+          `host cell budget exhausted for task ${taskId}`,
+          trialException,
+        );
+      }
       throw new HarborInfraError(`Harbor trial failed before verifier reward for task ${taskId}: ${trialException}`, errorText(error));
     }
     throw new HarborInfraError(`missing verifier reward for task ${taskId}`, errorText(error));
@@ -359,6 +365,10 @@ async function readTrialException(resultPath: string): Promise<string | null> {
   const type = typeof exceptionInfo.exception_type === 'string' ? exceptionInfo.exception_type : 'HarborTrialError';
   const message = typeof exceptionInfo.exception_message === 'string' ? exceptionInfo.exception_message : '';
   return message ? `${type}: ${message}` : type;
+}
+
+function isHostCellBudgetExhaustedTrialException(message: string): boolean {
+  return /^RuntimeError: Maka host cell exceeded \d+(?:\.\d+)?s$/.test(message);
 }
 
 async function readCellOutput(cellOutputPath: string, taskId: string): Promise<HarborCellOutput> {
