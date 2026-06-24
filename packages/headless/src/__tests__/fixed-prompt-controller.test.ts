@@ -93,6 +93,109 @@ describe('fixed prompt controller', () => {
     });
   });
 
+  test('reuses WAL task events only when the resume fingerprint matches', async () => {
+    await withDir(async (dir) => {
+      const systemPromptPath = join(dir, 'system_prompt.md');
+      const resultsJsonlPath = join(dir, 'results.jsonl');
+      await writeFile(systemPromptPath, 'fixed prompt\n', 'utf8');
+      await appendFile(
+        resultsJsonlPath,
+        `${JSON.stringify(taskCompletedEvent({ taskId: 'task-a', resumeFingerprint: 'fingerprint-old' }))}\n`,
+        'utf8',
+      );
+
+      const matchingCalls: string[] = [];
+      const matching = await runFixedPromptController({
+        runId: 'run-1',
+        roundId: 'round-1',
+        config,
+        systemPromptPath,
+        resultsJsonlPath,
+        resultsTsvPath: join(dir, 'matching.tsv'),
+        tasks: [{ id: 'task-a', path: '/bench/task-a' }],
+        resumeFingerprint: 'fingerprint-old',
+        harborRunner: async ({ task }) => {
+          matchingCalls.push(task.id);
+          return harborOutput({ taskId: task.id });
+        },
+        now: () => 100,
+        newId: idFactory(),
+      });
+      assert.deepEqual(matchingCalls, []);
+      assert.equal(matching.events[0]?.type, 'task_completed');
+
+      const changedCalls: string[] = [];
+      const changed = await runFixedPromptController({
+        runId: 'run-1',
+        roundId: 'round-1',
+        config,
+        systemPromptPath,
+        resultsJsonlPath,
+        resultsTsvPath: join(dir, 'changed.tsv'),
+        tasks: [{ id: 'task-a', path: '/bench/task-a' }],
+        resumeFingerprint: 'fingerprint-new',
+        harborRunner: async ({ task }) => {
+          changedCalls.push(task.id);
+          return harborOutput({ taskId: task.id });
+        },
+        now: () => 200,
+        newId: idFactory(),
+      });
+
+      assert.deepEqual(changedCalls, ['task-a']);
+      assert.equal(changed.events[0]?.type, 'task_completed');
+      assert.equal(changed.events[0]?.resumeFingerprint, 'fingerprint-new');
+      assert.equal((await readFile(resultsJsonlPath, 'utf8')).trimEnd().split('\n').length, 2);
+    });
+  });
+
+  test('reuses budget-exhausted WAL events when the resume fingerprint matches', async () => {
+    await withDir(async (dir) => {
+      const systemPromptPath = join(dir, 'system_prompt.md');
+      const resultsJsonlPath = join(dir, 'results.jsonl');
+      await writeFile(systemPromptPath, 'fixed prompt\n', 'utf8');
+
+      await runFixedPromptController({
+        runId: 'run-1',
+        roundId: 'round-1',
+        config,
+        systemPromptPath,
+        resultsJsonlPath,
+        resultsTsvPath: join(dir, 'results-old.tsv'),
+        tasks: [{ id: 'task-a', path: '/bench/task-a' }],
+        resumeFingerprint: 'fingerprint-same',
+        harborRunner: async () => {
+          throw new FixedPromptBudgetExhaustedError('harbor run timed out after 600s');
+        },
+        now: () => 100,
+        newId: idFactory(),
+      });
+
+      const calls: string[] = [];
+      const result = await runFixedPromptController({
+        runId: 'run-1',
+        roundId: 'round-1',
+        config,
+        systemPromptPath,
+        resultsJsonlPath,
+        resultsTsvPath: join(dir, 'results-new.tsv'),
+        tasks: [{ id: 'task-a', path: '/bench/task-a' }],
+        resumeFingerprint: 'fingerprint-same',
+        harborRunner: async ({ task }) => {
+          calls.push(task.id);
+          return harborOutput({ taskId: task.id });
+        },
+        now: () => 200,
+        newId: idFactory(),
+      });
+
+      assert.deepEqual(calls, []);
+      assert.equal(result.events[0]?.type, 'task_budget_exhausted');
+      assert.equal(result.events[0]?.resumeFingerprint, 'fingerprint-same');
+      assert.equal((await readFile(resultsJsonlPath, 'utf8')).trimEnd().split('\n').length, 1);
+    });
+  });
+
   test('ignores a torn final WAL line when resuming', async () => {
     await withDir(async (dir) => {
       const systemPromptPath = join(dir, 'system_prompt.md');
@@ -904,7 +1007,7 @@ describe('fixed prompt controller', () => {
   });
 });
 
-function taskCompletedEvent(input: { taskId: string; promptHash?: string }): FixedPromptWalEvent {
+function taskCompletedEvent(input: { taskId: string; promptHash?: string; resumeFingerprint?: string }): FixedPromptWalEvent {
   return {
     schemaVersion: 1,
     type: 'task_completed',
@@ -918,6 +1021,7 @@ function taskCompletedEvent(input: { taskId: string; promptHash?: string }): Fix
     scored: true,
     eligible: true,
     promptHash: input.promptHash ?? hashSystemPrompt('fixed prompt\n'),
+    ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
     tokenSummary: tokenSummary({ input: 2, output: 3, reasoning: 0, total: 5, costUsd: 0.01 }),
     steps: 4,
     durationMs: 50,

@@ -60,6 +60,7 @@ export interface FixedPromptTaskCompletedEvent {
   ts: number;
   runId: string;
   roundId: string;
+  resumeFingerprint?: string;
   taskId: string;
   status: HarborCellOutput['status'];
   passed: boolean;
@@ -84,6 +85,7 @@ export interface FixedPromptTaskInfraFailedEvent {
   ts: number;
   runId: string;
   roundId: string;
+  resumeFingerprint?: string;
   taskId: string;
   status: 'infra_failed';
   passed: false;
@@ -100,6 +102,7 @@ export interface FixedPromptTaskBudgetExhaustedEvent {
   ts: number;
   runId: string;
   roundId: string;
+  resumeFingerprint?: string;
   taskId: string;
   status: 'budget_exhausted';
   passed: false;
@@ -117,6 +120,7 @@ export interface FixedPromptTaskPlumbingFailedEvent {
   ts: number;
   runId: string;
   roundId: string;
+  resumeFingerprint?: string;
   taskId: string;
   status: 'plumbing_failed';
   passed: false;
@@ -199,6 +203,7 @@ export interface RunFixedPromptControllerInput {
   maxInfraFailureRate?: number;
   costCeilingUsd?: number;
   maxConcurrency?: number;
+  resumeFingerprint?: string;
   harborRunner: HarborTaskRunner;
   now?: () => number;
   newId?: () => string;
@@ -232,8 +237,8 @@ export async function runFixedPromptController(
   const expectedPromptHash = hashSystemPrompt(systemPrompt);
   const config = { ...input.config, systemPrompt };
   const events = await readFixedPromptWal(input.resultsJsonlPath);
-  const completed = terminalTaskEvents(events, input.runId, input.roundId, expectedPromptHash);
-  const stopEvidence = roundTaskEvents(events, input.runId, input.roundId, expectedPromptHash);
+  const completed = terminalTaskEvents(events, input.runId, input.roundId, expectedPromptHash, input.resumeFingerprint);
+  const stopEvidence = roundTaskEvents(events, input.runId, input.roundId, expectedPromptHash, input.resumeFingerprint);
   let stopReason = controllerStopReason({
     events: [...stopEvidence.values()],
     taskCount: input.tasks.length,
@@ -277,6 +282,7 @@ export async function runFixedPromptController(
         config,
         systemPrompt,
         expectedPromptHash,
+        resumeFingerprint: input.resumeFingerprint,
         id: newId(),
         ts: now(),
       }).then((event) => ({ index, event })));
@@ -407,6 +413,7 @@ async function runTaskAndBuildEvent(input: {
   config: Config;
   systemPrompt: string;
   expectedPromptHash: string;
+  resumeFingerprint?: string;
   id: string;
   ts: number;
 }): Promise<FixedPromptTaskWalEvent> {
@@ -428,6 +435,7 @@ async function runTaskAndBuildEvent(input: {
         runId: input.input.runId,
         roundId: input.input.roundId,
         expectedPromptHash: input.expectedPromptHash,
+        resumeFingerprint: input.resumeFingerprint,
         id: input.id,
         ts: input.ts,
       });
@@ -450,6 +458,7 @@ async function runTaskAndBuildEvent(input: {
           runId: input.input.runId,
           roundId: input.input.roundId,
           expectedPromptHash: input.expectedPromptHash,
+          resumeFingerprint: input.resumeFingerprint,
           id: input.id,
           ts: input.ts,
         });
@@ -459,6 +468,7 @@ async function runTaskAndBuildEvent(input: {
         taskId: input.task.id,
         runId: input.input.runId,
         roundId: input.input.roundId,
+        resumeFingerprint: input.resumeFingerprint,
         id: input.id,
         ts: input.ts,
       });
@@ -467,6 +477,7 @@ async function runTaskAndBuildEvent(input: {
   return taskEventFromOutput({
     output,
     expectedPromptHash: input.expectedPromptHash,
+    resumeFingerprint: input.resumeFingerprint,
     taskId: input.task.id,
     runId: input.input.runId,
     roundId: input.input.roundId,
@@ -478,6 +489,7 @@ async function runTaskAndBuildEvent(input: {
 function taskEventFromOutput(input: {
   output: HarborTaskRunOutput;
   expectedPromptHash: string;
+  resumeFingerprint?: string;
   taskId: string;
   runId: string;
   roundId: string;
@@ -500,6 +512,7 @@ function taskCompletedEvent(input: {
   taskId: string;
   runId: string;
   roundId: string;
+  resumeFingerprint?: string;
   id: string;
   ts: number;
 }): FixedPromptTaskCompletedEvent {
@@ -513,6 +526,7 @@ function taskCompletedEvent(input: {
     ts: input.ts,
     runId: input.runId,
     roundId: input.roundId,
+    ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
     taskId: input.taskId,
     status: output.cell.status,
     passed,
@@ -534,6 +548,7 @@ function taskCompletedEvent(input: {
 function taskPlumbingFailedEvent(input: {
   output: HarborTaskRunOutput;
   expectedPromptHash: string;
+  resumeFingerprint?: string;
   taskId: string;
   runId: string;
   roundId: string;
@@ -549,6 +564,7 @@ function taskPlumbingFailedEvent(input: {
     ts: input.ts,
     runId: input.runId,
     roundId: input.roundId,
+    ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
     taskId: input.taskId,
     status: 'plumbing_failed',
     passed: false,
@@ -599,6 +615,7 @@ function taskInfraFailedEvent(input: {
   taskId: string;
   runId: string;
   roundId: string;
+  resumeFingerprint?: string;
   id: string;
   ts: number;
 }): FixedPromptTaskInfraFailedEvent {
@@ -609,6 +626,7 @@ function taskInfraFailedEvent(input: {
     ts: input.ts,
     runId: input.runId,
     roundId: input.roundId,
+    ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
     taskId: input.taskId,
     status: 'infra_failed',
     passed: false,
@@ -625,6 +643,7 @@ function taskBudgetExhaustedEvent(input: {
   runId: string;
   roundId: string;
   expectedPromptHash: string;
+  resumeFingerprint?: string;
   id: string;
   ts: number;
 }): FixedPromptTaskBudgetExhaustedEvent {
@@ -635,6 +654,7 @@ function taskBudgetExhaustedEvent(input: {
     ts: input.ts,
     runId: input.runId,
     roundId: input.roundId,
+    ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
     taskId: input.taskId,
     status: 'budget_exhausted',
     passed: false,
@@ -651,12 +671,13 @@ function terminalTaskEvents(
   runId: string,
   roundId: string,
   expectedPromptHash: string,
+  resumeFingerprint: string | undefined,
 ): Map<string, FixedPromptTaskWalEvent> {
   const byTask = new Map<string, FixedPromptTaskWalEvent>();
   for (const event of events) {
     if (!isTaskEvent(event)) continue;
     if (event.runId !== runId || event.roundId !== roundId) continue;
-    if (!eventMatchesPrompt(event, expectedPromptHash)) continue;
+    if (!eventMatchesResumeIdentity(event, expectedPromptHash, resumeFingerprint)) continue;
     if (
       event.type === 'task_completed'
       || event.type === 'task_budget_exhausted'
@@ -673,20 +694,28 @@ function roundTaskEvents(
   runId: string,
   roundId: string,
   expectedPromptHash: string,
+  resumeFingerprint: string | undefined,
 ): Map<string, FixedPromptTaskWalEvent> {
   const byTask = new Map<string, FixedPromptTaskWalEvent>();
   for (const event of events) {
     if (!isTaskEvent(event)) continue;
     if (event.runId !== runId || event.roundId !== roundId) continue;
-    if (!eventMatchesPrompt(event, expectedPromptHash)) continue;
+    if (!eventMatchesResumeIdentity(event, expectedPromptHash, resumeFingerprint)) continue;
     byTask.set(event.taskId, event);
   }
   return byTask;
 }
 
-function eventMatchesPrompt(event: FixedPromptTaskWalEvent, expectedPromptHash: string): boolean {
+function eventMatchesResumeIdentity(
+  event: FixedPromptTaskWalEvent,
+  expectedPromptHash: string,
+  resumeFingerprint: string | undefined,
+): boolean {
+  if (resumeFingerprint !== undefined && event.resumeFingerprint !== resumeFingerprint) return false;
   if (event.type === 'task_infra_failed') return true;
-  if (event.type === 'task_budget_exhausted') return false;
+  if (event.type === 'task_budget_exhausted') {
+    return resumeFingerprint !== undefined && event.expectedPromptHash === expectedPromptHash;
+  }
   if (event.promptHash === expectedPromptHash) return true;
   return event.type === 'task_plumbing_failed' && event.expectedPromptHash === expectedPromptHash;
 }

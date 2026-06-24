@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import type { Config } from './contracts.js';
 import {
   runFixedPromptController,
@@ -6,57 +9,6 @@ import {
   type HarborTaskRunner,
 } from './fixed-prompt-controller.js';
 import { assertPositiveInt } from './numeric-guards.js';
-
-export interface PromptAbConcurrencyCalibrationPlanInput {
-  tasks: readonly FixedPromptTask[];
-  taskDurationsMs?: Readonly<Record<string, number>>;
-  samplesPerBucket?: number;
-  concurrencyLevels?: readonly number[];
-  repsPerLevel?: number;
-}
-
-export interface PromptAbConcurrencyCalibrationTrial {
-  concurrency: number;
-  rep: number;
-  task: FixedPromptTask;
-}
-
-export interface PromptAbConcurrencyCalibrationPlan {
-  sampleTasks: FixedPromptTask[];
-  concurrencyLevels: number[];
-  repsPerLevel: number;
-  trials: PromptAbConcurrencyCalibrationTrial[];
-}
-
-export interface RunPromptAbConcurrencyCalibrationInput extends PromptAbConcurrencyCalibrationPlanInput {
-  runId: string;
-  config: Config;
-  systemPromptPath: string;
-  resultsJsonlPath: string;
-  maxInfraFailureRate?: number;
-  harborRunner: HarborTaskRunner;
-  now?: () => number;
-  newId?: () => string;
-}
-
-export interface PromptAbConcurrencyLevelSummary {
-  concurrency: number;
-  attempts: number;
-  completed: number;
-  budgetExhausted: number;
-  infraFailed: number;
-  plumbingFailed: number;
-  totalCostUsd: number;
-  meanDurationMs: number | null;
-  maxDurationMs: number | null;
-}
-
-export interface PromptAbConcurrencyCalibrationResult {
-  runId: string;
-  sampleTaskIds: string[];
-  levels: PromptAbConcurrencyLevelSummary[];
-  recommendedConcurrency: number;
-}
 
 export interface SummarizePromptAbComparisonInput {
   runId: string;
@@ -79,6 +31,7 @@ export interface RunPromptAbComparisonInput {
   evaluationTasks: readonly FixedPromptTask[];
   reps?: number;
   maxConcurrency?: number;
+  resumeFingerprint?: string;
   budgetMs?: number;
   harborRunner: HarborTaskRunner;
   now?: () => number;
@@ -190,73 +143,30 @@ export interface PromptAbCandidateTaskLimitResult {
   truncatedTaskIds: string[];
 }
 
-export interface RunPromptAbTaskQualificationInput {
-  runId: string;
-  config: Config;
-  baselinePromptPath: string;
-  resultsJsonlPath: string;
-  candidateTasks: readonly FixedPromptTask[];
-  reps?: number;
-  targetTaskCount?: number;
-  minPasses?: number;
-  maxPasses?: number;
-  maxConcurrency?: number;
-  harborRunner: HarborTaskRunner;
-  now?: () => number;
-  newId?: () => string;
-}
-
-export interface PromptAbQualifiedTaskSummary {
-  taskId: string;
-  passed: number;
-  valid: number;
-  budgetExhausted: number;
-  infraFailed: number;
-  plumbingFailed: number;
-  missing: number;
-  classification: 'medium' | 'easy' | 'hard' | 'invalid';
-}
-
-export interface PromptAbTaskQualificationResult {
-  runId: string;
+export interface PromptAbRunManifestInput {
+  baselinePromptHash: string;
+  candidatePromptHash: string;
+  provider: string;
+  baseUrl: string;
+  model: string;
+  taskBudgetSec: number;
+  harborTimeoutMs: number;
+  evaluationTaskIds: readonly string[];
   reps: number;
-  targetTaskCount: number;
-  candidateTaskCount: number;
-  selectedTaskIds: string[];
-  selectedTasks: FixedPromptTask[];
-  shortage: number;
-  tasks: PromptAbQualifiedTaskSummary[];
-  rejected: {
-    easyTaskIds: string[];
-    hardTaskIds: string[];
-    infraOrInvalidTaskIds: string[];
-    overflowTaskIds: string[];
-  };
-  runs: FixedPromptTaskWalEvent[][];
+  candidateLimit: number | null;
+  maxConcurrency: number;
+  selectionMode?: 'explicit' | 'metadata';
+  candidateTaskIds?: readonly string[];
+  maxExpertTimeEstimateMin?: number | null;
+  targetEvaluationTaskCount?: number | null;
 }
 
-export function planPromptAbConcurrencyCalibration(
-  input: PromptAbConcurrencyCalibrationPlanInput,
-): PromptAbConcurrencyCalibrationPlan {
-  const samplesPerBucket = input.samplesPerBucket ?? 2;
-  const repsPerLevel = input.repsPerLevel ?? 1;
-  assertPositiveInt('samplesPerBucket', samplesPerBucket);
-  assertPositiveInt('repsPerLevel', repsPerLevel);
-  const concurrencyLevels = [...(input.concurrencyLevels ?? [1, 2, 4, 8, 12, 16])];
-  for (const level of concurrencyLevels) assertPositiveInt('concurrencyLevel', level);
-
-  const sampleTasks = representativeTasks(input.tasks, input.taskDurationsMs ?? {}, samplesPerBucket);
-  const trials: PromptAbConcurrencyCalibrationTrial[] = [];
-  for (const concurrency of concurrencyLevels) {
-    for (let rep = 0; rep < repsPerLevel; rep += 1) {
-      for (const task of sampleTasks) {
-        trials.push({ concurrency, rep, task });
-      }
-    }
-  }
-
-  return { sampleTasks, concurrencyLevels, repsPerLevel, trials };
-}
+export type PromptAbRunManifest = PromptAbRunManifestInput & {
+  schemaVersion: 'maka.prompt_ab.run_manifest.v1';
+  fingerprint: string;
+  evaluationTaskIds: string[];
+  candidateTaskIds?: string[];
+};
 
 export function filterPromptAbCandidateTasksByMetadata(
   input: PromptAbMetadataFilterInput,
@@ -304,115 +214,53 @@ export function limitPromptAbCandidateTasks(
   };
 }
 
-export async function runPromptAbConcurrencyCalibration(
-  input: RunPromptAbConcurrencyCalibrationInput,
-): Promise<PromptAbConcurrencyCalibrationResult> {
-  const maxInfraFailureRate = input.maxInfraFailureRate ?? 0;
-  assertZeroToOne('maxInfraFailureRate', maxInfraFailureRate);
-  const plan = planPromptAbConcurrencyCalibration(input);
-  const levels: PromptAbConcurrencyLevelSummary[] = [];
-
-  for (const concurrency of plan.concurrencyLevels) {
-    const events: FixedPromptTaskWalEvent[] = [];
-    for (let rep = 0; rep < plan.repsPerLevel; rep += 1) {
-      const roundId = calibrationRoundId(concurrency, rep);
-      const result = await runFixedPromptController({
-        runId: input.runId,
-        roundId,
-        config: input.config,
-        systemPromptPath: input.systemPromptPath,
-        resultsJsonlPath: input.resultsJsonlPath,
-        resultsTsvPath: `${input.resultsJsonlPath}.${roundId}.tsv`,
-        tasks: plan.sampleTasks,
-        maxConcurrency: concurrency,
-        harborRunner: input.harborRunner,
-        ...(input.now ? { now: input.now } : {}),
-        ...(input.newId ? { newId: input.newId } : {}),
-      });
-      events.push(...result.events);
-    }
-    levels.push(summarizeConcurrencyLevel(concurrency, events));
-  }
-
-  const passing = levels.filter((level) => level.attempts > 0 && level.infraFailed / level.attempts <= maxInfraFailureRate);
-  const recommendedConcurrency = passing.at(-1)?.concurrency ?? plan.concurrencyLevels[0] ?? 1;
+export function buildPromptAbRunManifest(input: PromptAbRunManifestInput): PromptAbRunManifest {
+  const manifestWithoutFingerprint = withoutUndefined({
+    schemaVersion: 'maka.prompt_ab.run_manifest.v1' as const,
+    baselinePromptHash: input.baselinePromptHash,
+    candidatePromptHash: input.candidatePromptHash,
+    provider: input.provider,
+    baseUrl: input.baseUrl,
+    model: input.model,
+    taskBudgetSec: input.taskBudgetSec,
+    harborTimeoutMs: input.harborTimeoutMs,
+    evaluationTaskIds: [...input.evaluationTaskIds],
+    reps: input.reps,
+    candidateLimit: input.candidateLimit,
+    maxConcurrency: input.maxConcurrency,
+    selectionMode: input.selectionMode,
+    candidateTaskIds: input.candidateTaskIds ? [...input.candidateTaskIds] : undefined,
+    maxExpertTimeEstimateMin: input.maxExpertTimeEstimateMin,
+    targetEvaluationTaskCount: input.targetEvaluationTaskCount,
+  });
   return {
-    runId: input.runId,
-    sampleTaskIds: plan.sampleTasks.map((task) => task.id),
-    levels,
-    recommendedConcurrency,
+    ...manifestWithoutFingerprint,
+    fingerprint: `sha256:${createHash('sha256').update(canonicalJson(manifestWithoutFingerprint)).digest('hex')}`,
   };
 }
 
-export async function runPromptAbTaskQualification(
-  input: RunPromptAbTaskQualificationInput,
-): Promise<PromptAbTaskQualificationResult> {
-  const reps = input.reps ?? 3;
-  const targetTaskCount = input.targetTaskCount ?? 30;
-  const minPasses = input.minPasses ?? 1;
-  const maxPasses = input.maxPasses ?? reps - 1;
-  assertPositiveInt('reps', reps);
-  assertPositiveInt('targetTaskCount', targetTaskCount);
-  assertPositiveInt('minPasses', minPasses);
-  assertPositiveInt('maxPasses', maxPasses);
-  if (minPasses > maxPasses) throw new Error('minPasses must be <= maxPasses');
-  if (input.maxConcurrency !== undefined) assertPositiveInt('maxConcurrency', input.maxConcurrency);
-
-  const runs: FixedPromptTaskWalEvent[][] = [];
-  for (let rep = 0; rep < reps; rep += 1) {
-    const roundId = `ab-qualification-r${rep}`;
-    const result = await runFixedPromptController({
-      runId: input.runId,
-      roundId,
-      config: input.config,
-      systemPromptPath: input.baselinePromptPath,
-      resultsJsonlPath: input.resultsJsonlPath,
-      resultsTsvPath: `${input.resultsJsonlPath}.${roundId}.tsv`,
-      tasks: input.candidateTasks,
-      harborRunner: input.harborRunner,
-      ...(input.maxConcurrency !== undefined ? { maxConcurrency: input.maxConcurrency } : {}),
-      ...(input.now ? { now: input.now } : {}),
-      ...(input.newId ? { newId: input.newId } : {}),
-    });
-    runs.push(result.events);
+export async function ensurePromptAbRunManifest(
+  path: string,
+  manifest: PromptAbRunManifest,
+): Promise<PromptAbRunManifest> {
+  let raw: string | undefined;
+  try {
+    raw = await readFile(path, 'utf8');
+  } catch (error) {
+    if (!isNotFound(error)) throw error;
   }
-
-  const summaries = input.candidateTasks.map((task) => {
-    const arm = summarizeTaskArm(task.id, runs, reps);
-    return {
-      taskId: task.id,
-      passed: arm.passed,
-      valid: arm.valid,
-      budgetExhausted: arm.budgetExhausted,
-      infraFailed: arm.infraFailed,
-      plumbingFailed: arm.plumbingFailed,
-      missing: arm.missing,
-      classification: classifyQualificationTask(arm, reps, minPasses, maxPasses),
-    };
-  });
-  const mediumTaskIds = summaries
-    .filter((summary) => summary.classification === 'medium')
-    .map((summary) => summary.taskId);
-  const selectedTaskIds = mediumTaskIds.slice(0, targetTaskCount);
-  const selected = new Set(selectedTaskIds);
-  const byId = new Map(input.candidateTasks.map((task) => [task.id, task]));
-  return {
-    runId: input.runId,
-    reps,
-    targetTaskCount,
-    candidateTaskCount: input.candidateTasks.length,
-    selectedTaskIds,
-    selectedTasks: selectedTaskIds.map((taskId) => byId.get(taskId)).filter((task): task is FixedPromptTask => task !== undefined),
-    shortage: Math.max(0, targetTaskCount - selectedTaskIds.length),
-    tasks: summaries,
-    rejected: {
-      easyTaskIds: summaries.filter((summary) => summary.classification === 'easy').map((summary) => summary.taskId),
-      hardTaskIds: summaries.filter((summary) => summary.classification === 'hard').map((summary) => summary.taskId),
-      infraOrInvalidTaskIds: summaries.filter((summary) => summary.classification === 'invalid').map((summary) => summary.taskId),
-      overflowTaskIds: mediumTaskIds.filter((taskId) => !selected.has(taskId)),
-    },
-    runs,
-  };
+  if (raw === undefined) {
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    return manifest;
+  }
+  const existing = JSON.parse(raw) as PromptAbRunManifest;
+  if (existing.fingerprint !== manifest.fingerprint) {
+    throw new Error(
+      `prompt A/B run manifest does not match existing run id: existing ${existing.fingerprint ?? 'missing'}, current ${manifest.fingerprint}. Use a new MAKA_PROMPT_AB_RUN_ID or restore the original run config.`,
+    );
+  }
+  return existing;
 }
 
 export function summarizePromptAbComparison(input: SummarizePromptAbComparisonInput): PromptAbComparisonSummary {
@@ -524,60 +372,6 @@ export function renderPromptAbComparisonMarkdown(summary: PromptAbComparisonSumm
   return `${lines.join('\n')}\n`;
 }
 
-function representativeTasks(
-  tasks: readonly FixedPromptTask[],
-  taskDurationsMs: Readonly<Record<string, number>>,
-  samplesPerBucket: number,
-): FixedPromptTask[] {
-  const sorted = [...tasks].sort((a, b) => {
-    const durationDelta = durationFor(a, taskDurationsMs) - durationFor(b, taskDurationsMs);
-    return durationDelta === 0 ? a.id.localeCompare(b.id) : durationDelta;
-  });
-  const buckets: FixedPromptTask[][] = [[], [], []];
-  sorted.forEach((task, index) => {
-    const bucket = Math.min(2, Math.floor(index * 3 / Math.max(1, sorted.length)));
-    buckets[bucket]!.push(task);
-  });
-
-  const selected = new Map<string, FixedPromptTask>();
-  for (const bucket of buckets) {
-    for (const task of bucket.slice(0, samplesPerBucket)) {
-      selected.set(task.id, task);
-    }
-  }
-  return [...selected.values()];
-}
-
-function durationFor(task: FixedPromptTask, taskDurationsMs: Readonly<Record<string, number>>): number {
-  const duration = taskDurationsMs[task.id];
-  return typeof duration === 'number' && Number.isFinite(duration) && duration >= 0
-    ? duration
-    : Number.MAX_SAFE_INTEGER;
-}
-
-function calibrationRoundId(concurrency: number, rep: number): string {
-  return `calibration-c${concurrency}-r${rep}`;
-}
-
-function summarizeConcurrencyLevel(
-  concurrency: number,
-  events: readonly FixedPromptTaskWalEvent[],
-): PromptAbConcurrencyLevelSummary {
-  const timed = events.filter((event) => event.type !== 'task_infra_failed' && event.type !== 'task_budget_exhausted');
-  const durations = timed.map((event) => event.durationMs);
-  return {
-    concurrency,
-    attempts: events.length,
-    completed: events.filter((event) => event.type === 'task_completed').length,
-    budgetExhausted: events.filter((event) => event.type === 'task_budget_exhausted').length,
-    infraFailed: events.filter((event) => event.type === 'task_infra_failed').length,
-    plumbingFailed: events.filter((event) => event.type === 'task_plumbing_failed').length,
-    totalCostUsd: sum(timed.map((event) => event.tokenSummary.costUsd)),
-    meanDurationMs: durations.length > 0 ? sum(durations) / durations.length : null,
-    maxDurationMs: durations.length > 0 ? Math.max(...durations) : null,
-  };
-}
-
 function summarizeArm(
   runs: readonly (readonly FixedPromptTaskWalEvent[])[],
   taskIds: readonly string[],
@@ -674,27 +468,6 @@ function summarizeTaskArm(
     plumbingFailed: observed.filter((event) => event.type === 'task_plumbing_failed').length,
     missing: reps - observed.length,
   };
-}
-
-function classifyQualificationTask(
-  arm: PromptAbTaskArmSummary,
-  reps: number,
-  minPasses: number,
-  maxPasses: number,
-): PromptAbQualifiedTaskSummary['classification'] {
-  if (
-    arm.valid !== reps
-    || arm.budgetExhausted > 0
-    || arm.infraFailed > 0
-    || arm.plumbingFailed > 0
-    || arm.missing > 0
-  ) {
-    return 'invalid';
-  }
-  if (arm.passed >= minPasses && arm.passed <= maxPasses) return 'medium';
-  if (arm.passed === 0) return 'hard';
-  if (arm.passed === reps) return 'easy';
-  return 'invalid';
 }
 
 function summarizeAttemptPairs(
@@ -830,6 +603,7 @@ async function runComparisonTaskArm(input: {
     resultsJsonlPath: input.input.resultsJsonlPath,
     resultsTsvPath: `${input.input.resultsJsonlPath}.${roundId}.tsv`,
     tasks: [input.task],
+    ...(input.input.resumeFingerprint ? { resumeFingerprint: input.input.resumeFingerprint } : {}),
     harborRunner: input.input.harborRunner,
     ...(input.input.now ? { now: input.input.now } : {}),
     ...(input.input.newId ? { newId: input.input.newId } : {}),
@@ -899,15 +673,30 @@ function binomialProbability(n: number, k: number, p: number): number {
   return combinations * p ** k * (1 - p) ** (n - k);
 }
 
-function sum(values: readonly number[]): number {
-  return values.reduce((total, value) => total + value, 0);
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries.map(([key, entryValue]) => `${JSON.stringify(key)}:${canonicalJson(entryValue)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
-function assertZeroToOne(name: string, value: number): number {
-  if (!Number.isFinite(value) || value < 0 || value > 1) {
-    throw new Error(`${name} must be a number in [0, 1] (got ${String(value)})`);
-  }
-  return value;
+function withoutUndefined<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)) as T;
+}
+
+function isNotFound(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: unknown }).code === 'ENOENT';
+}
+
+function sum(values: readonly number[]): number {
+  return values.reduce((total, value) => total + value, 0);
 }
 
 function assertSameRunCount(
