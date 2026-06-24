@@ -6652,14 +6652,21 @@ button:active {
   background: transparent;
 }
 
+/* PR-FE-BUG-HUNT-7 (kenji aesthetic-audit reminder 9, finding #1):
+   composer micro-interaction scales drifted way past the global
+   tactile press range (`button:active { scale(0.97) }`). 1.08 hover
+   and 0.94 active read as bouncy and call attention to the wrong
+   thing — these are quiet utility buttons at the bottom of the
+   composer, not primary CTAs. Pull back to 1.02 hover / 0.97 active
+   so they match the rest of the app. */
 .maka-composer-tool-button:hover:not(:disabled) {
   color: var(--foreground);
   background: var(--foreground-5);
-  transform: scale(1.08);
+  transform: scale(1.02);
 }
 
 .maka-composer-tool-button:active:not(:disabled) {
-  transform: scale(0.94);
+  transform: scale(0.97);
 }
 
 .maka-composer-tool-button:disabled {
@@ -6691,17 +6698,20 @@ button:active {
     box-shadow 220ms var(--ease-out-strong);
 }
 
+/* PR-FE-BUG-HUNT-7: send button is a primary CTA so it gets a hair
+   more travel than the tool buttons, but still inside the global
+   tactile press range. 1.06→1.03 hover, 0.96→0.97 active. */
 .maka-composer-send-button:hover:not(:disabled) {
   background: linear-gradient(oklch(0.32 0 0), oklch(0.20 0 0));
   color: oklch(1 0 0);
-  transform: scale(1.06);
+  transform: scale(1.03);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.18),
     0 4px 14px -8px oklch(from var(--foreground) l c h / 0.34);
 }
 
 .maka-composer-send-button:active:not(:disabled) {
-  transform: scale(0.96);
+  transform: scale(0.97);
   box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.10);
 }
 
