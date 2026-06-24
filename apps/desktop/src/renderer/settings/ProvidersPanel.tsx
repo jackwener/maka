@@ -2055,14 +2055,30 @@ function ClaudeSubscriptionCard() {
   const [pasteValue, setPasteValue] = useState('');
   const [pasteError, setPasteError] = useState<string | null>(null);
   const toast = useToast();
+  // PR-FE-BUG-HUNT-1 (kenji bug-hunt 2026-06-24): ClaudeSubscriptionCard
+  // launches a browser OAuth flow that takes seconds-to-minutes to
+  // complete. Closing the Settings modal while a `startLogin` /
+  // `submitPaste` / `logout` / `refreshQuota` call was in flight
+  // would `setState` on an unmounted component (loud warning in dev,
+  // masks real bugs in prod). Mirror the `mountedRef` pattern other
+  // settings sub-cards in this file use.
+  const claudeCardMountedRef = useRef(true);
+  useEffect(() => {
+    claudeCardMountedRef.current = true;
+    return () => {
+      claudeCardMountedRef.current = false;
+    };
+  }, []);
 
   const refresh = async () => {
     try {
       const next = await window.maka.claudeSubscription.getAccountState();
+      if (!claudeCardMountedRef.current) return;
       setState(next);
       setPasteError(null);
     } catch (error) {
       const message = subscriptionActionErrorMessage(error);
+      if (!claudeCardMountedRef.current) return;
       toast.error('刷新登录状态失败', message);
       setPasteError(message);
     }
@@ -2071,11 +2087,13 @@ function ClaudeSubscriptionCard() {
   const refreshExperimentalGate = async () => {
     try {
       const flag = await window.maka.claudeSubscription.isExperimentalEnabled();
+      if (!claudeCardMountedRef.current) return;
       setExperimentalEnabled(flag);
       setExperimentalGateError(null);
       if (flag) void refresh();
     } catch (error) {
       const message = subscriptionActionErrorMessage(error);
+      if (!claudeCardMountedRef.current) return;
       setExperimentalEnabled(null);
       setExperimentalGateError(message);
       toast.error('读取 Claude 登录开关失败', message);
@@ -2162,6 +2180,7 @@ function ClaudeSubscriptionCard() {
       // mounted). Discriminate by checking for the `ok` field; the
       // envelope variant has it, the success payload does not.
       const payload = await window.maka.claudeSubscription.getAuthUrl();
+      if (!claudeCardMountedRef.current) return;
       if ('ok' in payload) {
         // Envelope variant. `ok: true` shouldn't happen for
         // getAuthUrl (success returns the payload, not an envelope),
@@ -2176,6 +2195,7 @@ function ClaudeSubscriptionCard() {
       // kenji `1da909d5` hardening: pass the opaque authRequestId,
       // NOT the URL. Main looks up the URL it generated.
       const opened = await window.maka.claudeSubscription.openAuthUrl(payload.authRequestId);
+      if (!claudeCardMountedRef.current) return;
       if (!opened.ok) {
         toast.error('无法打开浏览器', subscriptionResultMessage(opened.message, '无法打开浏览器，请稍后重试。'));
         setAuthRequestId(null);
@@ -2184,10 +2204,11 @@ function ClaudeSubscriptionCard() {
       await refresh();
     } catch (error) {
       const message = subscriptionActionErrorMessage(error);
+      if (!claudeCardMountedRef.current) return;
       toast.error('无法开始登录', message);
       setPasteError(message);
     } finally {
-      finishPendingAction();
+      if (claudeCardMountedRef.current) finishPendingAction();
     }
   }
 
@@ -2200,6 +2221,7 @@ function ClaudeSubscriptionCard() {
         authRequestId,
         pasteValue,
       );
+      if (!claudeCardMountedRef.current) return;
       if (result.ok) {
         toast.success('登录成功', '已绑定 Claude 订阅。');
         setAuthRequestId(null);
@@ -2211,10 +2233,11 @@ function ClaudeSubscriptionCard() {
       }
     } catch (error) {
       const message = subscriptionActionErrorMessage(error);
+      if (!claudeCardMountedRef.current) return;
       toast.error('授权码提交失败', message);
       setPasteError(message);
     } finally {
-      finishPendingAction();
+      if (claudeCardMountedRef.current) finishPendingAction();
     }
   }
 
@@ -2223,15 +2246,17 @@ function ClaudeSubscriptionCard() {
     if (!beginPendingAction('cancel')) return;
     try {
       await window.maka.claudeSubscription.cancelAuthorization(authRequestId);
+      if (!claudeCardMountedRef.current) return;
       setAuthRequestId(null);
       setStateHint(null);
       setPasteValue('');
       setPasteError(null);
       await refresh();
     } catch (error) {
+      if (!claudeCardMountedRef.current) return;
       toast.error('取消登录失败', subscriptionActionErrorMessage(error));
     } finally {
-      finishPendingAction();
+      if (claudeCardMountedRef.current) finishPendingAction();
     }
   }
 
@@ -2247,6 +2272,7 @@ function ClaudeSubscriptionCard() {
       });
       if (!ok) return;
       const result = await window.maka.claudeSubscription.logout();
+      if (!claudeCardMountedRef.current) return;
       if (result.ok) {
         toast.success('已退出登录', '本地凭据已清除。');
         await refresh();
@@ -2254,9 +2280,10 @@ function ClaudeSubscriptionCard() {
         toast.error('退出失败', subscriptionResultMessage(result.message, '退出登录失败，请稍后重试。'));
       }
     } catch (error) {
+      if (!claudeCardMountedRef.current) return;
       toast.error('退出失败', subscriptionActionErrorMessage(error));
     } finally {
-      finishPendingAction();
+      if (claudeCardMountedRef.current) finishPendingAction();
     }
   }
 
@@ -2264,11 +2291,13 @@ function ClaudeSubscriptionCard() {
     if (!beginPendingAction('quota')) return;
     try {
       await window.maka.claudeSubscription.refreshQuota();
+      if (!claudeCardMountedRef.current) return;
       await refresh();
     } catch (error) {
+      if (!claudeCardMountedRef.current) return;
       toast.error('刷新配额失败', subscriptionActionErrorMessage(error));
     } finally {
-      finishPendingAction();
+      if (claudeCardMountedRef.current) finishPendingAction();
     }
   }
 
