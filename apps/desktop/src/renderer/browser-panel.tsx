@@ -50,12 +50,18 @@ export function BrowserPanel(props: { sessionId: string; hidden: boolean }) {
   // Subscribe to this session's state pushes + seed the initial state.
   useEffect(() => {
     let alive = true;
+    editingRef.current = false;
+    setState(EMPTY_STATE);
+    setAddress('');
     const apply = (next: BrowserState) => {
       if (!alive) return;
       setState(next);
       if (!editingRef.current) setAddress(next.url);
     };
-    void window.maka.browser.getState(sessionId).then((s) => apply(s ?? EMPTY_STATE));
+    void window.maka.browser
+      .getState(sessionId)
+      .then((s) => apply(s ?? EMPTY_STATE))
+      .catch(() => apply(EMPTY_STATE));
     const off = window.maka.browser.onState((payload) => {
       if (payload.sessionId === sessionId) apply(payload.state);
     });
@@ -144,6 +150,7 @@ export function BrowserPanel(props: { sessionId: string; hidden: boolean }) {
           className="maka-browser-navbtn"
           aria-label={state.loading ? '停止加载页面' : '刷新页面'}
           title={state.loading ? '停止' : '刷新'}
+          disabled={!state.hasPage && !state.loading}
           onClick={() =>
             state.loading ? void window.maka.browser.stop(sessionId) : void window.maka.browser.reload(sessionId)
           }

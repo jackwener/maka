@@ -28,6 +28,16 @@ describe('renderer utility surfaces use shared UI primitives', () => {
       /aria-label=\{state\.loading \? '停止加载页面' : '刷新页面'\}/,
       'BrowserPanel reload/stop icon-only action must expose a state-specific accessible name',
     );
+    assert.match(
+      source,
+      /disabled=\{!state\.hasPage && !state\.loading\}[\s\S]*state\.loading \? void window\.maka\.browser\.stop\(sessionId\) : void window\.maka\.browser\.reload\(sessionId\)/,
+      'BrowserPanel reload action must not stay clickable in the empty no-page state',
+    );
+    assert.match(
+      source,
+      /useEffect\(\(\) => \{[\s\S]*editingRef\.current = false;[\s\S]*setState\(EMPTY_STATE\);[\s\S]*setAddress\(''\);[\s\S]*window\.maka\.browser[\s\S]*\.getState\(sessionId\)[\s\S]*\.catch\(\(\) => apply\(EMPTY_STATE\)\);[\s\S]*\}, \[sessionId\]\)/,
+      'BrowserPanel must clear stale browser chrome synchronously when switching sessions and fail-soft on state-read errors',
+    );
   });
 
   it('keeps unsupported artifact preview CTA on Button without legacy classes', async () => {
