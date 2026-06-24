@@ -56,8 +56,8 @@ const CATALOG_TABS: Array<{ id: CatalogTab; label: string }> = [
 /**
  * "（5 分钟前拉取）" style suffix for the model-source label.
  * Delegates to the shared `@maka/core/relative-time` helper so the
- * format matches the sidebar's MessageMeta and every other Settings
- * surface. Returns an empty string when no timestamp is available
+ * format matches the rest of the app's relative-time surfaces.
+ * Returns an empty string when no timestamp is available
  * (e.g. legacy connections from before `modelsFetchedAt` was
  * persisted by backend `94b482b`).
  */

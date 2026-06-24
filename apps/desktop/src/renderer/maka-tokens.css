@@ -853,10 +853,9 @@
     gap: 18px;
   }
   .maka-message-row {
-    max-width: 760px;
+    max-width: var(--maka-chat-measure, 680px);
     margin: 0 auto;
     width: 100%;
-    padding: 0 24px;
     /* Subtle fade on first paint — uses @starting-style instead of a
        keyframe so the transition is interruptible and stays smooth even
        when messages are streaming in rapidly (emil-design-eng "Use CSS
@@ -875,14 +874,15 @@
   .maka-turn {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    max-width: 760px;
+    gap: 4px;
+    max-width: var(--maka-chat-measure, 680px);
     margin: 0 auto;
     width: 100%;
+    box-sizing: border-box;
   }
 
   .maka-turn-tools {
-    padding: 0 24px;
+    padding: 0 8px 0 0;
   }
 
   /* Compact turn summary chips between the user message and the rest of
@@ -891,35 +891,37 @@
   .maka-turn-summary {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    padding: 0 24px;
-    margin-top: -2px;
+    gap: 4px;
+    padding: 0 0 0 0;
+    margin-top: 0;
+    margin-bottom: 2px;
+    opacity: 0.86;
   }
 
   .maka-turn-summary-chip {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
+    gap: 3px;
+    padding: 0;
     border-radius: 999px;
-    background: var(--foreground-5);
-    color: var(--foreground-60);
-    font-size: 11px;
+    background: transparent;
+    color: var(--foreground-42);
+    font-size: 9.5px;
     font-weight: 500;
-    line-height: 1.4;
-    letter-spacing: 0.01em;
+    line-height: 1.25;
+    letter-spacing: 0;
   }
 
   .maka-turn-summary-chip code {
     background: transparent;
     color: inherit;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 9.5px;
   }
 
   .maka-turn-summary-chip[data-kind="tools"] {
-    color: var(--accent);
-    background: oklch(from var(--accent) l c h / 0.08);
+    color: var(--foreground-42);
+    background: transparent;
   }
 
   .maka-turn-summary-chip[data-kind="duration"] {
@@ -929,11 +931,11 @@
   .maka-turn-summary-chip[data-kind="tokens"] {
     font-variant-numeric: tabular-nums;
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: 9px;
   }
 
   .maka-turn-summary-chip[data-state="in-progress"] {
-    background: oklch(from var(--accent) l c h / 0.10);
+    background: transparent;
     color: var(--accent);
     font-weight: 600;
   }
@@ -944,19 +946,18 @@
      notices that this turn departed from the sticky session model
      (kenji 3-way decision lock). */
   .maka-turn-summary-chip[data-kind="model"][data-switched="true"] {
-    border-color: oklch(from var(--warning, var(--accent)) l c h / 0.45);
-    background: oklch(from var(--warning, var(--accent)) l c h / 0.08);
+    color: var(--foreground-55);
   }
 
   .maka-turn-summary-chip-switched {
-    margin-left: 5px;
-    padding: 0 5px;
+    margin-left: 2px;
+    padding: 0 4px;
     border-radius: 999px;
-    background: oklch(from var(--warning, var(--accent)) l c h / 0.20);
-    color: var(--warning-text, var(--accent));
-    font-size: 10px;
+    background: oklch(from var(--foreground) l c h / 0.06);
+    color: var(--foreground-45);
+    font-size: 8.5px;
     font-weight: 600;
-    letter-spacing: 0.04em;
+    letter-spacing: 0;
   }
 
   /* Optional reasoning block — collapsed by default, expandable to inspect
@@ -1115,19 +1116,23 @@
     /* maka-message-row already handles padding; this just keeps the
        in-progress assistant streaming-row visually separated from any
        previous turn while it lands. */
+    box-sizing: border-box;
   }
-  /* User bubble: tinted slate distinct from --accent, with a notched
-     top-right corner to mark direction. Matches external design reference §15.1. */
+  /* User message: plain text block aligned to the right, matching the
+     assistant's no-bubble body treatment while preserving the dialogue
+     structure via row alignment + metadata placement. */
   .maka-bubble-user {
-    background: var(--chat-user-bg);
-    border-radius: 12px 4px 12px 12px;
-    padding: 10px 14px;
-    line-height: 1.5;
-    color: var(--chat-user-foreground);
-    max-width: 80%;
+    background: transparent;
+    border-radius: 0;
+    padding: 2px 0 0;
+    line-height: 1.68;
+    color: var(--foreground);
+    max-width: min(100%, 640px);
     margin-left: auto;
+    margin-right: 0;
     white-space: pre-wrap;
     word-wrap: break-word;
+    text-align: left;
   }
   /* Assistant: no bubble — just text on background, like an editor.
      The bubble itself flows naturally; child markdown elements (h*, p, ul,
@@ -1147,8 +1152,8 @@
          build outputs). */
   .maka-bubble-assistant {
     color: var(--foreground);
-    line-height: 1.65;
-    padding: 4px 0;
+    line-height: 1.68;
+    padding: 2px 0 0;
     word-wrap: break-word;
     /* PR-MESSAGE-BODY-MAX-WIDTH-0 (WAWQAQ msg `38055b9f`, skills
        round task #116): cap body prose at ~72ch per pbakaus
@@ -1168,8 +1173,10 @@
   }
   .maka-bubble-assistant > :first-child { margin-top: 0; }
   .maka-bubble-assistant > :last-child { margin-bottom: 0; }
+  .maka-bubble-assistant > :nth-last-child(2) { margin-bottom: 0; }
+  .maka-bubble-assistant > p:nth-last-child(2) { display: inline; }
   .maka-bubble-assistant p {
-    margin: 0 0 12px;
+    margin: 0 0 14px;
     text-wrap: pretty;
   }
   .maka-bubble-assistant h1,
@@ -1404,9 +1411,11 @@
     border-top: 1px solid var(--border);
   }
 
-  /* User: still a bubble, content stays verbatim (no markdown) */
+  /* User content stays verbatim text, but shares the same no-bubble body
+     language as assistant messages. */
   .maka-bubble-user {
     white-space: pre-wrap;
+    max-width: min(100%, 640px);
   }
 
   /* Hover-revealed copy button on assistant messages. The wrapper is
@@ -1418,16 +1427,16 @@
   }
   .maka-message-copy {
     position: absolute;
-    top: 4px;
-    right: 0;
-    width: 28px;
-    height: 28px;
+    top: 2px;
+    right: -2px;
+    width: 24px;
+    height: 24px;
     display: grid;
     place-items: center;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    background: var(--background);
-    color: var(--foreground-60);
+    border: 0;
+    border-radius: 999px;
+    background: oklch(from var(--background) l c h / 0.88);
+    color: var(--foreground-48);
     opacity: 0;
     /* PR-CHAT-COPY-BUTTON-POLISH-0 (WAWQAQ 10min loop): the copy
        button used to fade in on hover but never moved — felt like
@@ -1436,12 +1445,13 @@
        on hover reads as "this just slid in from above" rather than
        a fade-only flash. transform stays GPU-accelerated; transition
        list keeps both axes coherent. */
-    transform: translateY(-4px) scale(0.94);
+    transform: translateY(-3px) scale(0.96);
     transition:
       opacity 160ms ease,
       transform 180ms var(--ease-out-strong),
       color 120ms ease,
-      background 120ms ease;
+      background 120ms ease,
+      box-shadow 120ms ease;
   }
 
   /* Labelled variant (e.g. "复制思考过程") — flows inline, doesn't absolute-
@@ -1454,10 +1464,11 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 10px;
-    font-size: 11px;
+    padding: 3px 8px;
+    font-size: 10.5px;
     font-weight: 600;
     opacity: 1;
+    background: transparent;
   }
   .maka-bubble-with-actions:hover .maka-message-copy,
   .maka-bubble-with-actions:focus-within .maka-message-copy,
@@ -1471,11 +1482,11 @@
   }
   .maka-message-copy:hover {
     color: var(--foreground);
-    background: var(--foreground-3);
+    background: oklch(from var(--foreground) l c h / 0.05);
+    box-shadow: 0 1px 3px oklch(from var(--foreground) l c h / 0.08);
   }
   .maka-message-copy[data-copied="true"] {
     color: var(--success-text);
-    border-color: oklch(from var(--success) l c h / 0.4);
     background: oklch(from var(--success) l c h / 0.08);
     opacity: 1;
   }
@@ -1485,7 +1496,6 @@
   }
   .maka-message-copy[data-copy-feedback="failed"] {
     color: var(--destructive);
-    border-color: oklch(from var(--destructive) l c h / 0.35);
     background: oklch(from var(--destructive) l c h / 0.08);
     opacity: 1;
   }

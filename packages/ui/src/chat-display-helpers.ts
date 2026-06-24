@@ -1,6 +1,6 @@
 /**
  * Small pure helpers backing the chat surface (TurnView,
- * RelativeTime, MessageMeta, StreamingAssistantBubble, etc.) —
+ * RelativeTime, StreamingAssistantBubble, etc.) —
  * time formatters, role/avatar label derivation, turn duration +
  * abort marker copy.
  *

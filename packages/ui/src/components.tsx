@@ -61,11 +61,9 @@ import {
   getPromptSuggestions,
 } from './locale-helpers.js';
 import {
-  avatarInitial,
   createAbsoluteTimeFormat,
   formatAbsoluteTimestamp,
   formatTurnDuration,
-  messageRoleLabel,
   turnAbortMarkerLabel,
 } from './chat-display-helpers.js';
 import {
@@ -4316,7 +4314,6 @@ export function ChatView(props: {
           })}
           {(props.streamingText || props.thinkingText) && (
             <article className="maka-message-row maka-turn-streaming message assistant streaming">
-              <MessageMeta role="assistant" userLabel={props.userLabel} />
               {/* PR-UI-LAYOUT-42: Reasoning panel for Anthropic-style
                * extended thinking. Renders ABOVE the streaming
                * answer because thinking always precedes the
@@ -4530,17 +4527,30 @@ function ChatModelSwitcher(props: {
  * Memoized because chat scroll re-renders the whole list on every streaming
  * delta; this keeps already-final bubbles from re-parsing markdown.
  */
-const MessageBody = memo(function MessageBody(props: { role: string; text: string }) {
+const MessageBody = memo(function MessageBody(props: { role: string; text: string; ts?: number }) {
   if (props.role === 'user') {
-    return <div className="maka-bubble-user">{props.text}</div>;
+    return (
+      <div className="maka-bubble-user">
+        <MessageTimeInline ts={props.ts} position="before" />
+        <span>{props.text}</span>
+      </div>
+    );
   }
   return (
     <div className="maka-bubble-assistant maka-bubble-with-actions">
       <Markdown text={props.text} />
-      <MessageCopyButton text={props.text} />
+      <MessageTimeInline ts={props.ts} />
     </div>
   );
 });
+
+function MessageTimeInline(props: { ts?: number; position?: 'before' | 'after' }) {
+  if (props.ts === undefined) return null;
+  const positionClass = props.position === 'before'
+    ? 'maka-message-time-inline-before'
+    : 'maka-message-time-inline-after';
+  return <RelativeTime ts={props.ts} className={`maka-message-time-inline ${positionClass}`} />;
+}
 
 function MessageCopyButton(props: { text: string; label?: string }) {
   const copyFeedback = useClipboardCopyFeedback(1400, { redact: false });
@@ -4835,8 +4845,7 @@ function TurnView(props: {
           className="maka-message-row message user"
           title={turn.user.ts ? formatAbsoluteTimestamp(turn.user.ts) : undefined}
         >
-          <MessageMeta role="user" userLabel={props.userLabel} ts={turn.user.ts} />
-          <MessageBody role="user" text={turn.user.text} />
+          <MessageBody role="user" text={turn.user.text} ts={turn.user.ts} />
         </article>
       )}
       <TurnSummary turn={turn} previousModelId={props.previousModelId} />
@@ -4847,8 +4856,7 @@ function TurnView(props: {
           className="maka-message-row message system"
           title={note.ts ? formatAbsoluteTimestamp(note.ts) : undefined}
         >
-          <MessageMeta role="system" userLabel={props.userLabel} ts={note.ts} />
-          <MessageBody role="system" text={note.text} />
+          <MessageBody role="system" text={note.text} ts={note.ts} />
         </article>
       ))}
       {turn.tools.length > 0 && (
@@ -4862,7 +4870,6 @@ function TurnView(props: {
           data-turn-status={turn.status}
           title={turn.assistant.ts ? formatAbsoluteTimestamp(turn.assistant.ts) : undefined}
         >
-          <MessageMeta role="assistant" userLabel={props.userLabel} ts={turn.assistant.ts} />
           <div className="maka-bubble-assistant-stack">
             {turn.assistantThinking && (
               <details className="maka-turn-thinking">
@@ -4907,7 +4914,7 @@ function TurnView(props: {
                 )}
               </div>
             )}
-            <MessageBody role="assistant" text={turn.assistant.text} />
+            <MessageBody role="assistant" text={turn.assistant.text} ts={turn.assistant.ts} />
           </div>
           {reverseBadges.length > 0 && (
             <div className="maka-turn-lineage-row maka-turn-lineage-row-reverse" aria-label="本轮回答的衍生">
@@ -5145,8 +5152,8 @@ const STATUS_FOOTER_ICON: Record<TurnFooterActionMeta['id'], ReactNode> = {
  * read it identically regardless of presentation state.
  */
 const STATUS_FOOTER_PRIORITY: Record<TurnFooterActionMeta['id'], 'primary' | 'secondary'> = {
-  retry: 'primary',
-  regenerate: 'primary',
+  retry: 'secondary',
+  regenerate: 'secondary',
   branch: 'secondary',
   copy: 'secondary',
 };
@@ -5339,30 +5346,6 @@ function readStreamSnap(): boolean {
   }
   return false;
 }
-
-function MessageMeta(props: { role: string; userLabel?: string; ts?: number }) {
-  const label = messageRoleLabel(props.role, props.userLabel);
-  const initial = props.role === 'assistant' ? 'M' : avatarInitial(label);
-  // PR-CHAT-META-POLISH-0 (kenji `bd58fcb6`): when the user has no
-  // configured displayName, both `avatarInitial` and
-  // `messageRoleLabel` fall back to `'你'`, producing the visual
-  // duplicate `你 你`. Suppress the text name in this case — the
-  // avatar carries the role signal on its own, and screen readers
-  // still get the label via `aria-label` on the row. For assistant
-  // (`M` + `Maka`) and for users with a real displayName
-  // (`JK` + `Jakevin`) we keep both because they aren't redundant.
-  const isAnonymousUser = props.role === 'user' && (!props.userLabel || !props.userLabel.trim());
-  return (
-    <span className="maka-message-meta" aria-label={label}>
-      <span className="maka-message-avatar" data-role={props.role} aria-hidden="true">
-        {initial}
-      </span>
-      {!isAnonymousUser && <span className="maka-message-name">{label}</span>}
-      {props.ts !== undefined && <RelativeTime ts={props.ts} />}
-    </span>
-  );
-}
-
 
 const COMPOSER_MAX_HEIGHT = 240;
 

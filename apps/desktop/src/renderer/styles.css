@@ -367,6 +367,7 @@ button:active {
 }
 
 .mainColumn {
+  --maka-chat-measure: 680px;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -4805,6 +4806,7 @@ button:active {
 .maka-chatContent {
   position: relative;
   min-height: 100%;
+  padding-inline: clamp(24px, 4vw, 40px);
 }
 
 .maka-chat-shell {
@@ -5672,73 +5674,57 @@ button:active {
 .message.assistant > span { color: var(--accent); }
 .message.system > span { color: var(--info-text); }
 
-.maka-message-time {
-  margin-left: 6px;
-  color: var(--foreground-40);
-  font-size: 9px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-/* PR-CHAT-MESSAGE-AVATAR-BEZEL-0 (WAWQAQ msg `145f15d5`): post-skills
-   review polish for chat meta. Applies high-end-visual-design "nested
-   bezel" pattern (outer ring + inner avatar) and design-taste-frontend
-   editorial typography hierarchy:
-   - avatar: 18→24px, rounded-square 30%→full circle, currentColor
-     ring shadow gives the bezel/halo
-   - meta gap: 4→8px so the avatar + name + time breathe
-   - name: slight positive tracking for editorial feel; previously the
-     compact -0.005em made the name read as one mass with the avatar
-   Skills applied: high-end-visual-design §2 (nested-shell architecture),
-   design-taste-frontend §3 (typographic hierarchy via tracking). */
-.maka-message-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+.maka-message-time-inline {
+  display: inline-block;
+  color: var(--foreground-35);
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--foreground-60);
-}
-
-.maka-message-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0;
-  user-select: none;
-  flex-shrink: 0;
-  /* Nested-bezel: 1px inner top highlight + 1px outer halo so the
-     avatar reads as a tangible disc against the message surface
-     instead of a flat color blob. */
-  box-shadow:
-    inset 0 1px 0 oklch(from currentColor l c h / 0.22),
-    0 0 0 1px oklch(from var(--background) l c h / 0.6),
-    0 0 0 2px oklch(from currentColor l c h / 0.10);
-}
-
-.maka-message-avatar[data-role="user"] {
-  background: var(--chat-user-bg);
-  color: var(--chat-user-foreground);
-}
-
-.maka-message-avatar[data-role="assistant"] {
-  background: oklch(from var(--accent) l c h / 0.14);
-  color: var(--accent);
-}
-
-.maka-message-avatar[data-role="system"] {
-  background: oklch(from var(--info) l c h / 0.18);
-  color: var(--info-text);
-}
-
-.maka-message-name {
+  font-weight: 500;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transform: translateY(-1px);
+  transition: opacity 120ms ease;
+  pointer-events: none;
   white-space: nowrap;
+}
+
+.maka-message-time-inline-after {
+  margin-left: 8px;
+}
+
+.maka-message-time-inline-before {
+  margin-right: 8px;
+}
+
+.message:hover .maka-message-time-inline,
+.message:focus-within .maka-message-time-inline {
+  opacity: 1;
+}
+
+.message.user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.maka-turn > .maka-turn-summary,
+.maka-turn > .maka-turn-lineage-row,
+.message.assistant .maka-turn-lineage-row,
+.message.assistant .maka-turn-footer {
+  display: flex;
+  max-width: var(--maka-chat-measure, 680px);
+  width: 100%;
+  margin-left: 0;
+  margin-right: auto;
+  justify-content: flex-start;
+}
+
+.message.assistant,
+.message.system {
+  max-width: var(--maka-chat-measure, 680px);
+  width: 100%;
+  margin-left: 0;
+  margin-right: auto;
 }
 
 .message pre {
@@ -6339,10 +6325,10 @@ button:active {
 }
 
 .composer .maka-composer-inner {
-  --h-composer-min: 72px;
+  --h-composer-min: 56px;
   position: relative;
-  width: min(620px, 80vw);
-  max-width: 620px;
+  width: min(var(--maka-chat-measure, 680px), 100%);
+  max-width: var(--maka-chat-measure, 680px);
   margin-inline: auto;
   box-sizing: border-box;
   /* Composer outer chrome uses the universal page-card recipe (atlas §4
@@ -6350,12 +6336,12 @@ button:active {
      since the composer reads as a "hero card" rather than a flush page
      surface — 6px would feel too tight for a 72px+ tall floating panel. */
   border: 1px solid var(--card-border-color);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 16px;
+  padding: 10px 12px 8px;
   background: var(--card-bg);
   box-shadow:
-    var(--card-shadow),
-    var(--card-highlight);
+    0 10px 30px -24px oklch(from var(--foreground) l c h / 0.25),
+    0 1px 0 oklch(1 0 0 / 0.76);
   transition:
     border-color var(--duration-emphasized) var(--ease-out-strong),
     box-shadow 220ms var(--ease-out-strong);
@@ -6379,8 +6365,8 @@ button:active {
    rather than sitting flat (study §8.1, §8.4). */
 .composer .maka-composer-inner:focus-within {
   box-shadow:
-    0 0 0 1px oklch(from var(--foreground) l c h / 0.07),
-    0 2px 8px -6px oklch(from var(--foreground) l c h / 0.16);
+    0 0 0 1px oklch(from var(--accent) l c h / 0.24),
+    0 14px 34px -28px oklch(from var(--foreground) l c h / 0.24);
 }
 
 .composer textarea {
@@ -6397,7 +6383,7 @@ button:active {
   appearance: none;
   display: block;
   width: 100%;
-  min-height: var(--h-composer-min, 84px);
+  min-height: var(--h-composer-min, 56px);
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -6406,8 +6392,8 @@ button:active {
   padding: 0 !important;
   color: var(--foreground);
   font-family: var(--font-default);
-  font-size: 14px;
-  line-height: 24px;
+  font-size: 15px;
+  line-height: 1.55;
   --tw-ring-shadow: 0 0 #0000 !important;
   --tw-ring-offset-shadow: 0 0 #0000 !important;
 }
@@ -6437,9 +6423,9 @@ button:active {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid oklch(from var(--foreground) l c h / 0.05);
+  margin-top: 8px;
+  padding-top: 2px;
+  border-top: 0;
 }
 
 .maka-composer-left-controls,
@@ -6453,7 +6439,7 @@ button:active {
      read as too loose vs reference implementation's tighter density. 8px keeps
      individual controls separable while pulling them into one
      coherent toolbar group. */
-  gap: 8px;
+  gap: 6px;
 }
 
 .maka-composer-left-controls {
@@ -6468,23 +6454,24 @@ button:active {
 .maka-composer-status-slot {
   min-width: 0;
   flex: 1 1 auto;
-  color: var(--foreground-50);
-  font-size: 11px;
+  color: var(--foreground-42);
+  font-size: 10px;
+  text-align: center;
 }
 
 .maka-composer-role-chip,
 .maka-composer-mode-chip,
 .maka-composer-model-chip {
-  height: 24px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   border: 1px solid var(--color-border-tertiary);
   border-radius: 999px;
-  padding: 0 8px;
-  background: var(--background);
-  color: var(--foreground-65);
-  font-size: 11px;
+  padding: 0 9px;
+  background: oklch(from var(--background) l c h / 0.82);
+  color: var(--foreground-62);
+  font-size: 10.5px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -6507,7 +6494,7 @@ button:active {
 }
 
 .maka-composer-model-chip {
-  max-width: min(190px, 30vw);
+  max-width: min(180px, 28vw);
 }
 
 /* PR-MOVE-PERMISSION-MODE (WAWQAQ 2026-06-23): permission-mode chip
@@ -6574,16 +6561,16 @@ button:active {
 
 .maka-composer-right-controls .maka-model-switcher {
   margin: 0;
-  max-width: min(190px, 30vw);
-  font-size: 11px;
+  max-width: min(180px, 28vw);
+  font-size: 10.5px;
 }
 
 .maka-composer-right-controls .maka-model-switcher-trigger {
-  min-width: 108px;
-  max-width: min(190px, 30vw);
-  height: 24px;
+  min-width: 100px;
+  max-width: min(180px, 28vw);
+  height: 26px;
   gap: 4px;
-  padding: 0 8px;
+  padding: 0 9px;
   border-color: var(--color-border-tertiary);
   background: var(--background);
   color: var(--foreground-65);
@@ -6600,9 +6587,9 @@ button:active {
 }
 
 .maka-composer-right-controls .maka-model-switcher-value {
-  max-width: 138px;
+  max-width: 128px;
   color: inherit;
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 500;
 }
 
@@ -6625,10 +6612,10 @@ button:active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 999px;
   background: transparent;
   color: var(--foreground-60);
   transition:
@@ -6638,16 +6625,16 @@ button:active {
 }
 
 .maka-composer-context-plus {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border: 1px solid var(--foreground-20);
   border-radius: 999px;
   background: transparent;
 }
 
 .maka-composer-tool-button.maka-composer-mic-button {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   border: 0;
   background: transparent;
 }
@@ -6679,12 +6666,17 @@ button:active {
    per design-taste rules). Uses oklch off-black (charcoal) so the button
    reads as premium machined hardware. */
 .maka-composer-send-button {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
-  background: linear-gradient(oklch(0.24 0 0), oklch(0.14 0 0));
+  background: linear-gradient(
+    oklch(from var(--accent) calc(l - 0.10) c h),
+    oklch(from var(--accent) calc(l - 0.20) c h)
+  );
   color: oklch(1 0 0);
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.15);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.18),
+    0 8px 18px -14px oklch(from var(--accent) l c h / 0.5);
   transition:
     background var(--duration-base) var(--ease-out-strong),
     transform var(--duration-emphasized) var(--ease-out-strong),
@@ -6692,12 +6684,15 @@ button:active {
 }
 
 .maka-composer-send-button:hover:not(:disabled) {
-  background: linear-gradient(oklch(0.32 0 0), oklch(0.20 0 0));
+  background: linear-gradient(
+    oklch(from var(--accent) calc(l - 0.05) c h),
+    oklch(from var(--accent) calc(l - 0.15) c h)
+  );
   color: oklch(1 0 0);
   transform: scale(1.06);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.18),
-    0 4px 14px -8px oklch(from var(--foreground) l c h / 0.34);
+    0 10px 22px -14px oklch(from var(--accent) l c h / 0.55);
 }
 
 .maka-composer-send-button:active:not(:disabled) {
@@ -6706,9 +6701,9 @@ button:active {
 }
 
 .maka-composer-send-button:disabled {
-  background: oklch(0.18 0 0);
+  background: oklch(from var(--foreground) 0.72 0 h / 0.18);
   color: oklch(1 0 0);
-  opacity: 1;
+  opacity: 0.72;
   cursor: not-allowed;
 }
 
@@ -6716,7 +6711,7 @@ button:active {
   /* PR-PARCHMENT-HOME-2: must share the new composer card measure
      (620px) so the "选择工作目录 ▾" pill stays aligned with the card
      left edge above it. */
-  width: min(620px, 80vw);
+  width: min(var(--maka-chat-measure, 680px), 100%);
   display: flex;
   justify-content: flex-start;
   box-sizing: border-box;
@@ -6727,17 +6722,17 @@ button:active {
   -webkit-app-region: no-drag;
   appearance: none;
   min-width: 0;
-  min-height: 26px;
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 8px;
+  padding: 4px 6px;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--foreground-55);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.25;
   text-align: left;
   transition: color var(--duration-quick) var(--ease-out-strong);
@@ -11356,10 +11351,11 @@ button:active {
 .maka-turn-footer {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 2px;
+  margin-top: 2px;
   padding: 0;
   flex-wrap: wrap;
+  opacity: 0.72;
 }
 /* PR-UI-PIXEL-6 (2026-06-21): turn-footer actions read as subtle borderless
    ghost buttons (reference's footer is icon-light, no bordered pills) — the
@@ -11368,16 +11364,20 @@ button:active {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid transparent;
+  padding: 2px 5px;
+  border-radius: 8px;
+  border: 0;
   background: transparent;
-  color: var(--foreground-60);
-  font-size: 12px;
-  transition: background var(--duration-quick) var(--ease-out-strong), color var(--duration-quick) var(--ease-out-strong), border-color var(--duration-quick) var(--ease-out-strong);
+  color: var(--foreground-42);
+  font-size: 10px;
+  transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+.maka-turn-footer:hover,
+.maka-turn-footer:focus-within {
+  opacity: 1;
 }
 .maka-turn-footer-action:hover:not(:disabled) {
-  background: var(--foreground-5);
+  background: oklch(from var(--foreground) l c h / 0.05);
   color: var(--foreground);
 }
 .maka-turn-footer-action:focus-visible {
@@ -11395,11 +11395,9 @@ button:active {
 }
 .maka-turn-footer-action[data-copy-feedback="copied"] {
   color: var(--accent);
-  border-color: oklch(from var(--accent) l c h / 0.35);
 }
 .maka-turn-footer-action[data-copy-feedback="failed"] {
   color: var(--destructive);
-  border-color: oklch(from var(--destructive) l c h / 0.35);
 }
 
 /* PR-UI-17 (audit §3.4): footer action density.
@@ -11487,26 +11485,27 @@ button:active {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
-  margin: 4px 0;
+  gap: 3px;
+  margin: 2px 0 4px;
+  opacity: 0.82;
 }
 .maka-turn-lineage-row-reverse {
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .maka-turn-lineage-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px;
+  gap: 3px;
+  padding: 1px 5px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--foreground-5);
-  color: var(--foreground-70);
-  font-size: 10px;
-  transition: background var(--duration-base) var(--ease-out-strong), color var(--duration-base) var(--ease-out-strong);
+  border: 0;
+  background: oklch(from var(--foreground) l c h / 0.05);
+  color: var(--foreground-48);
+  font-size: 9px;
+  transition: background 150ms var(--ease-out-strong), color 150ms var(--ease-out-strong);
 }
 .maka-turn-lineage-badge:hover {
-  background: var(--foreground-10, oklch(from var(--foreground) l c h / 0.08));
+  background: oklch(from var(--foreground) l c h / 0.08);
   color: var(--foreground);
 }
 .maka-turn-lineage-badge:focus-visible {
@@ -11514,15 +11513,12 @@ button:active {
   outline-offset: 2px;
 }
 .maka-turn-lineage-badge[data-direction="forward"] {
-  /* Subtle distinction: forward = info-tinted, reverse = success-tinted */
-  background: oklch(from var(--info) l c h / 0.08);
-  border-color: oklch(from var(--info) l c h / 0.20);
-  color: var(--info-text);
+  background: oklch(from var(--info) l c h / 0.06);
+  color: oklch(from var(--info-text) calc(l - 0.06) c h);
 }
 .maka-turn-lineage-badge[data-direction="reverse"] {
-  background: oklch(from var(--brand-deep) l c h / 0.08);
-  border-color: oklch(from var(--brand-deep) l c h / 0.20);
-  color: var(--brand-deep);
+  background: oklch(from var(--brand-deep) l c h / 0.06);
+  color: oklch(from var(--brand-deep) calc(l - 0.04) c h);
 }
 
 /* PR109f: branched session banner. Renders above the chat scroll area

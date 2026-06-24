@@ -715,13 +715,11 @@ async function writeSettings(workspaceRoot: string): Promise<void> {
   // real user's workspace, the placeholder would persist and
   // confuse them about who set it.
   //
-  // Phase 3 fixup v2 leaves `displayName` empty so the
-  // `messageRoleLabel` fallback (`'你'`) is what shows in
-  // screenshots — exactly what a new, unconfigured user would
-  // see. Settings test (`visual-smoke-fixture.test.ts`) asserts
-  // the empty-string value so a future patch that re-adds a
-  // demo name lands as an explicit copy decision, not silent
-  // drift.
+  // Phase 3 fixup v2 leaves `displayName` empty so screenshots and
+  // Settings match a new, unconfigured user. Settings test
+  // (`visual-smoke-fixture.test.ts`) asserts the empty-string value
+  // so a future patch that re-adds a demo name lands as an explicit
+  // copy decision, not silent drift.
   const settings = createDefaultSettings();
   settings.personalization.displayName = '';
   settings.appearance.theme = 'auto';
