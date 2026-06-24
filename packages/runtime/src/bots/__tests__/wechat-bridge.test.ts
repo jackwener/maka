@@ -9,6 +9,7 @@ import {
   mapWechatBridgeMessage,
   normalizeWechatBridgeUrl,
   normalizeWechatIlinkBaseUrl,
+  normalizeWechatSendTarget,
   readSseJsonObjects,
   testWechatIlinkCredentials,
 } from '../wechat-bridge.js';
@@ -29,6 +30,13 @@ describe('WechatBridge', () => {
     assert.equal(normalizeWechatIlinkBaseUrl('http://ilinkai.weixin.qq.com'), null);
     assert.equal(normalizeWechatIlinkBaseUrl('https://example.com'), null);
     assert.equal(normalizeWechatIlinkBaseUrl('http://127.0.0.1:18400'), null);
+  });
+
+  test('normalizes send targets before direct bridge and iLink sends', () => {
+    assert.equal(normalizeWechatSendTarget(' wxid_friend '), 'wxid_friend');
+    assert.equal(normalizeWechatSendTarget(' room@chatroom '), 'room@chatroom');
+    assert.equal(normalizeWechatSendTarget(''), null);
+    assert.equal(normalizeWechatSendTarget('   '), null);
   });
 
   test('bridge URL is a credential fact and a restart boundary', () => {

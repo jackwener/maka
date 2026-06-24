@@ -53,6 +53,11 @@ export function normalizeWechatIlinkBaseUrl(input: string | undefined): string |
   }
 }
 
+export function normalizeWechatSendTarget(value: string): string | null {
+  const target = value.trim();
+  return target.length > 0 ? target : null;
+}
+
 export class WechatBridge extends BaseBotAdapter implements SendCapable {
   private abortController: AbortController | null = null;
 
@@ -113,13 +118,15 @@ export class WechatBridge extends BaseBotAdapter implements SendCapable {
 
   async sendMessage(chatId: string, text: string, _options?: BotSendOptions): Promise<string | null> {
     if (!this.running) return null;
+    const targetId = normalizeWechatSendTarget(chatId);
+    if (!targetId) return null;
     try {
       if (isWechatIlinkChannel(this.settings)) {
-        return await this.sendIlinkMessage(chatId, text);
+        return await this.sendIlinkMessage(targetId, text);
       }
       const response = await wechatBridgeJson(this.settings, '/send', {
         method: 'POST',
-        body: JSON.stringify({ wxid: chatId, text }),
+        body: JSON.stringify({ wxid: targetId, text }),
       });
       const status = typeof response.status === 'string' ? response.status : '';
       if (status === 'failed') {
