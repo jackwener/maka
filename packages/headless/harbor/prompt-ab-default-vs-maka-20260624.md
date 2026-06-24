@@ -22,14 +22,14 @@ This PR now treats the run as a pure A/B evaluator:
 - Qualification: run A for 3 reps over the filtered candidate pool and select up to 30 medium tasks.
 - Primary A/B: 30 qualified tasks x 3 reps x 2 arms = 180 formal jobs.
 - Execution: A/B arms are interleaved by rep to reduce time-of-day/provider/cache drift.
-- Default task budget: `MAKA_PROMPT_AB_TASK_BUDGET_SEC=600`.
-- Default Harbor watchdog: `MAKA_PROMPT_AB_HARBOR_TIMEOUT_MS=780000`, leaving 3 minutes for Harbor/Docker cleanup after the 10-minute cell budget.
+- Default task budget: `MAKA_PROMPT_AB_TASK_BUDGET_SEC=1800`.
+- Default Harbor watchdog: `MAKA_PROMPT_AB_HARBOR_TIMEOUT_MS=2100000`, leaving 5 minutes for Harbor/Docker cleanup after the 30-minute cell budget.
 
 ## Timeout Limitation
 
-A 10-minute task budget cannot prove long-horizon prompt gains. If B improves by spending more time exploring, verifying, or repairing, the primary result is only valid as an under-budget comparison over the metadata-filtered short-horizon pool. The report must show per-arm timeout counts, and asymmetric timeout rates force an `inconclusive` decision.
+The primary comparison is intentionally cost-bounded to tasks whose declared expert estimate is at most 30 minutes, and the default task budget matches that pool at 30 minutes. A 10-minute budget is useful only for smoke runs; it should not be used for the primary A/B result because it can hide prompt gains that need more exploration, verification, or repair time. The report must show per-arm timeout counts, and asymmetric timeout rates force an `inconclusive` decision.
 
-Tasks with 60+ minute expert estimates should not be evaluated under a 10-minute primary budget. Long-horizon sensitivity should be run separately on a smaller hard/near-timeout slice with a 20-30 minute budget and 1-2 reps. Those results should not be mixed into the primary medium-task A/B summary.
+Tasks with 60+ minute expert estimates should not be mixed into this primary medium-task A/B summary. Long-horizon sensitivity should be run separately on a smaller hard/near-timeout slice with an explicit longer budget and 1-2 reps.
 
 ## Artifacts
 

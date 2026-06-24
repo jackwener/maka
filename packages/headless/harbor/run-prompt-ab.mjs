@@ -130,8 +130,8 @@ async function main() {
   const calibrationLevels = envLevels('MAKA_PROMPT_AB_CALIBRATION_LEVELS', [1, 2, 4, 8]);
   const maxInfraFailureRate = envZeroToOne('MAKA_PROMPT_AB_MAX_INFRA_FAILURE_RATE', 0);
   const explicitMaxConcurrency = envPosInt('MAKA_PROMPT_AB_MAX_CONCURRENCY', undefined);
-  const taskBudgetSec = envPosInt('MAKA_PROMPT_AB_TASK_BUDGET_SEC', 600);
-  const harborTimeoutMs = envPosInt('MAKA_PROMPT_AB_HARBOR_TIMEOUT_MS', (taskBudgetSec + 180) * 1000);
+  const taskBudgetSec = envPosInt('MAKA_PROMPT_AB_TASK_BUDGET_SEC', 30 * 60);
+  const harborTimeoutMs = envPosInt('MAKA_PROMPT_AB_HARBOR_TIMEOUT_MS', (taskBudgetSec + 300) * 1000);
 
   await readFile(keyFile, 'utf8');
   const candidatePrompt = await readFile(candidatePromptSourcePath, 'utf8');
