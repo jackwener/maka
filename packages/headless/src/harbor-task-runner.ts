@@ -18,6 +18,7 @@ const CONTAINER_MAKA_REPO = '/opt/maka-agent';
 const TRIAL_CELL_OUTPUT = 'agent/maka-cell-output.json';
 const TRIAL_RUNTIME_EVENTS = 'agent/runtime-events.jsonl';
 const TRIAL_REWARD = 'verifier/reward.txt';
+const TRIAL_RESULT = 'result.json';
 const TRIAL_TRACE_EVENTS_ROOT = 'agent/maka-storage/sessions';
 
 /** A Harbor-side failure (build/docker/timeout/missing artifact) — NOT a benchmark
@@ -170,9 +171,10 @@ export function createHarborTaskRunner(options: HarborTaskRunnerOptions): Harbor
     const trialDir = await findTrialDir(jobDir, basename(input.task.path));
     const cellOutputPath = join(trialDir, TRIAL_CELL_OUTPUT);
     const rewardPath = join(trialDir, TRIAL_REWARD);
+    const resultPath = join(trialDir, TRIAL_RESULT);
     const hostEventsPath = join(trialDir, TRIAL_RUNTIME_EVENTS);
 
-    const reward = await readReward(rewardPath, input.task.id);
+    const reward = await readReward(rewardPath, resultPath, input.task.id);
     const cell = await readCellOutput(cellOutputPath, input.task.id);
 
     return {
@@ -316,11 +318,15 @@ async function findTrialDir(jobDir: string, taskName: string): Promise<string> {
   return join(jobDir, match);
 }
 
-async function readReward(rewardPath: string, taskId: string): Promise<number> {
+async function readReward(rewardPath: string, resultPath: string, taskId: string): Promise<number> {
   let raw: string;
   try {
     raw = await readFile(rewardPath, 'utf8');
   } catch (error) {
+    const trialException = await readTrialException(resultPath);
+    if (trialException) {
+      throw new HarborInfraError(`Harbor trial failed before verifier reward for task ${taskId}: ${trialException}`, errorText(error));
+    }
     throw new HarborInfraError(`missing verifier reward for task ${taskId}`, errorText(error));
   }
   const trimmed = raw.trim();
@@ -332,6 +338,27 @@ async function readReward(rewardPath: string, taskId: string): Promise<number> {
     throw new HarborInfraError(`non-numeric verifier reward for task ${taskId}: ${trimmed}`);
   }
   return reward;
+}
+
+async function readTrialException(resultPath: string): Promise<string | null> {
+  let raw: string;
+  try {
+    raw = await readFile(resultPath, 'utf8');
+  } catch {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed)) return null;
+  const exceptionInfo = isRecord(parsed.exception_info) ? parsed.exception_info : null;
+  if (!exceptionInfo) return null;
+  const type = typeof exceptionInfo.exception_type === 'string' ? exceptionInfo.exception_type : 'HarborTrialError';
+  const message = typeof exceptionInfo.exception_message === 'string' ? exceptionInfo.exception_message : '';
+  return message ? `${type}: ${message}` : type;
 }
 
 async function readCellOutput(cellOutputPath: string, taskId: string): Promise<HarborCellOutput> {
@@ -409,4 +436,8 @@ function tail(text: string, lines = 20): string {
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

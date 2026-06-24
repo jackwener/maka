@@ -52,6 +52,7 @@ interface FakeOptions {
   cell?: HarborCellOutput | null;
   exitCode?: number;
   events?: string;
+  trialResult?: Record<string, unknown>;
   captured?: { config?: Record<string, unknown> };
 }
 
@@ -72,6 +73,9 @@ function fakeRunner(opts: FakeOptions): HarborProcessRunner {
     }
     if (opts.cell !== null) {
       await writeFile(join(trialDir, 'agent', 'maka-cell-output.json'), JSON.stringify(opts.cell ?? cellOutput()), 'utf8');
+    }
+    if (opts.trialResult) {
+      await writeFile(join(trialDir, 'result.json'), JSON.stringify(opts.trialResult), 'utf8');
     }
     await writeFile(join(trialDir, 'agent', 'runtime-events.jsonl'), opts.events ?? '{"type":"x"}\n', 'utf8');
     await mkdir(join(trialDir, 'agent', 'maka-storage', 'sessions', 'sess', 'runs', 'run'), { recursive: true });
@@ -247,6 +251,29 @@ describe('createHarborTaskRunner', () => {
         runHarbor: fakeRunner({ cell: cellOutput() }),
       });
       await assert.rejects(runner(runInput()), HarborInfraError);
+    });
+  });
+
+  test('reports Harbor trial exception when setup fails before verifier reward exists', async () => {
+    await withRun(async ({ jobsDir, repo }) => {
+      const runner = createHarborTaskRunner({
+        makaRepoPath: repo,
+        jobsDir,
+        model: 'deepseek/deepseek-v4-flash',
+        runHarbor: fakeRunner({
+          cell: cellOutput(),
+          trialResult: {
+            exception_info: {
+              exception_type: 'NonZeroAgentExitCodeError',
+              exception_message: 'Command failed (exit 127): nvm install 22',
+            },
+          },
+        }),
+      });
+      await assert.rejects(
+        runner(runInput()),
+        /Harbor trial failed before verifier reward for task task-1: NonZeroAgentExitCodeError: Command failed \(exit 127\): nvm install 22/,
+      );
     });
   });
 
