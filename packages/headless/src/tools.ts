@@ -615,30 +615,33 @@ else
 fi
 # Enumerate with ripgrep when present (fast), else POSIX find. Both branches emit
 # root-relative paths filtered by the shared ERE ($pattern_re) -- membership never
-# depends on rg's glob dialect -- and the merged output is sorted under a fixed
-# locale BEFORE the 200 cap, so a truncated result is the same set either way.
+# depends on rg's glob dialect -- then sort under a fixed locale BEFORE the 200 cap
+# so a truncated result is the same set either way. rg's listing goes to a temp
+# file (not a shell var) so the full set streams into the filter without being
+# buffered in memory, while its exit code is still checked in this shell: rc>1
+# surfaces a real error instead of "no files" (mirrors the Grep rg branch).
 # rg flags: --no-config keeps it hermetic (a host RIPGREP_CONFIG_PATH cannot
 # inject --follow/--glob); --no-ignore --hidden match find's file set; an explicit
-# path avoids rg's never-closing stdin; rc>1 surfaces a real error instead of
-# masquerading as "no files" (mirrors the Grep rg branch).
+# path avoids rg's never-closing stdin.
 rel_base=.
 [ "$base" != "$root" ] && rel_base=\${base#"$root"/}
 if command -v rg >/dev/null 2>&1; then
-  raw=$( cd "$root" && rg --no-config --files --no-ignore --hidden -- "$rel_base" )
+  list=$(mktemp) || exit 1
+  trap 'rm -f "$list"' EXIT
+  ( cd "$root" && rg --no-config --files --no-ignore --hidden -- "$rel_base" ) > "$list"
   rc=$?
   [ "$rc" -gt 1 ] && { echo "ripgrep failed (exit $rc)" >&2; exit "$rc"; }
-  files=$(printf '%s\n' "$raw" | sed 's#^\\./##' | awk -v re="$pattern_re" '$0 ~ re')
+  sed 's#^\\./##' "$list" | awk -v re="$pattern_re" '$0 ~ re' | LC_ALL=C sort | awk 'NR <= 200'
 else
-  files=$(find "$base" -type f -print | awk -v root="$root" -v re="$pattern_re" '
+  find "$base" -type f -print | awk -v root="$root" -v re="$pattern_re" '
     BEGIN { prefix = root "/" }
     {
       rel = $0
       if (index(rel, prefix) == 1) rel = substr(rel, length(prefix) + 1)
       if (rel ~ re) print rel
     }
-  ')
+  ' | LC_ALL=C sort | awk 'NR <= 200'
 fi
-printf '%s\n' "$files" | LC_ALL=C sort | awk 'NR <= 200'
 `;
 
 const GREP_SCRIPT = `${COMMON_SHELL_HELPERS}

@@ -523,6 +523,55 @@ describe('isolated headless tools', () => {
     );
   });
 
+  test('Glob rg success branch (fake rg) pins flags and applies ./-strip, ERE filter, sort, cap', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'maka-headless-glob-fakerg-ok-'));
+    const binDir = await mkdtemp(join(tmpdir(), 'maka-headless-fakerg-ok-'));
+    const argvLog = join(binDir, 'argv.txt');
+    // A fake rg that records its argv and prints a fixed `--files` listing in
+    // REVERSE order, with ./ prefixes and one non-.txt entry. This exercises the
+    // success branch end-to-end on a host with no real rg, so a regression in the
+    // pinned flags, ./ stripping, ERE filtering, sort, or the 200 cap is caught.
+    const rgScript = [
+      '#!/bin/sh',
+      `printf '%s ' "$@" > ${JSON.stringify(argvLog)}`,
+      'i=250',
+      `while [ "$i" -ge 1 ]; do printf './f%03d.txt\\n' "$i"; i=$((i - 1)); done`,
+      `printf '%s\\n' './notes.md' 'a.txt'`,
+      '',
+    ].join('\n');
+    await writeFile(join(binDir, 'rg'), rgScript, 'utf8');
+    await chmod(join(binDir, 'rg'), 0o755);
+    const tools = buildIsolatedHeadlessTools({
+      async exec(input) {
+        try {
+          const { stdout, stderr } = await execAsync(input.command, {
+            cwd: input.cwd,
+            env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ''}` },
+            maxBuffer: 1024 * 1024,
+          });
+          return { exitCode: 0, stdout, stderr };
+        } catch (error: any) {
+          return {
+            exitCode: typeof error?.code === 'number' ? error.code : 1,
+            stdout: typeof error?.stdout === 'string' ? error.stdout : '',
+            stderr: typeof error?.stderr === 'string' ? error.stderr : String(error),
+          };
+        }
+      },
+    });
+
+    const r = (await tool(tools, 'Glob').impl({ pattern: '*.txt' }, toolCtx(cwd))) as { files: string[] };
+    assert.equal(r.files.length, 200, 'capped at 200');
+    assert.equal(r.files[0], 'a.txt', 'sorted ascending despite reverse-order rg output');
+    assert.equal(r.files[1], 'f001.txt');
+    assert.equal(r.files[199], 'f199.txt');
+    assert.ok(!r.files.includes('notes.md'), '.md filtered out by the *.txt ERE');
+    assert.ok(!r.files.some((f) => f.startsWith('./')), 'leading ./ stripped from every path');
+    // rg was invoked with exactly the pinned safety flags.
+    const argv = await readFile(argvLog, 'utf8');
+    assert.match(argv, /--no-config --files --no-ignore --hidden --/);
+  });
+
   test('Read (command path) numbers lines, caps by default, and guards binaries', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'maka-headless-read-'));
     await writeFile(join(cwd, 'big.txt'), Array.from({ length: 2500 }, (_, i) => `line${i + 1}`).join('\n') + '\n', 'utf8');
