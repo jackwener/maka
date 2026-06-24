@@ -247,4 +247,17 @@ describe('Settings form accessibility labels', () => {
       'Settings sidebar navigation groups must not regress to anonymous visual-only labels',
     );
   });
+
+  it('keeps the Settings active nav row neutral without a leading accent rail', async () => {
+    const styles = await readRepo('apps/desktop/src/renderer/styles.css');
+    const activeRule = styles.match(/\.settingsNavItem\[data-active="true"\]\s*\{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    assert.match(activeRule, /background:\s*oklch\(from var\(--foreground\) l c h \/ 0\.065\);/);
+    assert.match(activeRule, /box-shadow:\s*none;/);
+    assert.doesNotMatch(
+      activeRule,
+      /inset\s+\d+px\s+0\s+0\s+var\(--accent\)|border-left|border-inline-start/,
+      'Settings active nav item must not draw the left green accent rail',
+    );
+  });
 });

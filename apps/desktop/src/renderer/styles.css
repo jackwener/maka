@@ -7398,14 +7398,12 @@ button:active {
   /* PR-SETTINGS-NAV-FOCUS-0 (round 14/15): bump the active state from
      the muted `--settings-nav-row-selected-bg` token to a slightly
      more visible 6.5% foreground overlay + 500 weight.
-     PR-SETTINGS-MOTION-TYPO-TOKENS-0 (round 15/15): add 3px inset
-     accent bar on the LEFT edge — Redesign-Skill recipe. Carries
-     brand into the most-used surface without recoloring the fill.
-     Inset shadow (not actual border) so the 38px row geometry stays. */
+     WAWQAQ msg 49bd00e1: keep the selected row neutral. A leading
+     accent rail reads like a stray status marker in the Settings nav. */
   background: oklch(from var(--foreground) l c h / 0.065);
   color: var(--foreground);
   font-weight: 500;
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: none;
 }
 
 .settingsNavItem:focus-visible {
