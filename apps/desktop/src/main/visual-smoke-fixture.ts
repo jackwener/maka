@@ -25,6 +25,10 @@ const VISUAL_SMOKE_SCENARIOS = new Set<VisualSmokeScenario>([
   'artifact-pane',
   'artifact-errors',
   'streaming-sidebar',
+  // PR-STREAM-TURN-CENTER: active session renders the live answer bubble in
+  // the main panel (below a committed turn) so the screenshot locks
+  // streaming-vs-committed horizontal alignment.
+  'streaming-answer',
   'permission-destructive',
   'stale-sessions',
   // PR108j: per-Settings-section fixtures so the screenshot pipeline
@@ -310,6 +314,16 @@ export function getVisualSmokeState(fixture: VisualSmokeFixture | null): VisualS
         streamingBySession: streamingState(),
         liveToolsBySession: streamingTools(),
       };
+    case 'streaming-answer':
+      // Active session = the committed turn-narrative session, PLUS a live
+      // answer streaming into it. The main panel then shows a settled turn
+      // and the in-flight bubble together, so the screenshot proves they
+      // share the same centered column (the streaming-turn-center fix).
+      return {
+        ...state,
+        activeSessionId: TURN_SESSION_ID,
+        streamingBySession: { [TURN_SESSION_ID]: STREAMING_ANSWER_MARKDOWN },
+      };
     case 'permission-destructive':
       return {
         ...state,
@@ -542,6 +556,21 @@ const TURN_CONTROL_SCENARIOS = new Set<VisualSmokeScenario>([
 
 const TURN_SESSION_ID = 'visual-smoke-turn';
 const STREAMING_SESSION_ID = 'visual-smoke-streaming';
+// PR-STREAM-TURN-CENTER: realistic multi-block markdown (heading + paragraph +
+// list) for the `streaming-answer` scenario, so the captured streaming bubble
+// exercises the same prose layout a real answer does and its left edge is
+// unambiguous to compare against the committed turn above it.
+const STREAMING_ANSWER_MARKDOWN = [
+  '## Maka Desktop 项目概况',
+  '',
+  '这里是当前项目的快速概览：',
+  '',
+  '- 框架：Electron + React 19 + Vite 7',
+  '- 语言：TypeScript',
+  '- 构建：tsc（main / preload）+ Vite（renderer）',
+  '',
+  '正在整理目录结构，稍等……',
+].join('\n');
 const PERMISSION_SESSION_ID = 'visual-smoke-permission';
 const WORKSTATION_RUNNING_SESSION_ID = 'visual-smoke-ws-running';
 const WORKSTATION_WAITING_SESSION_ID = 'visual-smoke-ws-waiting';

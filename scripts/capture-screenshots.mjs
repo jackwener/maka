@@ -66,6 +66,7 @@ const ALL_SCENARIOS = [
   'artifact-pane',
   'artifact-errors',
   'streaming-sidebar',
+  'streaming-answer',
   'permission-destructive',
   'stale-sessions',
   'settings-data',

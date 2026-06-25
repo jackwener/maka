@@ -12,6 +12,12 @@ export type VisualSmokeScenario =
   | 'artifact-pane'
   | 'artifact-errors'
   | 'streaming-sidebar'
+  // PR-STREAM-TURN-CENTER: streaming-sidebar only shows the SIDEBAR dot (its
+  // active session is a committed one). This seeds an ACTIVE session whose
+  // main panel renders the live answer bubble below a committed turn, so the
+  // screenshot locks streaming-vs-committed horizontal alignment — the gap
+  // that let the "streaming markdown sits ~110px too far left" bug ship.
+  | 'streaming-answer'
   | 'permission-destructive'
   | 'stale-sessions'
   | 'settings-data'

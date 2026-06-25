@@ -4329,29 +4329,40 @@ export function ChatView(props: {
             );
           })}
           {(props.streamingText || props.thinkingText) && (
-            <article className="maka-message-row maka-turn-streaming message assistant streaming">
-              {/* PR-UI-LAYOUT-42: Reasoning panel for Anthropic-style
-               * extended thinking. Renders ABOVE the streaming
-               * answer because thinking always precedes the
-               * answer. Default-open during streaming so the user
-               * sees the model reasoning; users can collapse it
-               * if too verbose. The panel disappears entirely on
-               * text_complete / abort / error (parent clears the
-               * thinkingBySession entry). */}
-              {props.thinkingText && (
-                <ReasoningPanel
-                  text={props.thinkingText}
-                  live={!props.streamingText}
-                  truncated={props.thinkingTruncated === true}
-                />
-              )}
-              {props.streamingText && (
-                <StreamingAssistantBubble
-                  text={props.streamingText}
-                  truncated={props.streamingTruncated === true}
-                />
-              )}
-            </article>
+            // PR-STREAM-TURN-CENTER: the in-flight answer must use the SAME
+            // `.maka-turn` shell a committed turn uses. `.maka-turn` owns the
+            // centered 680px reading column (max-width + margin:0 auto). A bare
+            // `.message.assistant` instead left-aligns — its unlayered
+            // margin-right:auto outranks `.maka-message-row`'s margin:0 auto —
+            // so without this wrapper the streaming answer rendered ~110px left
+            // of where it lands once committed, a visible horizontal jump on
+            // text_complete. Wrapping here makes streaming structurally
+            // identical to TurnView's committed turn.
+            <section className="maka-turn maka-turn-streaming">
+              <article className="maka-message-row message assistant streaming">
+                {/* PR-UI-LAYOUT-42: Reasoning panel for Anthropic-style
+                 * extended thinking. Renders ABOVE the streaming
+                 * answer because thinking always precedes the
+                 * answer. Default-open during streaming so the user
+                 * sees the model reasoning; users can collapse it
+                 * if too verbose. The panel disappears entirely on
+                 * text_complete / abort / error (parent clears the
+                 * thinkingBySession entry). */}
+                {props.thinkingText && (
+                  <ReasoningPanel
+                    text={props.thinkingText}
+                    live={!props.streamingText}
+                    truncated={props.thinkingTruncated === true}
+                  />
+                )}
+                {props.streamingText && (
+                  <StreamingAssistantBubble
+                    text={props.streamingText}
+                    truncated={props.streamingTruncated === true}
+                  />
+                )}
+              </article>
+            </section>
           )}
           {/* Defensive: if any tool ended up outside a turn (e.g. legacy
               sessions without turnId), render those at the very end so they
