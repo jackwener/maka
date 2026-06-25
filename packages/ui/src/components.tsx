@@ -4396,6 +4396,32 @@ export function ChatView(props: {
   );
 }
 
+/**
+ * Shared grouped option rows for both model pickers: one `<SelectItem>` per
+ * model, connections separated by a divider. Only the list is shared — the
+ * in-session `ChatModelSwitcher` and the home `NewChatModelPicker` keep their
+ * own trigger and selection behavior.
+ */
+function ModelChoiceOptions({ groups }: { groups: ReturnType<typeof groupModelChoices> }) {
+  return (
+    <>
+      {groups.map((group, groupIdx) => (
+        <SelectGroup key={group.connectionSlug}>
+          {groupIdx > 0 && <SelectSeparator />}
+          {group.choices.map((choice) => (
+            <SelectItem
+              key={modelChoiceValue(choice.connectionSlug, choice.model)}
+              value={modelChoiceValue(choice.connectionSlug, choice.model)}
+            >
+              <span className="maka-model-switcher-item-main">{choice.model}</span>
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      ))}
+    </>
+  );
+}
+
 function ChatModelSwitcher(props: {
   activeSession: SessionSummary;
   activeModel?: string;
@@ -4527,25 +4553,61 @@ function ChatModelSwitcher(props: {
                     {grouped.length > 0 && <SelectSeparator />}
                   </>
                 )}
-                {grouped.map((group, groupIdx) => (
-                  <SelectGroup key={group.connectionSlug}>
-                    {groupIdx > 0 && <SelectSeparator />}
-                    {group.choices.map((choice) => (
-                      <SelectItem
-                        key={modelChoiceValue(choice.connectionSlug, choice.model)}
-                        value={modelChoiceValue(choice.connectionSlug, choice.model)}
-                      >
-                        <span className="maka-model-switcher-item-main">{choice.model}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
+                <ModelChoiceOptions groups={grouped} />
               </SelectList>
             </SelectPopup>
           </SelectPositioner>
         </SelectPortal>
       </SelectRoot>
     </div>
+  );
+}
+
+/**
+ * Home / empty-state model picker (no active session yet). Unlike
+ * `ChatModelSwitcher` — which is bound to a live session and switches THAT
+ * session's model — this one just records which model the next new chat should
+ * start with. Reuses the model chip's look so the only visible change is that
+ * the chevron now actually opens a menu.
+ */
+function NewChatModelPicker(props: {
+  label: string;
+  choices: ChatModelChoice[];
+  currentValue?: string;
+  onPick(input: { llmConnectionSlug: string; model: string }): void | Promise<void>;
+}) {
+  const grouped = groupModelChoices(props.choices);
+  return (
+    <SelectRoot<string>
+      items={props.choices.map((choice) => ({
+        value: modelChoiceValue(choice.connectionSlug, choice.model),
+        label: choice.model,
+      }))}
+      value={props.currentValue}
+      onValueChange={(value) => {
+        const next = typeof value === 'string' ? parseModelChoiceValue(value) : undefined;
+        if (next) void props.onPick(next);
+      }}
+    >
+      <SelectTrigger
+        className="maka-composer-model-chip"
+        aria-label={`选择新对话模型，当前 ${props.label}`}
+        title={`新对话使用的模型：${props.label}`}
+      >
+        <span className="maka-composer-model-chip-text">{props.label}</span>
+        <span className="maka-composer-model-status" aria-hidden="true" />
+        {/* SelectTrigger already renders a BaseSelect.Icon chevron — no manual one. */}
+      </SelectTrigger>
+      <SelectPortal>
+        <SelectPositioner alignItemWithTrigger={false} sideOffset={8} className="maka-model-switcher-positioner">
+          <SelectPopup className="maka-model-switcher-popup">
+            <SelectList>
+              <ModelChoiceOptions groups={grouped} />
+            </SelectList>
+          </SelectPopup>
+        </SelectPositioner>
+      </SelectPortal>
+    </SelectRoot>
   );
 }
 
@@ -5491,6 +5553,14 @@ export const Composer = forwardRef<
     modelChoices?: ChatModelChoice[];
     modelChangePending?: boolean;
     onModelChange?(input: { llmConnectionSlug: string; model: string }): void | Promise<void>;
+    /**
+     * Home / empty-state composer only (no active session yet): the model
+     * the next new chat will start with, and the picker callback. When set,
+     * the otherwise-static model chip becomes a real dropdown so the user can
+     * choose the new-chat model inline instead of only via Settings · 模型.
+     */
+    newChatModel?: { llmConnectionSlug: string; model: string };
+    onPickNewChatModel?(input: { llmConnectionSlug: string; model: string }): void | Promise<void>;
     workspacePicker?: {
       label?: string;
       branch?: string | null;
@@ -6002,6 +6072,17 @@ export const Composer = forwardRef<
                     pending={props.modelChangePending}
                     disabledReason={modelSwitcherDisabledReason}
                     onChange={props.onModelChange}
+                  />
+                ) : props.onPickNewChatModel && (props.modelChoices?.length ?? 0) > 0 ? (
+                  <NewChatModelPicker
+                    label={modelChipLabel}
+                    choices={props.modelChoices ?? []}
+                    currentValue={
+                      props.newChatModel
+                        ? modelChoiceValue(props.newChatModel.llmConnectionSlug, props.newChatModel.model)
+                        : undefined
+                    }
+                    onPick={props.onPickNewChatModel}
                   />
                 ) : (
                   <span className="maka-composer-model-chip" aria-label={`当前模型：${modelChipLabel}`} title={modelChipLabel}>
