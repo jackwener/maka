@@ -6178,11 +6178,13 @@ function PermissionCenterPage() {
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const toast = useToast();
   const mountedRef = useRef(true);
+  const pendingPermActionRef = useRef<string | null>(null);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      pendingPermActionRef.current = null;
     };
   }, []);
 
@@ -6215,6 +6217,8 @@ function PermissionCenterPage() {
     kind: 'request' | 'openSettings',
   ) {
     const actionKey = `${permId}:${kind}`;
+    if (pendingPermActionRef.current) return;
+    pendingPermActionRef.current = actionKey;
     setPendingPermAction(actionKey);
     try {
       const result =
@@ -6231,6 +6235,9 @@ function PermissionCenterPage() {
     } catch (err) {
       if (mountedRef.current) toast.error('权限操作失败', settingsActionErrorMessage(err));
     } finally {
+      if (pendingPermActionRef.current === actionKey) {
+        pendingPermActionRef.current = null;
+      }
       if (mountedRef.current) setPendingPermAction(null);
     }
   }

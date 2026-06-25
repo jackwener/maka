@@ -235,6 +235,31 @@ describe('Settings coming-soon cleanup contract', () => {
     assert.doesNotMatch(settings, /case\s+'missing':\s*return\s+'缺少必要配置'/, 'configuration missing must not use raw missing-field copy');
   });
 
+  it('gates Permission Center OS permission actions with one synchronous owner', async () => {
+    const settings = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
+    const permissionPage = settings.match(/function PermissionCenterPage\(\)[\s\S]*?function CapabilityRow/)?.[0] ?? '';
+
+    assert.match(permissionPage, /const \[pendingPermAction, setPendingPermAction\] = useState<string \| null>\(null\)/);
+    assert.match(permissionPage, /const pendingPermActionRef = useRef<string \| null>\(null\)/);
+    assert.match(
+      permissionPage,
+      /return \(\) => \{[\s\S]*mountedRef\.current = false;[\s\S]*pendingPermActionRef\.current = null;/,
+      'Permission Center must release the pending action owner when Settings closes',
+    );
+    assert.match(
+      permissionPage,
+      /const actionKey = `\$\{permId\}:\$\{kind\}`;[\s\S]*if \(pendingPermActionRef\.current\) return;[\s\S]*pendingPermActionRef\.current = actionKey;[\s\S]*setPendingPermAction\(actionKey\);/,
+      'Permission Center must synchronously reject same-frame duplicate permission actions before React commits disabled state',
+    );
+    assert.match(
+      permissionPage,
+      /finally \{[\s\S]*if \(pendingPermActionRef\.current === actionKey\) \{[\s\S]*pendingPermActionRef\.current = null;[\s\S]*\}[\s\S]*if \(mountedRef\.current\) setPendingPermAction\(null\);/,
+      'Permission Center must release only the action it owns and avoid state writes after unmount',
+    );
+    assert.match(permissionPage, /busy=\{pendingPermAction !== null\}/);
+    assert.match(permissionPage, /pendingKey=\{pendingPermAction === `\$\{id\}:request` \? 'request'/);
+  });
+
   it('keeps bot readiness waiting states action-oriented', async () => {
     const settings = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
 
