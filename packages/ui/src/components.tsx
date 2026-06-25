@@ -50,6 +50,7 @@ import {
   IconifyIcon,
 } from './icons.js';
 import { BOT_BRAND } from './bot-brand.js';
+import { SettingsSelect, type SettingsSelectOption } from './primitives/settings-select.js';
 import { redactSecrets } from './redact.js';
 import { DeepResearchEmptyHero, EmptyChatHero } from './chat-empty-hero.js';
 import {
@@ -1992,80 +1993,21 @@ function DailyReviewTopList(props: { title: string; entries: ReadonlyArray<Daily
   );
 }
 
-// PR audit2-bundled (@kenji msg `e4cfbfb0` finding #2): the third
-// tuple slot lets callers pass a leading icon (e.g. the real IM brand
-// logo) so the Plan Reminder delivery picker reads identically to
-// Settings → 机器人对话, instead of falling back to plain Chinese text.
-type PlanReminderOption<T extends string> =
-  | readonly [T, string]
-  | readonly [T, string, ReactNode];
-
+// PR round-AB-shared-select (yuejing 2026-06-25, kenji styles inventory
+// task #128): `PlanReminderSelect` is now a thin specialization of the
+// shared `SettingsSelect` primitive — `width="full"` to preserve the
+// existing edge-to-edge sizing inside `.maka-plan-delivery-grid`.
+// Plan Reminder and Settings selects share one component so option
+// shape, trigger/popup chrome, and the selected-trigger icon contract
+// can't drift apart again.
 function PlanReminderSelect<T extends string>(props: {
   value: T;
-  options: ReadonlyArray<PlanReminderOption<T>>;
+  options: ReadonlyArray<SettingsSelectOption<T>>;
   onChange(value: T): void;
   ariaLabel: string;
   disabled?: boolean;
 }) {
-  // PR audit3 (@kenji msg `232aec0f` finding #2): the dropdown items
-  // already render the brand icon, but the collapsed `<SelectValue />`
-  // was falling back to the plain label string — open dropdown showed
-  // a logo, but the picked value collapsed back to text. Build a
-  // value→{label,icon} lookup and have `SelectValue`'s function child
-  // render the icon + label together so the selected state matches the
-  // option state.
-  const optionByValue = new Map<T, { label: string; icon: ReactNode | null }>();
-  for (const option of props.options) {
-    const [value, label] = option;
-    optionByValue.set(value, {
-      label,
-      icon: option.length === 3 ? option[2] : null,
-    });
-  }
-  const renderOptionRow = (label: string, icon: ReactNode | null, className = 'maka-plan-select-option') =>
-    icon ? (
-      <span className={className}>
-        <span className="maka-plan-select-option-icon" aria-hidden="true">{icon}</span>
-        <span>{label}</span>
-      </span>
-    ) : (
-      <>{label}</>
-    );
-  return (
-    <SelectRoot
-      value={props.value}
-      items={props.options.map(([value, label]) => ({ value, label }))}
-      disabled={props.disabled}
-      onValueChange={(value) => {
-        if (value !== null) props.onChange(value);
-      }}
-    >
-      <SelectTrigger className="maka-plan-select w-full" aria-label={props.ariaLabel}>
-        <SelectValue>
-          {(value: T) => {
-            const entry = optionByValue.get(value);
-            if (!entry) return null;
-            return renderOptionRow(entry.label, entry.icon);
-          }}
-        </SelectValue>
-      </SelectTrigger>
-      <SelectPortal>
-        <SelectPositioner alignItemWithTrigger={false} sideOffset={6}>
-          <SelectPopup className="maka-plan-select-popup">
-            {props.options.map((option) => {
-              const [value, label] = option;
-              const icon = option.length === 3 ? option[2] : null;
-              return (
-                <SelectItem key={value} value={value}>
-                  {renderOptionRow(label, icon)}
-                </SelectItem>
-              );
-            })}
-          </SelectPopup>
-        </SelectPositioner>
-      </SelectPortal>
-    </SelectRoot>
-  );
+  return <SettingsSelect width="full" {...props} />;
 }
 
 function PlanReminderPanel(props: {

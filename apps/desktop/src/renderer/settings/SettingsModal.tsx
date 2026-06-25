@@ -91,13 +91,7 @@ import {
   Input,
   OverlayScrollArea,
   RelativeTime,
-  SelectItem,
-  SelectPopup,
-  SelectPortal,
-  SelectPositioner,
-  SelectRoot,
-  SelectTrigger,
-  SelectValue,
+  SettingsSelect,
   PrimitiveBadge,
   Switch as BaseUiSwitch,
   Textarea,
@@ -179,39 +173,11 @@ function radioTabIndex<T extends string>(value: T, current: T, values: readonly 
   return !values.includes(current) && values[0] === value ? 0 : -1;
 }
 
-function SettingsSelect<T extends string>(props: {
-  value: T;
-  options: ReadonlyArray<readonly [T, string]>;
-  onChange(value: T): void;
-  ariaLabel: string;
-  disabled?: boolean;
-}) {
-  return (
-    <SelectRoot
-      value={props.value}
-      items={props.options.map(([value, label]) => ({ value, label }))}
-      disabled={props.disabled}
-      onValueChange={(value) => {
-        if (value !== null) props.onChange(value);
-      }}
-    >
-      <SelectTrigger className="settingsBaseSelectTrigger w-full" aria-label={props.ariaLabel}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectPortal>
-        <SelectPositioner alignItemWithTrigger={false} sideOffset={6}>
-          <SelectPopup className="settingsBaseSelectPopup">
-            {props.options.map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </SelectPositioner>
-      </SelectPortal>
-    </SelectRoot>
-  );
-}
+// `SettingsSelect` moved to `packages/ui/src/primitives/settings-select.tsx`
+// in PR round-AB-shared-select (yuejing 2026-06-25). The Plan Reminder
+// platform select now uses the same primitive, so option shape,
+// selected-trigger icon rendering, and chrome contract are one source
+// of truth (kenji styles inventory task #128). Imported via `@maka/ui`.
 
 // `SettingsNavGroup` + `NAV_GROUP_ORDER` moved to `nav-group-summary.ts`
 // (PR-HEALTH-1) so the H1/H2 group-summary assertions can be pinned with

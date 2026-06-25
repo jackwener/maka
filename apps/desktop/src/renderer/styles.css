@@ -806,28 +806,6 @@ button:active {
   color: currentColor;
 }
 
-.maka-session-panel[data-collapsed="true"] .maka-nav-primary {
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  min-height: 28px;
-  display: grid;
-  grid-template-columns: 1fr;
-  place-items: center;
-  gap: 0;
-  margin-inline: auto;
-  padding: 0;
-  border-radius: 6px;
-}
-
-.maka-session-panel[data-collapsed="true"] .maka-nav-primary span {
-  display: none;
-}
-
-.maka-session-panel[data-collapsed="true"] .maka-nav-primary {
-  background: var(--foreground-5);
-}
-
 .maka-nav-icon {
   width: var(--icon-size);
   height: var(--icon-size);
@@ -3251,8 +3229,14 @@ button:active {
   box-shadow: 0 0 0 2px oklch(from var(--accent) l c h / 0.12);
 }
 
-.maka-plan-select {
-  width: 100%;
+/* PR round-AB-shared-select (yuejing 2026-06-25): the Plan Reminder
+   delivery select and the 5 Settings selects used to ship two slightly
+   different wrappers — different option shapes, different selected
+   trigger renderers, different CSS recipes. They are now one
+   `SettingsSelect` primitive in `@maka/ui` (see kenji styles inventory
+   `notes/maka-styles-css-inventory-2026-06-25-task-128.md`). These
+   `.settingsSelect*` rules pin the unified chrome. */
+.settingsSelectTrigger {
   min-width: 0;
   height: 34px;
   justify-content: space-between;
@@ -3261,24 +3245,21 @@ button:active {
   font-weight: 600;
 }
 
-.maka-plan-select-popup {
+.settingsSelectPopup {
   min-width: var(--anchor-width);
 }
 
-/* PR audit2-bundled (@kenji audit msg `e4cfbfb0` finding #2): the Plan
-   Reminder delivery picker now carries real IM brand logos so it reads
-   the same as Settings → 机器人对话. The icon slot lines up with the
-   text via inline-flex; the icon tile is a fixed 16x16 to absorb
-   Iconify's size: '100%' rendering of the lazy-loaded simple-icons
-   svg without pushing the option row height around. */
-.maka-plan-select-option {
+/* The icon slot lines up with the text via inline-flex; the icon tile
+   is a fixed 16x16 to absorb Iconify's size: '100%' rendering of the
+   simple-icons svg without pushing option row height around. */
+.settingsSelectOption {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
-.maka-plan-select-option-icon {
+.settingsSelectOptionIcon {
   flex: 0 0 auto;
   width: 16px;
   height: 16px;
@@ -4311,9 +4292,6 @@ button:active {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .maka-skill-workbench-rail {
-    position: static;
-  }
 .maka-skill-library-row {
     grid-template-columns: 38px minmax(0, 1fr) max-content;
     gap: 6px;
@@ -7437,9 +7415,7 @@ button:active {
   justify-self: end;
 }
 
-.settingsRow[data-control-width="select"] > .settingsBaseSelectTrigger {
-  max-width: 320px;
-  width: 100%;
+.settingsRow[data-control-width="select"] > .settingsSelectTrigger {
   justify-self: end;
 }
 
@@ -7863,7 +7839,7 @@ button:active {
    PR-SETTINGS-INPUT-POLISH-0: cap from 280 → 320 since rows are now
    roomier (24px L/R padding). */
 .settingsField[data-orient="horizontal"] > input,
-.settingsField[data-orient="horizontal"] > .settingsBaseSelectTrigger {
+.settingsField[data-orient="horizontal"] > .settingsSelectTrigger {
   max-width: 320px;
 }
 /* WAWQAQ msg `0951e3b1` 2026-06-25 + @kenji audit #5 (msg `26a221be`):
