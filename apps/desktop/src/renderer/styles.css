@@ -12,13 +12,6 @@
 @import "./maka-tokens.css";
 @import "./reference-shell.css";
 
-:root {
-  --maka-titlebar-control-safe-left: 94px;
-  /* Shared titlebar baseline = macOS traffic-light vertical center; every icon
-     cluster anchors here, each subtracting a small per-container correction. */
-  --maka-titlebar-control-safe-top: 20px;
-}
-
 @theme inline {
   --font-sans: "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -62,17 +55,6 @@
 }
 
 @layer base {
-:root {
-  /* PR-REFERENCE-PIXEL-3 (WAWQAQ msg `f79de85f` round 3): match
-     reference implementation's `[data-agents-page] { --sidebar-width: 240px }`
-     extracted from `globals-UfMzAdiO.css`. Was 210; 240 gives
-     kenji's slim inset rows a touch more breathing room and the
-     account pill at the bottom doesn't truncate the user label as
-     often. */
-  --w-sessionlist: 240px;
-  --h-list-header: 52px;
-}
-
 body {
   margin: 0;
 }
@@ -92,6 +74,7 @@ body {
 }
 
 .os-theme-maka {
+  /* local: OverlayScrollbars theme overrides */
   --os-size: 8px;
   --os-padding-perpendicular: 1px;
   --os-padding-axis: 2px;
@@ -370,6 +353,7 @@ button:active {
 }
 
 .mainColumn {
+  /* local: chat content max measure */
   --maka-chat-measure: 680px;
   min-width: 0;
   min-height: 0;
@@ -6139,7 +6123,6 @@ button:active {
 }
 
 .composer .maka-composer-inner {
-  --h-composer-min: 56px;
   position: relative;
   width: min(var(--maka-chat-measure, 680px), 100%);
   max-width: var(--maka-chat-measure, 680px);
@@ -6208,6 +6191,7 @@ button:active {
   font-family: var(--font-default);
   font-size: 15px;
   line-height: 1.55;
+  /* local: suppress tailwind ring shadow on this element */
   --tw-ring-shadow: 0 0 #0000 !important;
   --tw-ring-offset-shadow: 0 0 #0000 !important;
 }
