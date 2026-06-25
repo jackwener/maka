@@ -16,8 +16,21 @@ describe('renderer utility surfaces use shared UI primitives', () => {
     assert.doesNotMatch(source, /const full = \/\^\[a-z\]\+/, 'BrowserPanel must not keep renderer-only address prefix regex');
     assert.match(
       source,
-      /const result = normalizeBrowserAddressInput\(address\);[\s\S]*if \(!result\.ok\) \{[\s\S]*toast\.error\('无法打开地址', browserAddressFailureCopy\(result\.reason\)\);[\s\S]*return;[\s\S]*window\.maka\.browser\.navigate\(sessionId, result\.url\)/,
+      /const result = normalizeBrowserAddressInput\(address\);[\s\S]*if \(!result\.ok\) \{[\s\S]*toast\.error\('无法打开地址', browserAddressFailureCopy\(result\.reason\)\);[\s\S]*return;[\s\S]*const ownerSessionId = sessionId;[\s\S]*window\.maka\.browser\.navigate\(ownerSessionId, result\.url\)/,
       'BrowserPanel must validate addresses with the shared helper before invoking browser navigation',
+    );
+    assert.match(source, /const browserPanelMountedRef = useRef\(false\)/);
+    assert.match(source, /const browserPanelSessionIdRef = useRef\(sessionId\)/);
+    assert.match(source, /browserPanelSessionIdRef\.current = sessionId/);
+    assert.match(
+      source,
+      /const isBrowserPanelSessionCurrent = useCallback\(\(ownerSessionId: string\): boolean => \{[\s\S]*return browserPanelMountedRef\.current && browserPanelSessionIdRef\.current === ownerSessionId;[\s\S]*\}, \[\]\);/,
+      'BrowserPanel async continuations must be owned by the active mounted session.',
+    );
+    assert.match(
+      source,
+      /window\.maka\.browser\.navigate\(ownerSessionId, result\.url\)\.catch\(\(\) => \{[\s\S]*if \(isBrowserPanelSessionCurrent\(ownerSessionId\)\) \{[\s\S]*toast\.error\('浏览器导航失败', '页面暂时无法打开，请稍后重试。'\);[\s\S]*\}/,
+      'BrowserPanel must not toast a stale navigation failure after switching sessions or unmounting.',
     );
     assert.match(source, /嵌入式浏览器只支持打开 HTTP\/HTTPS 网页地址。/);
     assert.match(source, /这个地址无法识别，请检查网址后重试。/);

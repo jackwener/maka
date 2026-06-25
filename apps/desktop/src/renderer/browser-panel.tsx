@@ -57,6 +57,21 @@ export function BrowserPanel(props: { sessionId: string; hidden: boolean }) {
   // did-navigate state push.
   const [address, setAddress] = useState('');
   const editingRef = useRef(false);
+  const browserPanelMountedRef = useRef(false);
+  const browserPanelSessionIdRef = useRef(sessionId);
+
+  browserPanelSessionIdRef.current = sessionId;
+
+  useEffect(() => {
+    browserPanelMountedRef.current = true;
+    return () => {
+      browserPanelMountedRef.current = false;
+    };
+  }, []);
+
+  const isBrowserPanelSessionCurrent = useCallback((ownerSessionId: string): boolean => {
+    return browserPanelMountedRef.current && browserPanelSessionIdRef.current === ownerSessionId;
+  }, []);
 
   // Subscribe to this session's state pushes + seed the initial state.
   useEffect(() => {
@@ -126,10 +141,13 @@ export function BrowserPanel(props: { sessionId: string; hidden: boolean }) {
       }
       return;
     }
-    void window.maka.browser.navigate(sessionId, result.url).catch(() => {
-      toast.error('浏览器导航失败', '页面暂时无法打开，请稍后重试。');
+    const ownerSessionId = sessionId;
+    void window.maka.browser.navigate(ownerSessionId, result.url).catch(() => {
+      if (isBrowserPanelSessionCurrent(ownerSessionId)) {
+        toast.error('浏览器导航失败', '页面暂时无法打开，请稍后重试。');
+      }
     });
-  }, [address, sessionId, toast]);
+  }, [address, isBrowserPanelSessionCurrent, sessionId, toast]);
 
   return (
     <div className="maka-browser-panel" aria-label="嵌入式浏览器">
