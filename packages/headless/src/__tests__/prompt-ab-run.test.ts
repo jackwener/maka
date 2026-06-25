@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, test } from 'node:test';
 import {
+  buildAbRunManifest,
+  runAbComparison,
   buildPromptAbRunManifest,
   ensurePromptAbRunManifest,
   limitPromptAbCandidateTasks,
@@ -68,6 +70,42 @@ describe('limitPromptAbCandidateTasks', () => {
 });
 
 describe('prompt A/B run manifest', () => {
+  test('records generic A/B arm identities for non-prompt experiments', () => {
+    const manifest = buildAbRunManifest({
+      experimentKind: 'tools',
+      arms: [
+        {
+          id: 'tools-off',
+          kind: 'tools',
+          fingerprint: sha256('tools-off'),
+          metadata: { toolProfile: 'standard' },
+        },
+        {
+          id: 'tools-on',
+          kind: 'tools',
+          fingerprint: sha256('tools-on'),
+          metadata: { toolProfile: 'standard-plus-new-tool' },
+        },
+      ],
+      taskBudgetSec: 30 * 60,
+      harborTimeoutMs: 35 * 60 * 1000,
+      subjectFingerprint: 'subject:path=/repo;maka-head=abc123;dirty=false',
+      taskSourceFingerprint: 'tasks:path=/cache/tasks;selected=task-a:/cache/tasks/a',
+      toolchainFingerprint: sha256('c'),
+      evaluationTaskIds: ['task-a'],
+      reps: 3,
+      candidateLimit: null,
+      maxConcurrency: 16,
+    });
+
+    assert.equal(manifest.experimentKind, 'tools');
+    assert.deepEqual(manifest.arms.map((arm) => `${arm.kind}:${arm.id}`), [
+      'tools:tools-off',
+      'tools:tools-on',
+    ]);
+    assert.match(manifest.fingerprint, /^sha256:[a-f0-9]{64}$/);
+  });
+
   test('rejects a reused run id when resume-critical config changes', async () => {
     await withDir(async (dir) => {
       const manifestPath = join(dir, 'prompt-ab-manifest.json');
@@ -134,6 +172,45 @@ describe('prompt A/B run manifest', () => {
         /prompt A\/B run manifest does not match existing run id/,
       );
     });
+  });
+});
+
+describe('runAbComparison', () => {
+  test('runs generic arms adjacent for each task-rep pair', async () => {
+    const calls: string[] = [];
+    const result = await runAbComparison({
+      runId: 'ab-run',
+      arms: [
+        { id: 'tools-off', kind: 'tools', fingerprint: sha256('tools-off') },
+        { id: 'tools-on', kind: 'tools', fingerprint: sha256('tools-on') },
+      ],
+      evaluationTasks: [
+        { id: 't1', path: '/tasks/t1' },
+        { id: 't2', path: '/tasks/t2' },
+      ],
+      reps: 2,
+      maxConcurrency: 1,
+      runArm: async ({ roundId, task, arm }) => {
+        calls.push(`${roundId}:${arm.id}:${task.id}`);
+        return arm.id === 'tools-on'
+          ? completed(task.id, true)
+          : completed(task.id, false);
+      },
+    });
+
+    assert.equal(result.baselineArmId, 'tools-off');
+    assert.equal(result.candidateArmId, 'tools-on');
+    assert.equal(result.taskLevel.wins, 2);
+    assert.deepEqual(calls, [
+      'ab-tools-off-r0-t1:tools-off:t1',
+      'ab-tools-on-r0-t1:tools-on:t1',
+      'ab-tools-on-r0-t2:tools-on:t2',
+      'ab-tools-off-r0-t2:tools-off:t2',
+      'ab-tools-on-r1-t1:tools-on:t1',
+      'ab-tools-off-r1-t1:tools-off:t1',
+      'ab-tools-off-r1-t2:tools-off:t2',
+      'ab-tools-on-r1-t2:tools-on:t2',
+    ]);
   });
 });
 

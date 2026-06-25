@@ -1,5 +1,11 @@
 import type { Config } from './contracts.js';
 import type {
+  AbArmSpec,
+  AbComparisonSummary,
+  AbDecision,
+  AbRunManifest,
+} from './ab-types.js';
+import type {
   FixedPromptTask,
   FixedPromptTaskWalEvent,
   HarborTaskRunner,
@@ -33,10 +39,7 @@ export interface RunPromptAbComparisonInput {
   newId?: () => string;
 }
 
-export type PromptAbDecision =
-  | 'candidate_better'
-  | 'baseline_better'
-  | 'inconclusive';
+export type PromptAbDecision = AbDecision;
 
 export interface PromptAbArmSummary {
   attempts: number;
@@ -98,20 +101,9 @@ export interface PromptAbAttemptPairSummary {
   infraOrPlumbingDiscordantPairIds: string[];
 }
 
-export interface PromptAbComparisonSummary {
-  runId: string;
-  roundId: string;
+export interface PromptAbComparisonSummary extends AbComparisonSummary {
   baselinePromptId: string;
   candidatePromptId: string;
-  taskCount: number;
-  reps: number;
-  budgetMs?: number;
-  decision: PromptAbDecision;
-  reason: string;
-  baseline: PromptAbArmSummary;
-  candidate: PromptAbArmSummary;
-  taskLevel: PromptAbTaskLevelSummary;
-  pairedAttempts: PromptAbAttemptPairSummary;
 }
 
 export interface PromptAbMetadataFilterInput {
@@ -159,9 +151,11 @@ export interface PromptAbRunManifestInput {
   targetEvaluationTaskCount?: number | null;
 }
 
-export type PromptAbRunManifest = PromptAbRunManifestInput & {
+export type PromptAbRunManifest = PromptAbRunManifestInput & Omit<AbRunManifest, 'schemaVersion' | 'arms'> & {
   schemaVersion: 'maka.prompt_ab.run_manifest.v1';
   fingerprint: string;
+  experimentKind: 'prompt';
+  arms: [AbArmSpec, AbArmSpec];
   evaluationTaskIds: string[];
   candidateTaskIds?: string[];
 };
