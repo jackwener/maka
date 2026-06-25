@@ -87,8 +87,13 @@ describe('voice capture smoke Settings contract', () => {
     assert.ok(voicePage, 'voice settings page source must be discoverable');
     assert.match(
       voicePage!,
-      /const voicePageMountedRef = useRef\(false\);[\s\S]*voicePageMountedRef\.current = true;[\s\S]*return \(\) => \{[\s\S]*voicePageMountedRef\.current = false;[\s\S]*captureSmokeBusyRef\.current = false;/,
+      /const voicePageMountedRef = useRef\(false\);[\s\S]*const activeVoiceCaptureStreamRef = useRef<MediaStream \| null>\(null\);[\s\S]*voicePageMountedRef\.current = true;[\s\S]*return \(\) => \{[\s\S]*voicePageMountedRef\.current = false;[\s\S]*activeVoiceCaptureStreamRef\.current\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\);[\s\S]*activeVoiceCaptureStreamRef\.current = null;[\s\S]*captureSmokeBusyRef\.current = false;/,
       'voice capture smoke must track page ownership and release the pending owner when Settings closes',
+    );
+    assert.match(
+      voicePage!,
+      /stream = await navigator\.mediaDevices\.getUserMedia[\s\S]*activeVoiceCaptureStreamRef\.current = stream;[\s\S]*if \(!voicePageMountedRef\.current\) return;/,
+      'voice capture smoke must remember the active MediaStream before the mounted check so unmount cleanup can stop it immediately',
     );
     assert.match(
       voicePage!,
@@ -107,8 +112,8 @@ describe('voice capture smoke Settings contract', () => {
     );
     assert.match(
       voicePage!,
-      /finally \{[\s\S]*stream\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\);[\s\S]*captureSmokeBusyRef\.current = false;[\s\S]*if \(voicePageMountedRef\.current\) \{[\s\S]*setIsBusy\(false\);/,
-      'voice capture cleanup must stop microphone tracks even after unmount but only write React state while mounted',
+      /finally \{[\s\S]*stream\?\.getTracks\(\)\.forEach\(\(track\) => track\.stop\(\)\);[\s\S]*if \(activeVoiceCaptureStreamRef\.current === stream\) \{[\s\S]*activeVoiceCaptureStreamRef\.current = null;[\s\S]*\}[\s\S]*captureSmokeBusyRef\.current = false;[\s\S]*if \(voicePageMountedRef\.current\) \{[\s\S]*setIsBusy\(false\);/,
+      'voice capture cleanup must stop microphone tracks, clear the active stream owner, and only write React state while mounted',
     );
   });
 

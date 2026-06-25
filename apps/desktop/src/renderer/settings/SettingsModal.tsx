@@ -1775,6 +1775,7 @@ function VoiceModelsSettingsPage() {
   const [isBusy, setIsBusy] = useState(false);
   const captureSmokeBusyRef = useRef(false);
   const voicePageMountedRef = useRef(false);
+  const activeVoiceCaptureStreamRef = useRef<MediaStream | null>(null);
   const toast = useToast();
   const caps = defaultVoiceCaptureCaps();
   const smokeStatusId = useId();
@@ -1783,6 +1784,8 @@ function VoiceModelsSettingsPage() {
     voicePageMountedRef.current = true;
     return () => {
       voicePageMountedRef.current = false;
+      activeVoiceCaptureStreamRef.current?.getTracks().forEach((track) => track.stop());
+      activeVoiceCaptureStreamRef.current = null;
       captureSmokeBusyRef.current = false;
     };
   }, []);
@@ -1821,6 +1824,7 @@ function VoiceModelsSettingsPage() {
           sampleRate: caps.maxSampleRate,
         },
       });
+      activeVoiceCaptureStreamRef.current = stream;
       if (!voicePageMountedRef.current) return;
       setPermission('granted');
       setSmoke({ status: 'recording', message: '正在录制 2 秒本地样本；样本只在内存里计算大小，结束后立即丢弃。' });
@@ -1871,6 +1875,9 @@ function VoiceModelsSettingsPage() {
       }
     } finally {
       stream?.getTracks().forEach((track) => track.stop());
+      if (activeVoiceCaptureStreamRef.current === stream) {
+        activeVoiceCaptureStreamRef.current = null;
+      }
       captureSmokeBusyRef.current = false;
       if (voicePageMountedRef.current) {
         setIsBusy(false);
