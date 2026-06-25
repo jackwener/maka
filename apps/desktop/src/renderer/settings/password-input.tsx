@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Eye, EyeOff } from '@maka/ui/icons';
 import { Button, Input, useToast } from '@maka/ui';
 
@@ -30,6 +30,32 @@ export function PasswordInput(props: {
   const [justCopied, setJustCopied] = useState(false);
   const [copying, setCopying] = useState(false);
   const copyingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const copyFeedbackTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      copyingRef.current = false;
+      if (copyFeedbackTimerRef.current !== null) {
+        window.clearTimeout(copyFeedbackTimerRef.current);
+        copyFeedbackTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  function showCopiedFeedback() {
+    if (copyFeedbackTimerRef.current !== null) {
+      window.clearTimeout(copyFeedbackTimerRef.current);
+    }
+    setJustCopied(true);
+    copyFeedbackTimerRef.current = window.setTimeout(() => {
+      copyFeedbackTimerRef.current = null;
+      if (mountedRef.current) setJustCopied(false);
+    }, 1200);
+  }
+
   async function copyValue() {
     if (!props.value) return;
     if (copyingRef.current) return;
@@ -37,13 +63,12 @@ export function PasswordInput(props: {
     setCopying(true);
     try {
       await navigator.clipboard.writeText(props.value);
-      setJustCopied(true);
-      window.setTimeout(() => setJustCopied(false), 1200);
+      if (mountedRef.current) showCopiedFeedback();
     } catch {
-      toast.error('复制失败', '剪贴板不可用或被系统拒绝。');
+      if (mountedRef.current) toast.error('复制失败', '剪贴板不可用或被系统拒绝。');
     } finally {
       copyingRef.current = false;
-      setCopying(false);
+      if (mountedRef.current) setCopying(false);
     }
   }
   return (

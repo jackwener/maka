@@ -177,8 +177,23 @@ describe('Settings form accessibility labels', () => {
 
     assert.match(passwordInput, /const toast = useToast\(\)/);
     assert.match(passwordInput, /const copyingRef = useRef\(false\)/);
+    assert.match(passwordInput, /const mountedRef = useRef\(true\)/);
+    assert.match(passwordInput, /const copyFeedbackTimerRef = useRef<number \| null>\(null\)/);
+    assert.match(
+      passwordInput,
+      /return \(\) => \{[\s\S]*mountedRef\.current = false;[\s\S]*copyingRef\.current = false;[\s\S]*window\.clearTimeout\(copyFeedbackTimerRef\.current\);/,
+      'PasswordInput must clear pending copy-feedback timers and invalidate clipboard state when it unmounts',
+    );
+    assert.match(
+      passwordInput,
+      /function showCopiedFeedback\(\) \{[\s\S]*window\.clearTimeout\(copyFeedbackTimerRef\.current\);[\s\S]*setJustCopied\(true\);[\s\S]*copyFeedbackTimerRef\.current = window\.setTimeout\(\(\) => \{[\s\S]*if \(mountedRef\.current\) setJustCopied\(false\);/,
+      'PasswordInput must replace stale success timers so repeated copies do not clear fresh success feedback early',
+    );
     assert.match(passwordInput, /if \(copyingRef\.current\) return;/);
     assert.match(passwordInput, /setCopying\(true\)/);
+    assert.match(passwordInput, /if \(mountedRef\.current\) showCopiedFeedback\(\)/);
+    assert.match(passwordInput, /if \(mountedRef\.current\) toast\.error\('复制失败', '剪贴板不可用或被系统拒绝。'\)/);
+    assert.match(passwordInput, /if \(mountedRef\.current\) setCopying\(false\)/);
     assert.match(passwordInput, /disabled=\{copying\}/);
     assert.match(passwordInput, /aria-label=\{copying \? '复制中' : justCopied \? '已复制' : '复制'\}/);
     assert.match(passwordInput, /toast\.error\('复制失败', '剪贴板不可用或被系统拒绝。'\)/);
