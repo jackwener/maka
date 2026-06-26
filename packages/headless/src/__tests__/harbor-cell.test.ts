@@ -735,13 +735,6 @@ describe('runHarborCell', () => {
       () => buildHarborCellContextBudgetBackendOptions({ MAKA_CONTEXT_ARCHIVE_RETRIEVAL: 'onn' }),
       /MAKA_CONTEXT_ARCHIVE_RETRIEVAL must be a boolean/,
     );
-    assert.throws(
-      () => buildHarborCellContextBudgetBackendOptions({
-        MAKA_CONTEXT_ACTIVE_TOOL_RESULT_PRUNE: 'on',
-        MAKA_CONTEXT_ACTIVE_TOOL_RESULT_ARCHIVE_REQUIRED: 'maybe',
-      }),
-      /MAKA_CONTEXT_ACTIVE_TOOL_RESULT_ARCHIVE_REQUIRED must be a boolean/,
-    );
   });
 
   test('Harbor context budget env treats explicit false-like booleans as disabled', () => {
@@ -756,9 +749,8 @@ describe('runHarborCell', () => {
     assert.deepEqual(
       buildHarborCellContextBudgetBackendOptions({
         MAKA_CONTEXT_ACTIVE_TOOL_RESULT_PRUNE: 'enabled',
-        MAKA_CONTEXT_ACTIVE_TOOL_RESULT_ARCHIVE_REQUIRED: 'disabled',
       }).contextBudget?.activeToolResultPrune,
-      { enabled: true, archiveRequired: false },
+      { enabled: true },
     );
   });
 

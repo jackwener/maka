@@ -33,7 +33,12 @@ import {
 } from '@maka/core';
 import { PROVIDER_DEFAULTS } from '@maka/core';
 import {
+  applyAssistantComplete,
   applyAssistantDelta,
+  clearSettledAssistantStreamSlot,
+  drainAssistantStreamSlot,
+  markAssistantStreamSlotDraining,
+  type AssistantStreamSlot,
   applyThinkingComplete,
   applyThinkingDelta,
   applyToolOutputChunk,
@@ -289,11 +294,21 @@ function AppShell() {
   // pair lives in a SINGLE useState so the `text_delta` handler can
   // produce both fields from one functional updater — no
   // cross-mutation between updaters, no closure-variable hack.
-  // `truncated` is monotonic per-session: once flipped to `true`
-  // within a streaming turn, stays true until `clearStreaming`
-  // resets the slot.
-  type AssistantStreamSlot = { text: string; truncated: boolean };
-  const [streamingBySession, setStreamingBySession] = useState<Record<string, AssistantStreamSlot>>({});
+  // `truncated` is monotonic while deltas are streaming; `text_complete`
+  // replaces the slot with the final payload, so the flag then reflects the
+  // final visible text until `clearStreaming` resets the slot.
+  const [streamingBySession, setStreamingBySessionState] = useState<Record<string, AssistantStreamSlot>>({});
+  // Session event handlers are subscribed per activeId; read live stream slots from this ref to avoid stale render closures.
+  const streamingBySessionRef = useRef<Record<string, AssistantStreamSlot>>({});
+  function setStreamingBySession(
+    updater: (current: Record<string, AssistantStreamSlot>) => Record<string, AssistantStreamSlot>,
+  ) {
+    const current = streamingBySessionRef.current;
+    const next = updater(current);
+    if (next === current) return;
+    streamingBySessionRef.current = next;
+    setStreamingBySessionState(next);
+  }
   /**
    * PR-UI-LAYOUT-42 (@kenji reference renderer audit, external docs/12-renderer.md §15.3):
    * The reference design displays Anthropic-style `reasoning_content`
@@ -379,6 +394,8 @@ function AppShell() {
   const activeStreamingSlot = activeId ? streamingBySession[activeId] : undefined;
   const activeStreaming = activeStreamingSlot?.text ?? '';
   const activeStreamingTruncated = activeStreamingSlot?.truncated === true;
+  const activeStreamingComplete = activeStreamingSlot?.phase === 'draining';
+  const activeStreamingMessageId = activeStreamingComplete ? activeStreamingSlot?.messageId : undefined;
   const activeThinking = activeId ? thinkingBySession[activeId] ?? '' : '';
   const activeThinkingTruncated = activeId ? thinkingTruncatedBySession[activeId] === true : false;
   // Set of session ids with a live streaming delta — drives the sidebar
@@ -1364,7 +1381,7 @@ function AppShell() {
       setStreamingBySession((current) => {
         const next = { ...current };
         for (const [sid, text] of Object.entries(seed)) {
-          next[sid] = { text, truncated: false };
+          next[sid] = { text, truncated: false, phase: 'streaming' };
         }
         return next;
       });
@@ -2134,7 +2151,7 @@ function AppShell() {
     }
   }
 
-  async function refreshMessages(sessionId: string) {
+  async function refreshMessages(sessionId: string): Promise<boolean> {
     try {
       const next = await window.maka.sessions.readMessages(sessionId);
       if (activeIdRef.current === sessionId) {
@@ -2147,12 +2164,14 @@ function AppShell() {
           return updated;
         });
       }
+      return true;
     } catch (error) {
       if (activeIdRef.current === sessionId) {
         const message = generalizedErrorMessageChinese(error, '对话内容暂时无法刷新，请稍后重试。');
         setMessageLoadErrorBySession((current) => ({ ...current, [sessionId]: message }));
         toastApi.error('刷新对话失败', message);
       }
+      return false;
     }
   }
   async function retryMessages(sessionId: string) {
@@ -2202,8 +2221,12 @@ function AppShell() {
     setStreamingBySession((current) => {
       const prev = current[sessionId];
       if (!prev || (prev.text === '' && prev.truncated === false)) return current;
-      return { ...current, [sessionId]: { text: '', truncated: false } };
+      return { ...current, [sessionId]: { text: '', truncated: false, phase: 'streaming' } };
     });
+    clearThinking(sessionId);
+  }
+
+  function clearThinking(sessionId: string) {
     // PR-UI-LAYOUT-42: thinking is part of the same streaming turn —
     // any clearStreaming caller (abort / error / complete) means the
     // turn is done, so the Reasoning panel should also collapse.
@@ -2218,6 +2241,25 @@ function AppShell() {
       delete next[sessionId];
       return next;
     });
+  }
+
+  function drainAssistantStreaming(sessionId: string, text: string, messageId?: string) {
+    const applied = applyAssistantComplete(text);
+    if (!applied.text) {
+      clearStreaming(sessionId);
+      void refreshMessages(sessionId);
+      return;
+    }
+    setStreamingBySession((current) => drainAssistantStreamSlot(current, sessionId, applied, messageId));
+    clearThinking(sessionId);
+  }
+
+  async function settleAssistantStreaming(sessionId: string, messageId?: string) {
+    const settledSlot = streamingBySessionRef.current[sessionId];
+    if (!settledSlot || settledSlot.phase !== 'draining') return;
+    if (messageId && settledSlot.messageId && settledSlot.messageId !== messageId) return;
+    await refreshMessages(sessionId).catch(() => false);
+    setStreamingBySession((current) => clearSettledAssistantStreamSlot(current, sessionId, settledSlot, messageId));
   }
 
   function handleEvent(sessionId: string, event: SessionEvent) {
@@ -2239,12 +2281,10 @@ function AppShell() {
         // raw `event.text` only flows through the helper input; it
         // never enters state un-redacted or un-capped.
         //
-        // Combined state shape (fixup v2): a single
-        // `AssistantStreamSlot = { text, truncated }` lets us
-        // produce both fields from one functional updater without
-        // cross-mutating outer locals or chaining setStates. The
-        // `truncated` flag is monotonic per-session — once true,
-        // stays true until `clearStreaming`.
+        // Combined state shape: one functional updater owns visible
+        // text, truncation, phase, and message identity, so the final
+        // `text_complete` handoff can drain the same bubble instead of
+        // racing a committed-message refresh.
         setStreamingBySession((current) => {
           const prevSlot = current[sessionId];
           const prevText = prevSlot?.text ?? '';
@@ -2262,14 +2302,18 @@ function AppShell() {
           }
           return {
             ...current,
-            [sessionId]: { text: applied.text, truncated: nextTruncated },
+            [sessionId]: {
+              text: applied.text,
+              truncated: nextTruncated,
+              phase: 'streaming',
+              messageId: event.messageId,
+            },
           };
         });
         break;
       }
       case 'text_complete':
-        clearStreaming(sessionId);
-        void refreshMessages(sessionId);
+        drainAssistantStreaming(sessionId, event.text, event.messageId);
         break;
       case 'thinking_delta':
         // PR-UI-LAYOUT-42 / C0 review fixup (@kenji msg 7885a347):
@@ -2303,9 +2347,8 @@ function AppShell() {
         // ProviderEvent's `text` is the FULL final reasoning string,
         // so we replace rather than append (still through the
         // redaction + cap chokepoint via `applyThinkingComplete`).
-        // Keep visible until `text_complete` collapses the panel via
-        // `clearStreaming`; this avoids the flicker between "thinking
-        // done" and "answer streaming".
+        // Keep visible until `text_complete` collapses the panel; this
+        // avoids the flicker between "thinking done" and "answer streaming".
         setThinkingBySession((current) => {
           const applied = applyThinkingComplete(event.text);
           // PR-UI-C0 review nit #1 (@kenji msg 68ca6bc7): `complete`
@@ -2405,8 +2448,16 @@ function AppShell() {
         void refreshMessages(sessionId);
         break;
       case 'complete':
+        let deferMessageRefresh = false;
         if (event.stopReason !== 'permission_handoff') {
-          clearStreaming(sessionId);
+          const slot = streamingBySessionRef.current[sessionId];
+          if (slot?.text) {
+            setStreamingBySession((current) => markAssistantStreamSlotDraining(current, sessionId));
+            clearThinking(sessionId);
+            deferMessageRefresh = true;
+          } else {
+            clearStreaming(sessionId);
+          }
           // PR-PERMISSION-UI-CLEANUP-0: parallel the `abort` branch
           // above — drop any stranded permission request for this
           // session when it completes for non-permission-handoff
@@ -2416,7 +2467,9 @@ function AppShell() {
           setPermissionBySession((current) => clearPermissions(current, sessionId));
         }
         void refreshSessions();
-        void refreshMessages(sessionId);
+        if (!deferMessageRefresh) {
+          void refreshMessages(sessionId);
+        }
         break;
       default:
         break;
@@ -2998,6 +3051,9 @@ function AppShell() {
               <ChatView
                 messages={messages}
                 streamingText={activeStreaming}
+                streamingComplete={activeStreamingComplete}
+                streamingMessageId={activeStreamingMessageId}
+                onStreamingSettled={activeId ? () => settleAssistantStreaming(activeId, activeStreamingMessageId) : undefined}
                 streamingTruncated={activeStreamingTruncated}
                 thinkingText={activeThinking}
                 thinkingTruncated={activeThinkingTruncated}

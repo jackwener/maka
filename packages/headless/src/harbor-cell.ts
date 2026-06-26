@@ -449,15 +449,10 @@ export function buildHarborCellContextBudgetBackendOptions(
       'MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MAX_ESTIMATED_TOKENS',
     );
     const minStepNumber = firstContextNonNegativeIntEnv(env, ['MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MIN_STEP_NUMBER']);
-    const archiveRequiredRaw =
-      env.MAKA_CONTEXT_ACTIVE_TOOL_RESULT_ARCHIVE_REQUIRED ??
-      env.MAKA_CONTEXT_ACTIVE_TOOL_RESULT_PRUNE_ARCHIVE_REQUIRED;
-    const archiveRequired = booleanEnv(archiveRequiredRaw, 'MAKA_CONTEXT_ACTIVE_TOOL_RESULT_ARCHIVE_REQUIRED');
     contextBudget.activeToolResultPrune = {
       enabled: true,
       ...(maxCurrentResultEstimatedTokens !== undefined ? { maxCurrentResultEstimatedTokens } : {}),
       ...(minStepNumber !== undefined ? { minStepNumber } : {}),
-      ...(archiveRequired !== undefined ? { archiveRequired } : {}),
     };
   }
 

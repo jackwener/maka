@@ -19,6 +19,7 @@ import { describe, it } from 'node:test';
 import {
   ASSISTANT_MAX_DELTA_CHARS,
   ASSISTANT_MAX_TOTAL_CHARS,
+  applyAssistantComplete,
   applyAssistantDelta,
 } from '@maka/ui/assistant-stream';
 
@@ -335,5 +336,34 @@ describe('applyAssistantDelta — monotonic truncated propagation', () => {
   it('reports truncated=false for a small delta that fits comfortably', () => {
     const result = applyAssistantDelta('hello', ' there');
     assert.equal(result.truncated, false);
+  });
+});
+
+describe('applyAssistantComplete — final payload replace path', () => {
+  it('returns an empty result for an empty complete payload', () => {
+    const result = applyAssistantComplete('');
+
+    assert.deepEqual(result, { text: '', redacted: false, truncated: false });
+  });
+
+  it('does not apply the per-delta cap to a complete payload under the total cap', () => {
+    const finalText = 'word '.repeat(Math.ceil(ASSISTANT_MAX_DELTA_CHARS / 5) + 20);
+    assert.ok(finalText.length > ASSISTANT_MAX_DELTA_CHARS);
+    assert.ok(finalText.length < ASSISTANT_MAX_TOTAL_CHARS);
+
+    const result = applyAssistantComplete(finalText);
+
+    assert.equal(result.text, finalText);
+    assert.equal(result.truncated, false);
+  });
+
+  it('redacts and total-caps the final complete payload before it reaches state', () => {
+    const secret = 'sk-abcdef1234567890abcdef1234567890';
+    const result = applyAssistantComplete(`token ${secret} tail that is too long`, { maxTotalChars: 24 });
+
+    assert.ok(!result.text.includes(secret), 'raw secret must not survive complete payload handling');
+    assert.ok(result.text.endsWith('\n\n[…后续已截断]'));
+    assert.equal(result.redacted, true);
+    assert.equal(result.truncated, true);
   });
 });

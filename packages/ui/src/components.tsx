@@ -3914,6 +3914,12 @@ export interface ChatHeaderAlert {
 export function ChatView(props: {
   messages: StoredMessage[];
   streamingText: string;
+  /** True after upstream emitted the final assistant text, while the UI is draining the smoother. */
+  streamingComplete?: boolean;
+  /** Assistant message id hidden while the matching streaming bubble drains. */
+  streamingMessageId?: string;
+  /** Called once the streaming bubble has displayed the final text and can hand off to history. */
+  onStreamingSettled?(): void;
   /**
    * PR-UI-LAYOUT-42: Anthropic extended-thinking stream from
    * `ThinkingDeltaEvent` (`@maka/core/events`). When non-empty, a
@@ -4070,10 +4076,13 @@ export function ChatView(props: {
   // chat + storedTools survive for the empty-state and streaming-bubble
   // paths; the main message log is now driven by `turns` (per @kenji UI-04
   // turn-grouping projection).
-  const chat = materializeChat(props.messages);
-  const storedTools = materializeTools(props.messages);
+  const visibleMessages = props.streamingComplete && props.streamingMessageId
+    ? props.messages.filter((message) => !(message.type === 'assistant' && message.id === props.streamingMessageId))
+    : props.messages;
+  const chat = materializeChat(visibleMessages);
+  const storedTools = materializeTools(visibleMessages);
   const tools = mergeTools(storedTools, props.tools);
-  const turns = materializeTurns(props.messages, props.tools);
+  const turns = materializeTurns(visibleMessages, props.tools);
   const capabilityAuditReport = useMemo(
     () => deriveCapabilityAuditReport({
       skills: props.skills ?? [],
@@ -4395,7 +4404,9 @@ export function ChatView(props: {
                 {props.streamingText && (
                   <StreamingAssistantBubble
                     text={props.streamingText}
+                    live={props.streamingComplete !== true}
                     truncated={props.streamingTruncated === true}
+                    onSettled={props.onStreamingSettled}
                   />
                 )}
               </article>
@@ -5327,15 +5338,15 @@ const STATUS_FOOTER_PRIORITY: Record<TurnFooterActionMeta['id'], 'primary' | 'se
  *
  * Wraps the live `streamingText` in `useSmoothStreamContent` so the
  * visible text grows at the EMA-tracked arrival CPS instead of
- * lurching with each network chunk. The bubble itself unmounts on
- * `text_complete` / abort / error (parent clears `streamingText`), so
- * the smoother only has to handle the live phase — settled history
- * messages render via the regular Markdown path with no smoothing.
+ * lurching with each network chunk. On `text_complete`, the parent keeps
+ * the bubble mounted with `live=false` so the smoother can drain the final
+ * tail before settled history takes over. Abort / error still unmount
+ * immediately.
  *
- * `streaming=true` while this component is mounted: by construction
- * the parent only renders it when the stream is in progress.
+ * `live=false` after `text_complete`: keep the bubble mounted until
+ * the smoother catches up, then notify the parent to hand off to history.
  */
-function StreamingAssistantBubble(props: { text: string; truncated?: boolean }) {
+function StreamingAssistantBubble(props: { text: string; live: boolean; truncated?: boolean; onSettled?: () => void }) {
   // PR-UI-C1 review fixup (@kenji msg fbb8f119): the smoother
   // typewriters PREFIXES of its input string. If the raw text
   // contains a mid-delta secret like `Authorization: Bearer sk-...`,
@@ -5355,10 +5366,22 @@ function StreamingAssistantBubble(props: { text: string; truncated?: boolean }) 
   // contract holds even if a future caller forgets the chokepoint.
   const snap = useStreamSnap();
   const safeText = prepareSmoothStreamText(props.text);
-  const { displayed } = useSmoothStreamContent(safeText, {
-    streaming: true,
+  const { displayed, catchingUp } = useSmoothStreamContent(safeText, {
+    streaming: props.live,
     snap,
   });
+  const settledRef = useRef(false);
+
+  useEffect(() => {
+    settledRef.current = false;
+  }, [safeText, props.live]);
+
+  useEffect(() => {
+    if (props.live || catchingUp || settledRef.current) return;
+    settledRef.current = true;
+    props.onSettled?.();
+  }, [props.live, catchingUp, props.onSettled]);
+
   return (
     <div className="maka-bubble-assistant maka-bubble-streaming">
       <Markdown text={displayed} />

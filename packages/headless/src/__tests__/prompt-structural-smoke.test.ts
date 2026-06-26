@@ -442,6 +442,19 @@ function committedEvent(
     commitSha: `candidate-${roundId}`,
     summary: `candidate ${roundId}`,
     promptHash,
+    heldInTaskSetHash: 'sha256:held-in-task-set',
+    candidateRationaleHash: 'sha256:candidate-rationale',
+    candidateRationale: candidateRationale(),
+  };
+}
+
+function candidateRationale() {
+  return {
+    failurePattern: 'coverage_regression' as const,
+    hypothesis: 'held-in coverage can improve with a clearer prompt',
+    targetedFix: 'make success criteria explicit without task-specific answers',
+    predictedFixes: [],
+    riskTasks: [],
   };
 }
 
