@@ -200,13 +200,38 @@ export interface PromptCandidateDecisionEvent {
   metrics: unknown;
 }
 
+export type RsiPredictedFixOutcome = 'improved' | 'unchanged' | 'regressed' | 'unscored' | 'missing';
+export type RsiRiskTaskOutcome = 'safe' | 'regressed' | 'unscored' | 'missing';
+export type RsiRootCauseSignalMatch = 'matched' | 'contradicted' | 'unknown';
+
+export interface RsiControllerAttributionEvent {
+  schemaVersion: typeof FIXED_PROMPT_WAL_SCHEMA_VERSION;
+  type: 'rsi_controller_attribution';
+  id: string;
+  ts: number;
+  runId: string;
+  roundId: string;
+  candidateCommitSha: string;
+  heldInTaskSetHash: string;
+  candidateRationaleHash: string;
+  predictedFixes: Array<{ taskId: string; outcome: RsiPredictedFixOutcome }>;
+  riskTasks: Array<{ taskId: string; outcome: RsiRiskTaskOutcome }>;
+  unexpectedHeldInFlips: Array<{ taskId: string; from: string; to: string }>;
+  decision: {
+    decision: 'keep' | 'discard';
+    reason: string;
+  };
+  rootCauseSignalMatch: RsiRootCauseSignalMatch;
+}
+
 export type FixedPromptWalEvent =
   | FixedPromptTaskCompletedEvent
   | FixedPromptTaskInfraFailedEvent
   | FixedPromptTaskBudgetExhaustedEvent
   | FixedPromptTaskPlumbingFailedEvent
   | PromptCandidateCommittedEvent
-  | PromptCandidateDecisionEvent;
+  | PromptCandidateDecisionEvent
+  | RsiControllerAttributionEvent;
 
 export type FixedPromptTaskWalEvent =
   | FixedPromptTaskCompletedEvent

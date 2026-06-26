@@ -1,0 +1,166 @@
+import type {
+  FixedPromptTaskWalEvent,
+  PromptCandidateRationale,
+  RsiControllerAttributionEvent,
+} from './fixed-prompt-controller.js';
+import {
+  appendFixedPromptWalEvent,
+  FIXED_PROMPT_WAL_SCHEMA_VERSION,
+} from './fixed-prompt-controller.js';
+import type { PromptAcceptanceResult } from './prompt-acceptance-policy.js';
+import type { RsiRoundAnalysis, RsiTaskOutcome, RsiTaskTransition } from './rsi-round-analysis.js';
+
+export type RsiPredictedFixOutcome = 'improved' | 'unchanged' | 'regressed' | 'unscored' | 'missing';
+export type RsiRiskTaskOutcome = 'safe' | 'regressed' | 'unscored' | 'missing';
+export type RsiRootCauseSignalMatch = 'matched' | 'contradicted' | 'unknown';
+
+export interface RsiControllerAttribution {
+  runId: string;
+  roundId: string;
+  candidateCommitSha: string;
+  heldInTaskSetHash: string;
+  candidateRationaleHash: string;
+  predictedFixes: Array<{ taskId: string; outcome: RsiPredictedFixOutcome }>;
+  riskTasks: Array<{ taskId: string; outcome: RsiRiskTaskOutcome }>;
+  unexpectedHeldInFlips: RsiTaskTransition[];
+  decision: {
+    decision: PromptAcceptanceResult['decision'];
+    reason: PromptAcceptanceResult['reason'];
+  };
+  rootCauseSignalMatch: RsiRootCauseSignalMatch;
+}
+
+export interface BuildRsiControllerAttributionInput {
+  runId: string;
+  roundId: string;
+  candidateCommitSha: string;
+  candidateRationaleHash: string;
+  candidateRationale: PromptCandidateRationale;
+  analysis: RsiRoundAnalysis;
+  heldInTaskIds: readonly string[];
+  lastKeptEvents: readonly FixedPromptTaskWalEvent[];
+  candidateEvents: readonly FixedPromptTaskWalEvent[];
+  decision: PromptAcceptanceResult;
+}
+
+export interface AppendRsiControllerAttributionInput {
+  resultsJsonlPath: string;
+  id: string;
+  ts: number;
+  attribution: RsiControllerAttribution;
+}
+
+export function buildRsiControllerAttribution(
+  input: BuildRsiControllerAttributionInput,
+): RsiControllerAttribution {
+  const heldInTaskIds = [...new Set(input.heldInTaskIds)].sort(compareStrings);
+  const heldIn = new Set(heldInTaskIds);
+  const previous = eventsByTask(input.lastKeptEvents, heldIn);
+  const current = eventsByTask(input.candidateEvents, heldIn);
+  const predictedFixes = sortedUnique(input.candidateRationale.predictedFixes)
+    .map((taskId) => ({
+      taskId,
+      outcome: predictedFixOutcome(taskOutcome(previous.get(taskId)), taskOutcome(current.get(taskId))),
+    }));
+  const riskTasks = sortedUnique(input.candidateRationale.riskTasks)
+    .map((taskId) => ({
+      taskId,
+      outcome: riskTaskOutcome(taskOutcome(previous.get(taskId)), taskOutcome(current.get(taskId))),
+    }));
+  const predictedOrRisk = new Set([...input.candidateRationale.predictedFixes, ...input.candidateRationale.riskTasks]);
+  return {
+    runId: input.runId,
+    roundId: input.roundId,
+    candidateCommitSha: input.candidateCommitSha,
+    heldInTaskSetHash: input.analysis.heldInTaskSetHash,
+    candidateRationaleHash: input.candidateRationaleHash,
+    predictedFixes,
+    riskTasks,
+    unexpectedHeldInFlips: input.analysis.transitionVsLastKept
+      .filter((transition) => heldIn.has(transition.taskId) && !predictedOrRisk.has(transition.taskId)),
+    decision: {
+      decision: input.decision.decision,
+      reason: input.decision.reason,
+    },
+    rootCauseSignalMatch: rootCauseSignalMatch(input.candidateRationale, input.analysis),
+  };
+}
+
+export async function appendRsiControllerAttribution(
+  input: AppendRsiControllerAttributionInput,
+): Promise<RsiControllerAttributionEvent> {
+  const event: RsiControllerAttributionEvent = {
+    schemaVersion: FIXED_PROMPT_WAL_SCHEMA_VERSION,
+    type: 'rsi_controller_attribution',
+    id: input.id,
+    ts: input.ts,
+    ...input.attribution,
+  };
+  await appendFixedPromptWalEvent(input.resultsJsonlPath, event);
+  return event;
+}
+
+function eventsByTask(
+  events: readonly FixedPromptTaskWalEvent[],
+  heldIn: ReadonlySet<string>,
+): Map<string, FixedPromptTaskWalEvent> {
+  const byTask = new Map<string, FixedPromptTaskWalEvent>();
+  for (const event of events) {
+    if (heldIn.has(event.taskId)) byTask.set(event.taskId, event);
+  }
+  return byTask;
+}
+
+function predictedFixOutcome(from: RsiTaskOutcome, to: RsiTaskOutcome): RsiPredictedFixOutcome {
+  if (to === 'missing') return 'missing';
+  if (to === 'unscored' || to === 'infra' || to === 'budget' || to === 'plumbing') return 'unscored';
+  if (score(to) > score(from)) return 'improved';
+  if (score(to) < score(from)) return 'regressed';
+  return 'unchanged';
+}
+
+function riskTaskOutcome(from: RsiTaskOutcome, to: RsiTaskOutcome): RsiRiskTaskOutcome {
+  if (to === 'missing') return 'missing';
+  if (to === 'unscored' || to === 'infra' || to === 'budget' || to === 'plumbing') return 'unscored';
+  return score(to) < score(from) ? 'regressed' : 'safe';
+}
+
+function taskOutcome(event: FixedPromptTaskWalEvent | undefined): RsiTaskOutcome {
+  if (!event) return 'missing';
+  if (event.type === 'task_infra_failed') return 'infra';
+  if (event.type === 'task_budget_exhausted') return 'budget';
+  if (event.type === 'task_plumbing_failed') return 'plumbing';
+  if (!event.eligible || !event.scored) return 'unscored';
+  return event.passed ? 'pass' : 'fail';
+}
+
+function score(outcome: RsiTaskOutcome): number {
+  return outcome === 'pass' ? 1 : 0;
+}
+
+function rootCauseSignalMatch(
+  rationale: PromptCandidateRationale,
+  analysis: RsiRoundAnalysis,
+): RsiRootCauseSignalMatch {
+  const signalKinds = new Set(analysis.signals.map((signal) => signal.kind));
+  if (rationale.failurePattern === 'coverage_regression') {
+    return signalKinds.has('coverage_regression') ? 'matched' : 'contradicted';
+  }
+  if (rationale.failurePattern === 'tool_failed') {
+    return signalKinds.has('tool_failure_cluster') ? 'matched' : 'contradicted';
+  }
+  if (rationale.failurePattern === 'max_tokens' || rationale.failurePattern === 'verification_failed') {
+    return analysis.errorClassDistribution.some((group) => group.errorClass === rationale.failurePattern)
+      ? 'matched'
+      : 'contradicted';
+  }
+  return 'unknown';
+}
+
+function sortedUnique(values: readonly string[]): string[] {
+  return [...new Set(values)].sort(compareStrings);
+}
+
+function compareStrings(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
