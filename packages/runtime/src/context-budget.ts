@@ -982,7 +982,6 @@ export function selectSynthesisCacheForReplay(
   const coveredEventIds = new Set<string>();
   const coveredToolCallIds = new Set<string>();
   const insertions = new Map<number, RuntimeEvent[]>();
-  const trailingInsertions: RuntimeEvent[] = [];
   for (const block of selectedBlocks) {
     const blockEventIds = new Set(block.coverage.runtimeEventIds);
     const blockToolCallIds = new Set(block.coverage.toolCallIds);
@@ -1002,14 +1001,13 @@ export function selectSynthesisCacheForReplay(
       blockEventIds.has(event.id) ||
       (event.content?.kind === 'function_call' && blockToolCallIds.has(event.content.id))
     );
-    const synthetic = synthesisBlockRuntimeEvent(block, options.sessionId);
-    if (insertionIndex >= 0) {
-      const existing = insertions.get(insertionIndex);
-      if (existing) existing.push(synthetic);
-      else insertions.set(insertionIndex, [synthetic]);
-    } else {
-      trailingInsertions.push(synthetic);
+    if (insertionIndex < 0) {
+      throw new Error('validated synthesis cache block has no covered replay event');
     }
+    const synthetic = synthesisBlockRuntimeEvent(block, options.sessionId);
+    const existing = insertions.get(insertionIndex);
+    if (existing) existing.push(synthetic);
+    else insertions.set(insertionIndex, [synthetic]);
   }
   const replayEvents: RuntimeEvent[] = [];
   for (const [index, event] of events.entries()) {
@@ -1023,7 +1021,6 @@ export function selectSynthesisCacheForReplay(
     }
     replayEvents.push(event);
   }
-  replayEvents.push(...trailingInsertions);
   return {
     events: replayEvents,
     selectedBlocks,
