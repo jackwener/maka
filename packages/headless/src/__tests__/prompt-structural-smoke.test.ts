@@ -442,6 +442,8 @@ function committedEvent(
     commitSha: `candidate-${roundId}`,
     summary: `candidate ${roundId}`,
     promptHash,
+    heldInTaskSetHash: 'sha256:held-in-task-set',
+    candidateRationaleHash: 'sha256:candidate-rationale',
     candidateRationale: candidateRationale(),
   };
 }

@@ -189,6 +189,7 @@ export async function runPromptCandidateRound(
       commitSha,
       summary: result.summary,
       systemPrompt: result.systemPrompt,
+      heldInTaskIds: input.heldInTaskIds,
       candidateRationale,
     }));
   } catch (error) {
@@ -510,6 +511,7 @@ function promptCandidateCommittedEvent(input: {
   commitSha: string;
   summary: string;
   systemPrompt: string;
+  heldInTaskIds: readonly string[];
   candidateRationale: CandidateRationale;
 }): PromptCandidateCommittedEvent {
   return {
@@ -522,8 +524,22 @@ function promptCandidateCommittedEvent(input: {
     commitSha: input.commitSha,
     summary: input.summary,
     promptHash: hashSystemPrompt(input.systemPrompt),
+    heldInTaskSetHash: hashHeldInTaskSet(input.heldInTaskIds),
+    candidateRationaleHash: hashCandidateRationale(input.candidateRationale),
     candidateRationale: input.candidateRationale,
   };
+}
+
+function hashHeldInTaskSet(heldInTaskIds: readonly string[]): string {
+  return sha256Json([...new Set(heldInTaskIds)].sort((a, b) => a.localeCompare(b)));
+}
+
+function hashCandidateRationale(candidateRationale: CandidateRationale): string {
+  return sha256Json(candidateRationale);
+}
+
+function sha256Json(value: unknown): string {
+  return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
 }
 
 export function assertOnlySystemPromptChanged(

@@ -150,6 +150,8 @@ export interface PromptCandidateCommittedEvent {
   commitSha: string;
   summary: string;
   promptHash: string;
+  heldInTaskSetHash: string;
+  candidateRationaleHash: string;
   candidateRationale: PromptCandidateRationale;
 }
 

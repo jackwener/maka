@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -31,6 +32,12 @@ describe('prompt candidate loop', () => {
       await writeFile(systemPromptPath, 'original prompt\n', 'utf8');
       await writeFile(resultsTsvPath, 'task_id\tpassed\ntask-a\tfalse\nheld-out-secret\ttrue\n', 'utf8');
       const candidateRationale = validCandidateRationale({
+        predictedFixes: ['task-a'],
+        riskTasks: ['task-a'],
+        heldInTaskSetHash: 'sha256:model-supplied-held-in',
+        candidateRationaleHash: 'sha256:model-supplied-rationale',
+      });
+      const committedCandidateRationale = validCandidateRationale({
         predictedFixes: ['task-a'],
         riskTasks: ['task-a'],
       });
@@ -89,10 +96,22 @@ describe('prompt candidate loop', () => {
           commitSha: 'commit-1',
           summary: 'tightened output instruction',
           promptHash: hashSystemPrompt('candidate prompt\n'),
-          candidateRationale,
+          heldInTaskSetHash: expectedHeldInTaskSetHash(['task-a']),
+          candidateRationaleHash: expectedCandidateRationaleHash(committedCandidateRationale),
+          candidateRationale: committedCandidateRationale,
         },
       ]);
     });
+  });
+
+  test('hashes the held-in task set independent of input order', async () => {
+    const firstHash = await runCandidateRoundHeldInTaskSetHash(['task-b', 'task-a']);
+    const secondHash = await runCandidateRoundHeldInTaskSetHash(['task-a', 'task-b']);
+    const differentHash = await runCandidateRoundHeldInTaskSetHash(['task-a']);
+
+    assert.equal(firstHash, secondHash);
+    assert.notEqual(firstHash, differentHash);
+    assert.equal(firstHash, expectedHeldInTaskSetHash(['task-a', 'task-b']));
   });
 
   test('filters results TSV by held-in tasks independently from trajectory digests', async () => {
@@ -1820,6 +1839,51 @@ async function assertRejectsCandidateRationale(
 
     assert.equal(await readFile(systemPromptPath, 'utf8'), 'original prompt\n');
   });
+}
+
+async function runCandidateRoundHeldInTaskSetHash(heldInTaskIds: readonly string[]): Promise<string> {
+  let heldInTaskSetHash = '';
+  await withDir(async (dir) => {
+    const programPath = join(dir, 'program.md');
+    const systemPromptPath = join(dir, 'system_prompt.md');
+    const resultsTsvPath = join(dir, 'results.tsv');
+    const resultsJsonlPath = join(dir, 'results.jsonl');
+    await writeFile(programPath, 'Improve the prompt conservatively.\n', 'utf8');
+    await writeFile(systemPromptPath, 'original prompt\n', 'utf8');
+    await writeFile(resultsTsvPath, 'task_id\tpassed\ntask-a\tfalse\ntask-b\tfalse\n', 'utf8');
+
+    await runPromptCandidateRound({
+      runId: 'run-1',
+      roundId: 'round-1',
+      agentCwdPath: await testAgentCwd(dir),
+      programPath,
+      systemPromptPath,
+      resultsTsvPath,
+      resultsJsonlPath,
+      heldInTaskIds,
+      heldInDigests: heldInTaskIds.map((taskId) => ({ taskId, summary: 'failed held-in task' })),
+      metaAgent: async () => candidatePromptResult(),
+      git: gitNoop(dir),
+      now: () => 100,
+      newId: idFactory(),
+    });
+
+    const [event] = (await readFile(resultsJsonlPath, 'utf8')).trimEnd().split('\n').map((line) => JSON.parse(line));
+    heldInTaskSetHash = event.heldInTaskSetHash;
+  });
+  return heldInTaskSetHash;
+}
+
+function expectedHeldInTaskSetHash(heldInTaskIds: readonly string[]): string {
+  return sha256Json([...new Set(heldInTaskIds)].sort((a, b) => a.localeCompare(b)));
+}
+
+function expectedCandidateRationaleHash(candidateRationale: Record<string, unknown>): string {
+  return sha256Json(candidateRationale);
+}
+
+function sha256Json(value: unknown): string {
+  return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
 }
 
 function gitNoop(gitRootPath = process.cwd()) {
