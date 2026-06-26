@@ -53,7 +53,7 @@ import { BOT_BRAND } from './bot-brand.js';
 import { SettingsSelect, type SettingsSelectOption } from './primitives/settings-select.js';
 import { redactSecrets } from './redact.js';
 import { DeepResearchEmptyHero, EmptyChatHero } from './chat-empty-hero.js';
-import { ChatModelSwitcher, NewChatModelPicker } from './chat-model-switcher.js';
+import { ChatModelSwitcher, ModelChipStatic, NewChatModelPicker } from './chat-model-switcher.js';
 import {
   type ClipboardCopyPhase,
   useClipboardCopyFeedback,
@@ -5363,6 +5363,12 @@ export const Composer = forwardRef<
      */
     newChatModel?: { llmConnectionSlug: string; model: string };
     onPickNewChatModel?(input: { llmConnectionSlug: string; model: string }): void | Promise<void>;
+    /**
+     * Empty-state only: no models are configured yet, so the model chip is a
+     * non-interactive label. When provided, the chip becomes a button into
+     * Settings · 模型 instead of wearing a dropdown chevron it cannot honor.
+     */
+    onOpenModelSettings?(): void;
     workspacePicker?: {
       label?: string;
       branch?: string | null;
@@ -5888,11 +5894,7 @@ export const Composer = forwardRef<
                     onPick={props.onPickNewChatModel}
                   />
                 ) : (
-                  <span className="maka-composer-model-chip" aria-label={`当前模型：${modelChipLabel}`} title={modelChipLabel}>
-                    <span className="maka-composer-model-chip-text">{modelChipLabel}</span>
-                    <span className="maka-composer-model-status" aria-hidden="true" />
-                    <ChevronDown size={12} strokeWidth={1.8} aria-hidden="true" />
-                  </span>
+                  <ModelChipStatic label={modelChipLabel} onOpenSettings={props.onOpenModelSettings} />
                 )}
                 <UiButton
                   variant="quiet"

@@ -12,7 +12,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Button as UiButton,
   SelectGroup,
+  SelectGroupLabel,
   SelectItem,
   SelectList,
   SelectPopup,
@@ -23,36 +25,46 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui.js';
+import { Settings } from './icons.js';
 import {
   type ChatModelChoice,
   groupModelChoices,
   modelChoiceValue,
   parseModelChoiceValue,
 } from './chat-model-helpers.js';
-import type { SessionSummary } from '@maka/core';
+import { type SessionSummary, providerTypeLabel } from '@maka/core';
 
 /**
  * Shared grouped option rows for both model pickers: one `<SelectItem>` per
- * model, connections separated by a divider. Only the list is shared — the
- * in-session `ChatModelSwitcher` and the home `NewChatModelPicker` keep their
- * own trigger and selection behavior.
+ * model, grouped under a provider heading. The heading text comes from the
+ * provider TYPE (`providerTypeLabel`), never the connection name — connection
+ * names embed the OAuth account email, which must not surface here. The
+ * selected-row check is the `SelectItem` primitive's built-in `ItemIndicator`.
  */
 function ModelChoiceOptions({ groups }: { groups: ReturnType<typeof groupModelChoices> }) {
   return (
     <>
-      {groups.map((group, groupIdx) => (
-        <SelectGroup key={group.connectionSlug}>
-          {groupIdx > 0 && <SelectSeparator />}
-          {group.choices.map((choice) => (
-            <SelectItem
-              key={modelChoiceValue(choice.connectionSlug, choice.model)}
-              value={modelChoiceValue(choice.connectionSlug, choice.model)}
-            >
-              <span className="maka-model-switcher-item-main">{choice.model}</span>
-            </SelectItem>
-          ))}
-        </SelectGroup>
-      ))}
+      {groups.map((group) => {
+        const providerType = group.choices[0]?.providerType;
+        return (
+          <SelectGroup key={group.connectionSlug} className="maka-model-switcher-group">
+            {providerType && (
+              <SelectGroupLabel className="maka-model-switcher-group-label">
+                {providerTypeLabel(providerType)}
+                <span className="maka-model-switcher-group-count">{group.choices.length}</span>
+              </SelectGroupLabel>
+            )}
+            {group.choices.map((choice) => (
+              <SelectItem
+                key={modelChoiceValue(choice.connectionSlug, choice.model)}
+                value={modelChoiceValue(choice.connectionSlug, choice.model)}
+              >
+                <span className="maka-model-switcher-item-main">{choice.model}</span>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        );
+      })}
     </>
   );
 }
@@ -243,5 +255,38 @@ export function NewChatModelPicker(props: {
         </SelectPositioner>
       </SelectPortal>
     </SelectRoot>
+  );
+}
+
+/**
+ * Non-interactive model chip for the composer's empty state: no active
+ * session and no models to pick from yet. Replaces a former inline `<span>`
+ * that wore a dropdown chevron it could not honor. When `onOpenSettings` is
+ * given it becomes an honest button into Settings · 模型 (with a gear, no fake
+ * chevron); otherwise it is plain inert text. Shares the `.maka-composer-model-chip`
+ * look with `NewChatModelPicker` so the chip reads identically across states.
+ */
+export function ModelChipStatic(props: { label: string; onOpenSettings?: () => void }) {
+  if (props.onOpenSettings) {
+    return (
+      <UiButton
+        type="button"
+        variant="quiet"
+        size="nav"
+        className="maka-composer-model-chip maka-composer-model-chip-action"
+        onClick={props.onOpenSettings}
+        aria-label={`配置模型连接，当前 ${props.label}`}
+        title="配置模型连接"
+      >
+        <Settings size={12} strokeWidth={1.8} aria-hidden="true" />
+        <span className="maka-composer-model-chip-text">{props.label}</span>
+      </UiButton>
+    );
+  }
+  return (
+    <span className="maka-composer-model-chip" aria-label={`当前模型：${props.label}`} title={props.label}>
+      <span className="maka-composer-model-chip-text">{props.label}</span>
+      <span className="maka-composer-model-status" aria-hidden="true" />
+    </span>
   );
 }

@@ -3143,6 +3143,7 @@ function AppShell() {
                 onModelChange={(input) => setSessionModel(input)}
                 newChatModel={newChatModel}
                 onPickNewChatModel={(input) => setPendingNewChatModel(input)}
+                onOpenModelSettings={() => openSettingsSection('models')}
                 workspacePicker={{
                   label: appInfo ? basenameFromPath(appInfo.projectPath) : undefined,
                   branch: appInfo?.projectGit.branch,
