@@ -182,3 +182,36 @@ export function applyAssistantDelta(
     truncated: deltaTruncated || totalTruncated,
   };
 }
+
+/**
+ * Apply a `text_complete` final payload. The complete event carries the FULL
+ * final assistant text, so this is a replace path: redact and apply only the
+ * per-session total cap, not the per-delta cap used for incremental chunks.
+ */
+export function applyAssistantComplete(
+  rawText: string,
+  options: Pick<ApplyAssistantOptions, 'maxTotalChars'> = {},
+): ApplyAssistantResult {
+  const maxTotal = options.maxTotalChars ?? ASSISTANT_MAX_TOTAL_CHARS;
+
+  if (typeof rawText !== 'string') {
+    return { text: '', redacted: false, truncated: false };
+  }
+
+  const redacted = redactSecrets(rawText);
+  const redactionHappened = redacted !== rawText;
+
+  let result = redacted;
+  let totalTruncated = false;
+  if (result.length > maxTotal) {
+    const keep = maxTotal - TRUNCATED_TAIL_MARKER.length;
+    result = redacted.slice(0, keep) + TRUNCATED_TAIL_MARKER;
+    totalTruncated = true;
+  }
+
+  return {
+    text: result,
+    redacted: redactionHappened,
+    truncated: totalTruncated,
+  };
+}
