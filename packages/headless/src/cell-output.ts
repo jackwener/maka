@@ -1,5 +1,5 @@
 import type { RuntimeEvent } from '@maka/core';
-import type { InvocationResult } from '@maka/runtime';
+import type { ContextBudgetPolicy, InvocationResult } from '@maka/runtime';
 
 export const HARBOR_CELL_OUTPUT_SCHEMA_VERSION = 1;
 
@@ -35,6 +35,8 @@ export interface HarborCellContextBudgetSummary {
   archiveRetrievalFailures: number;
 }
 
+export type HarborCellContextBudgetPolicySnapshot = ({ enabled: false } | ({ enabled: true } & ContextBudgetPolicy));
+
 export interface HarborCellRuntimeRefs {
   invocationId: string;
   sessionId: string;
@@ -56,6 +58,7 @@ export interface HarborCellOutput {
   runtimeEventsPath: string;
   promptHash?: string;
   tokenSummary: HarborCellTokenSummary;
+  contextBudgetPolicy?: HarborCellContextBudgetPolicySnapshot;
   contextBudgetSummary?: HarborCellContextBudgetSummary;
   toolSummary: HarborCellToolSummary;
   steps: number;
@@ -68,6 +71,7 @@ export interface HarborCellOutput {
 export function buildHarborCellOutput(input: {
   invocation: InvocationResult;
   runtimeEventsPath: string;
+  contextBudgetPolicy?: HarborCellContextBudgetPolicySnapshot;
 }): HarborCellOutput {
   const { invocation } = input;
   return {
@@ -77,6 +81,7 @@ export function buildHarborCellOutput(input: {
     runtimeEventsPath: input.runtimeEventsPath,
     ...promptHashField(invocation.events),
     tokenSummary: summarizeCellTokens(invocation.events),
+    ...(input.contextBudgetPolicy ? { contextBudgetPolicy: input.contextBudgetPolicy } : {}),
     ...contextBudgetSummaryField(invocation.events),
     toolSummary: summarizeCellTools(invocation.events),
     steps: invocation.events.length,
@@ -105,6 +110,9 @@ export function validateHarborCellOutput(value: unknown): HarborCellOutput {
   const runtimeEventsPath = requireString(value.runtimeEventsPath, 'runtimeEventsPath');
   const promptHash = 'promptHash' in value ? requireOptionalString(value.promptHash, 'promptHash') : undefined;
   const tokenSummary = validateTokenSummary(value.tokenSummary);
+  const contextBudgetPolicy = 'contextBudgetPolicy' in value
+    ? validateContextBudgetPolicySnapshot(value.contextBudgetPolicy)
+    : undefined;
   const contextBudgetSummary = 'contextBudgetSummary' in value
     ? validateContextBudgetSummary(value.contextBudgetSummary)
     : undefined;
@@ -121,6 +129,7 @@ export function validateHarborCellOutput(value: unknown): HarborCellOutput {
     runtimeEventsPath,
     ...(promptHash !== undefined ? { promptHash } : {}),
     tokenSummary,
+    ...(contextBudgetPolicy !== undefined ? { contextBudgetPolicy } : {}),
     ...(contextBudgetSummary !== undefined ? { contextBudgetSummary } : {}),
     toolSummary,
     steps,
@@ -332,6 +341,52 @@ function validateContextBudgetSummary(value: unknown): HarborCellContextBudgetSu
   };
 }
 
+function validateContextBudgetPolicySnapshot(value: unknown): HarborCellContextBudgetPolicySnapshot {
+  if (!isRecord(value)) throw new Error('contextBudgetPolicy must be a JSON object');
+  const enabled = requireBoolean(value.enabled, 'contextBudgetPolicy.enabled');
+  if (!enabled) return { enabled: false };
+  return {
+    enabled: true,
+    name: requireString(value.name, 'contextBudgetPolicy.name'),
+    ...(optionalNumber(value.maxHistoryTurns, 'contextBudgetPolicy.maxHistoryTurns') !== undefined
+      ? { maxHistoryTurns: optionalNumber(value.maxHistoryTurns, 'contextBudgetPolicy.maxHistoryTurns') }
+      : {}),
+    ...(optionalNumber(value.maxHistoryEstimatedTokens, 'contextBudgetPolicy.maxHistoryEstimatedTokens') !== undefined
+      ? { maxHistoryEstimatedTokens: optionalNumber(value.maxHistoryEstimatedTokens, 'contextBudgetPolicy.maxHistoryEstimatedTokens') }
+      : {}),
+    ...(value.staleToolResultPrune !== undefined
+      ? { staleToolResultPrune: validateStaleToolResultPruneSnapshot(value.staleToolResultPrune) }
+      : {}),
+    ...(value.archiveRetrieval !== undefined
+      ? { archiveRetrieval: validateArchiveRetrievalSnapshot(value.archiveRetrieval) }
+      : {}),
+    minRecentTurns: requireNumber(value.minRecentTurns, 'contextBudgetPolicy.minRecentTurns'),
+  };
+}
+
+function validateStaleToolResultPruneSnapshot(value: unknown): NonNullable<ContextBudgetPolicy['staleToolResultPrune']> {
+  if (!isRecord(value)) throw new Error('contextBudgetPolicy.staleToolResultPrune must be a JSON object');
+  return {
+    enabled: requireBoolean(value.enabled, 'contextBudgetPolicy.staleToolResultPrune.enabled'),
+    maxResultEstimatedTokens: requireNumber(value.maxResultEstimatedTokens, 'contextBudgetPolicy.staleToolResultPrune.maxResultEstimatedTokens'),
+    minRecentTurnsFull: requireNumber(value.minRecentTurnsFull, 'contextBudgetPolicy.staleToolResultPrune.minRecentTurnsFull'),
+  };
+}
+
+function validateArchiveRetrievalSnapshot(value: unknown): NonNullable<ContextBudgetPolicy['archiveRetrieval']> {
+  if (!isRecord(value)) throw new Error('contextBudgetPolicy.archiveRetrieval must be a JSON object');
+  return {
+    enabled: requireBoolean(value.enabled, 'contextBudgetPolicy.archiveRetrieval.enabled'),
+    ...(value.mode !== undefined
+      ? { mode: requireStringUnion(value.mode, 'contextBudgetPolicy.archiveRetrieval.mode', ['eager', 'history_search_gated'] as const) }
+      : {}),
+    maxResults: requireNumber(value.maxResults, 'contextBudgetPolicy.archiveRetrieval.maxResults'),
+    maxEstimatedTokens: requireNumber(value.maxEstimatedTokens, 'contextBudgetPolicy.archiveRetrieval.maxEstimatedTokens'),
+    maxBytes: requireNumber(value.maxBytes, 'contextBudgetPolicy.archiveRetrieval.maxBytes'),
+    order: requireStringUnion(value.order, 'contextBudgetPolicy.archiveRetrieval.order', ['newest_first'] as const),
+  };
+}
+
 function validateToolCallCounts(value: unknown): Record<string, number> {
   if (!isRecord(value)) throw new Error('toolSummary.actualToolCallCounts must be a JSON object');
   const counts: Record<string, number> = {};
@@ -375,6 +430,13 @@ function requireOptionalString(value: unknown, field: string): string | undefine
 function requireNumber(value: unknown, field: string): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw new Error(`${field} must be a finite number`);
+  }
+  return value;
+}
+
+function requireBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') {
+    throw new Error(`${field} must be a boolean`);
   }
   return value;
 }

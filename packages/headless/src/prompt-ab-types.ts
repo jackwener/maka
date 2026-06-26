@@ -20,6 +20,7 @@ export interface SummarizePromptAbComparisonInput {
   baselineRuns: readonly (readonly FixedPromptTaskWalEvent[])[];
   candidateRuns: readonly (readonly FixedPromptTaskWalEvent[])[];
   budgetMs?: number;
+  nonInferiorityMargin?: number;
 }
 
 export interface RunPromptAbComparisonInput {
@@ -34,6 +35,7 @@ export interface RunPromptAbComparisonInput {
   maxConcurrency?: number;
   resumeFingerprint?: string;
   budgetMs?: number;
+  nonInferiorityMargin?: number;
   harborRunner: HarborTaskRunner;
   now?: () => number;
   newId?: () => string;
@@ -149,6 +151,7 @@ export interface PromptAbRunManifestInput {
   candidateTaskIds?: readonly string[];
   maxExpertTimeEstimateMin?: number | null;
   targetEvaluationTaskCount?: number | null;
+  nonInferiorityMargin?: number;
 }
 
 export type PromptAbRunManifest = PromptAbRunManifestInput & Omit<AbRunManifest, 'schemaVersion' | 'arms'> & {

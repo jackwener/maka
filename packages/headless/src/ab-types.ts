@@ -1,4 +1,5 @@
 import type { FixedPromptTask, FixedPromptTaskWalEvent } from './fixed-prompt-controller.js';
+import type { HarborCellContextBudgetPolicySnapshot } from './cell-output.js';
 
 export type AbExperimentKind = 'prompt' | 'tools' | 'provider' | 'runtime';
 
@@ -18,6 +19,7 @@ export interface SummarizeAbComparisonInput {
   baselineRuns: readonly (readonly FixedPromptTaskWalEvent[])[];
   candidateRuns: readonly (readonly FixedPromptTaskWalEvent[])[];
   budgetMs?: number;
+  nonInferiorityMargin?: number;
 }
 
 export interface RunAbComparisonInput {
@@ -27,6 +29,7 @@ export interface RunAbComparisonInput {
   reps?: number;
   maxConcurrency?: number;
   budgetMs?: number;
+  nonInferiorityMargin?: number;
   runArm: AbArmRunner;
 }
 
@@ -41,6 +44,8 @@ export interface AbArmRunInput {
 export type AbArmRunner = (input: AbArmRunInput) => Promise<FixedPromptTaskWalEvent>;
 
 export type AbDecision =
+  | 'non_inferior'
+  | 'inferior'
   | 'candidate_better'
   | 'baseline_better'
   | 'inconclusive';
@@ -59,7 +64,14 @@ export interface AbArmSummary {
   coverageRate: number;
   totalCostUsd: number;
   meanDurationMs: number | null;
+  contextBudgetPolicy?: AbContextBudgetPolicySummary;
   contextBudget?: AbContextBudgetSummary;
+}
+
+export interface AbContextBudgetPolicySummary {
+  attempts: number;
+  enabledAttempts: number;
+  snapshots: HarborCellContextBudgetPolicySnapshot[];
 }
 
 export interface AbContextBudgetSummary {
@@ -127,6 +139,8 @@ export interface AbComparisonSummary {
   taskCount: number;
   reps: number;
   budgetMs?: number;
+  nonInferiorityMargin: number;
+  passRateDelta: number | null;
   decision: AbDecision;
   reason: string;
   baseline: AbArmSummary;
@@ -151,6 +165,7 @@ export interface AbRunManifestInput {
   candidateTaskIds?: readonly string[];
   maxExpertTimeEstimateMin?: number | null;
   targetEvaluationTaskCount?: number | null;
+  nonInferiorityMargin?: number;
 }
 
 export type AbRunManifest = AbRunManifestInput & {

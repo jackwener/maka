@@ -917,6 +917,12 @@ describe('fixed prompt controller', () => {
         archiveRetrievalSkipped: 0,
         archiveRetrievalFailures: 0,
       };
+      const contextBudgetPolicy = {
+        enabled: true as const,
+        name: 'harbor-cell-context-budget',
+        staleToolResultPrune: { enabled: true, maxResultEstimatedTokens: 2048, minRecentTurnsFull: 2 },
+        minRecentTurns: 2,
+      };
 
       const result = await runFixedPromptController({
         runId: 'run-1',
@@ -926,16 +932,18 @@ describe('fixed prompt controller', () => {
         resultsJsonlPath,
         resultsTsvPath: join(dir, 'results.tsv'),
         tasks: [{ id: 'task-a', path: '/bench/task-a' }],
-        harborRunner: async () => harborOutput({ taskId: 'task-a', contextBudgetSummary }),
+        harborRunner: async () => harborOutput({ taskId: 'task-a', contextBudgetPolicy, contextBudgetSummary }),
         now: () => 100,
         newId: idFactory(),
       });
 
       assert.equal(result.events[0]?.type, 'task_completed');
       if (result.events[0]?.type === 'task_completed') {
+        assert.deepEqual(result.events[0].contextBudgetPolicy, contextBudgetPolicy);
         assert.deepEqual(result.events[0].contextBudgetSummary, contextBudgetSummary);
       }
       const event = JSON.parse((await readFile(resultsJsonlPath, 'utf8')).trimEnd());
+      assert.deepEqual(event.contextBudgetPolicy, contextBudgetPolicy);
       assert.deepEqual(event.contextBudgetSummary, contextBudgetSummary);
     });
   });
@@ -1100,6 +1108,7 @@ function harborOutput(input: {
   promptHash?: string;
   omitPromptHash?: boolean;
   tokenSummary?: HarborTaskRunOutput['cell']['tokenSummary'];
+  contextBudgetPolicy?: HarborTaskRunOutput['cell']['contextBudgetPolicy'];
   contextBudgetSummary?: HarborTaskRunOutput['cell']['contextBudgetSummary'];
 }): HarborTaskRunOutput {
   return {
@@ -1111,6 +1120,7 @@ function harborOutput(input: {
       traceEventsPath: `/logs/${input.taskId}/events.jsonl`,
       ...(input.omitPromptHash ? {} : { promptHash: input.promptHash ?? hashSystemPrompt('fixed prompt\n') }),
       tokenSummary: input.tokenSummary ?? tokenSummary({ input: 1, output: 2, reasoning: 0, total: 3, costUsd: 0.02 }),
+      ...(input.contextBudgetPolicy ? { contextBudgetPolicy: input.contextBudgetPolicy } : {}),
       ...(input.contextBudgetSummary ? { contextBudgetSummary: input.contextBudgetSummary } : {}),
       toolSummary: {
         providerVisibleToolCount: 0,

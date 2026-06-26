@@ -26,6 +26,7 @@ export function buildPromptAbRunManifest(input: PromptAbRunManifestInput): Promp
     candidateTaskIds: input.candidateTaskIds ? [...input.candidateTaskIds] : undefined,
     maxExpertTimeEstimateMin: input.maxExpertTimeEstimateMin,
     targetEvaluationTaskCount: input.targetEvaluationTaskCount,
+    nonInferiorityMargin: input.nonInferiorityMargin,
   });
   const genericManifest = buildAbRunManifest({
     experimentKind: 'prompt',
@@ -64,6 +65,7 @@ export function buildPromptAbRunManifest(input: PromptAbRunManifestInput): Promp
     candidateTaskIds: input.candidateTaskIds,
     maxExpertTimeEstimateMin: input.maxExpertTimeEstimateMin,
     targetEvaluationTaskCount: input.targetEvaluationTaskCount,
+    nonInferiorityMargin: input.nonInferiorityMargin,
   });
   return {
     ...promptManifestWithoutFingerprint,

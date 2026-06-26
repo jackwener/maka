@@ -303,9 +303,6 @@ class MakaAgent(BaseInstalledAgent):
             value = self._get_env(key)
             if value:
                 env[key] = value
-        for key, value in os.environ.items():
-            if key.startswith("MAKA_CONTEXT_") and value and key not in env:
-                env[key] = value
         return env
 
     async def _download_cell_output(self, environment: BaseEnvironment) -> None:

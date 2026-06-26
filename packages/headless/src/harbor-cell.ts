@@ -33,7 +33,12 @@ import {
   createSessionStore,
 } from '@maka/storage';
 import { registerFakeBackend } from './backends.js';
-import { buildHarborCellOutput, validateHarborCellOutput, type HarborCellOutput } from './cell-output.js';
+import {
+  buildHarborCellOutput,
+  validateHarborCellOutput,
+  type HarborCellContextBudgetPolicySnapshot,
+  type HarborCellOutput,
+} from './cell-output.js';
 import type { Config, Task } from './contracts.js';
 import { configWithHeavyTaskPolicy, resolveHeavyTaskMode } from './heavy-task-policy.js';
 import type { HeadlessBackendContext, IsolatedToolExecutor, RealBackendIsolation } from './isolation.js';
@@ -58,6 +63,7 @@ export interface RunHarborCellInput {
     context: HeadlessBackendContext,
   ) => void | Promise<void>;
   realBackendIsolation?: RealBackendIsolation;
+  contextBudgetPolicy?: HarborCellContextBudgetPolicySnapshot;
   now?: () => number;
   newId?: () => string;
 }
@@ -185,7 +191,11 @@ export async function runHarborCell(input: RunHarborCellInput): Promise<RunHarbo
   const runtimeEventsPath = join(input.outputDir, HARBOR_CELL_RUNTIME_EVENTS_FILENAME);
   const outputPath = join(input.outputDir, HARBOR_CELL_OUTPUT_FILENAME);
   await writeFile(runtimeEventsPath, runtimeEventsJsonl(invocation), 'utf8');
-  const output = validateHarborCellOutput(buildHarborCellOutput({ invocation, runtimeEventsPath }));
+  const output = validateHarborCellOutput(buildHarborCellOutput({
+    invocation,
+    runtimeEventsPath,
+    ...(input.contextBudgetPolicy ? { contextBudgetPolicy: input.contextBudgetPolicy } : {}),
+  }));
   await writeFile(outputPath, `${JSON.stringify(output, null, 2)}\n`, 'utf8');
 
   return { invocation, output, outputPath, runtimeEventsPath };
@@ -198,6 +208,7 @@ export async function runHarborCellFromEnv(
   const now = options.now ?? Date.now;
   const newId = options.newId ?? randomId;
   const outputDir = env.MAKA_OUTPUT_DIR ?? '/logs/agent';
+  const contextBudgetPolicy = buildHarborCellContextBudgetPolicySnapshot(env);
   const backend = backendFromEnv(env.MAKA_BACKEND);
   const baseConfig = {
     id: env.MAKA_CONFIG_ID ?? 'harbor-cell',
@@ -269,6 +280,7 @@ export async function runHarborCellFromEnv(
     cwd: env.MAKA_WORKDIR ?? process.cwd(),
     outputDir,
     storageRoot: env.MAKA_STORAGE_ROOT ?? join(outputDir, 'maka-storage'),
+    ...(contextBudgetPolicy ? { contextBudgetPolicy } : {}),
     ...(registerBackends ? { registerBackends } : {}),
     ...(backendNeedsIsolation(backend)
       ? {
@@ -472,6 +484,14 @@ function buildHarborCellContextBudgetPolicy(env: RunHarborCellEnv): ContextBudge
   };
 }
 
+export function buildHarborCellContextBudgetPolicySnapshot(
+  env: RunHarborCellEnv,
+): HarborCellContextBudgetPolicySnapshot | undefined {
+  if (env.MAKA_CONTEXT_BUDGET === 'off') return { enabled: false };
+  const policy = buildHarborCellContextBudgetPolicy(env);
+  return policy ? { enabled: true, ...policy } : undefined;
+}
+
 function buildHarborCellStaleToolResultPrunePolicy(
   env: RunHarborCellEnv,
   minRecentTurns: number,
@@ -503,8 +523,8 @@ function positiveIntEnv(raw: string | undefined): number | undefined;
 function positiveIntEnv(raw: string | undefined, fallback: number): number;
 function positiveIntEnv(raw: string | undefined, fallback?: number): number | undefined {
   if (raw === undefined || raw.trim() === '') return fallback;
-  const value = Number.parseInt(raw, 10);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
+  if (!/^[1-9]\d*$/.test(raw.trim())) return fallback;
+  return Number(raw);
 }
 
 function parseArchiveRetrievalMode(

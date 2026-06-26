@@ -29,6 +29,7 @@ import {
   runPromptAbComparison,
 } from '#prompt-ab-run';
 import {
+  envRatio,
   envPositiveInt,
 } from '#headless-run-env';
 import { createHarborTaskRunner } from '#harbor-task-runner';
@@ -51,6 +52,7 @@ function envPath(name, fallback) {
 }
 
 const envPosInt = (name, fallback) => envPositiveInt(name, process.env[name], fallback);
+const envRatioValue = (name, fallback) => envRatio(name, process.env[name], fallback);
 
 function rejectUnsupportedProviderEnv(env) {
   const raw = env.MAKA_PROMPT_AB_PROVIDER;
@@ -310,6 +312,7 @@ async function main() {
   const maxConcurrency = envPosInt('MAKA_PROMPT_AB_MAX_CONCURRENCY', 4);
   const taskBudgetSec = envPosInt('MAKA_PROMPT_AB_TASK_BUDGET_SEC', 30 * 60);
   const harborTimeoutMs = envPosInt('MAKA_PROMPT_AB_HARBOR_TIMEOUT_MS', (taskBudgetSec + 300) * 1000);
+  const nonInferiorityMargin = envRatioValue('MAKA_PROMPT_AB_NON_INFERIORITY_MARGIN', 0.10);
 
   await readFile(keyFile, 'utf8');
   const candidatePrompt = await readFile(candidatePromptSourcePath, 'utf8');
@@ -370,6 +373,7 @@ async function main() {
     candidateTaskIds: evaluationIds ? undefined : candidateTasks.map((task) => task.id),
     maxExpertTimeEstimateMin: evaluationIds ? null : maxExpertTimeEstimateMin,
     targetEvaluationTaskCount: targetEvaluationTaskCount ?? null,
+    nonInferiorityMargin,
   });
   await ensurePromptAbRunManifest(join(runRoot, 'prompt-ab-manifest.json'), runManifest);
 
@@ -411,6 +415,7 @@ async function main() {
     maxConcurrency,
     resumeFingerprint: runManifest.fingerprint,
     budgetMs: taskBudgetSec * 1000,
+    nonInferiorityMargin,
     harborRunner,
   });
 
@@ -494,6 +499,7 @@ function renderPromptAbRunManifestMarkdown(manifest) {
     `- Evaluation tasks: ${manifest.evaluationTaskIds.length}`,
     `- Task budget: ${manifest.taskBudgetSec}s`,
     `- Harbor timeout: ${manifest.harborTimeoutMs}ms`,
+    `- Non-inferiority margin: ${manifest.nonInferiorityMargin}`,
     '',
   ].join('\n');
 }

@@ -3,6 +3,7 @@ import { appendFile, mkdir, readFile, truncate, writeFile } from 'node:fs/promis
 import { dirname } from 'node:path';
 import {
   validateHarborCellOutput,
+  type HarborCellContextBudgetPolicySnapshot,
   type HarborCellContextBudgetSummary,
   type HarborCellOutput,
   type HarborCellTokenSummary,
@@ -74,6 +75,7 @@ export interface FixedPromptTaskCompletedEvent {
   errorClass?: string;
   promptHash?: string;
   tokenSummary: HarborCellTokenSummary;
+  contextBudgetPolicy?: HarborCellContextBudgetPolicySnapshot;
   contextBudgetSummary?: HarborCellContextBudgetSummary;
   steps: number;
   durationMs: number;
@@ -137,6 +139,7 @@ export interface FixedPromptTaskPlumbingFailedEvent {
   promptHash?: string;
   expectedPromptHash?: string;
   tokenSummary: HarborCellTokenSummary;
+  contextBudgetPolicy?: HarborCellContextBudgetPolicySnapshot;
   contextBudgetSummary?: HarborCellContextBudgetSummary;
   steps: number;
   durationMs: number;
@@ -542,6 +545,7 @@ function taskCompletedEvent(input: {
     ...(errorClass ? { errorClass } : {}),
     ...(output.cell.promptHash ? { promptHash: output.cell.promptHash } : {}),
     tokenSummary: output.cell.tokenSummary,
+    ...(output.cell.contextBudgetPolicy ? { contextBudgetPolicy: output.cell.contextBudgetPolicy } : {}),
     ...(output.cell.contextBudgetSummary ? { contextBudgetSummary: output.cell.contextBudgetSummary } : {}),
     steps: output.cell.steps,
     durationMs: output.cell.durationMs,
@@ -583,6 +587,9 @@ function taskPlumbingFailedEvent(input: {
     ...(input.output.cell.promptHash ? { promptHash: input.output.cell.promptHash } : {}),
     expectedPromptHash: input.expectedPromptHash,
     tokenSummary: input.output.cell.tokenSummary,
+    ...(input.output.cell.contextBudgetPolicy
+      ? { contextBudgetPolicy: input.output.cell.contextBudgetPolicy }
+      : {}),
     ...(input.output.cell.contextBudgetSummary
       ? { contextBudgetSummary: input.output.cell.contextBudgetSummary }
       : {}),

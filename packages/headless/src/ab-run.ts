@@ -59,6 +59,7 @@ export async function runAbComparison(input: RunAbComparisonInput): Promise<AbCo
     baselineRuns,
     candidateRuns,
     ...(input.budgetMs !== undefined ? { budgetMs: input.budgetMs } : {}),
+    ...(input.nonInferiorityMargin !== undefined ? { nonInferiorityMargin: input.nonInferiorityMargin } : {}),
   });
 }
 

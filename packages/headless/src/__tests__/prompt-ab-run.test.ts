@@ -487,8 +487,8 @@ describe('summarizePromptAbComparison', () => {
       budgetMs: 600_000,
     });
 
-    assert.equal(result.decision, 'inconclusive');
-    assert.equal(result.reason, 'sign_test_not_significant');
+    assert.equal(result.decision, 'non_inferior');
+    assert.equal(result.reason, 'pass_rate_delta_within_non_inferiority_margin');
     assert.equal(result.taskCount, 2);
     assert.equal(result.reps, 2);
     assert.equal(result.baseline.passRate, 0.25);
@@ -502,7 +502,7 @@ describe('summarizePromptAbComparison', () => {
     assert.equal(result.candidate.budgetExhausted, 0);
 
     const markdown = renderPromptAbComparisonMarkdown(result);
-    assert.match(markdown, /Decision: inconclusive \(sign_test_not_significant\)/);
+    assert.match(markdown, /Decision: B non-inferior \(pass_rate_delta_within_non_inferiority_margin\)/);
     assert.match(markdown, /Budget: 600s task budget/);
     assert.match(markdown, /Evaluation pass rate: A=1\/4 = 0.25, B=4\/4 = 1/);
     assert.match(markdown, /Task-level delta: mean=0.75/);
@@ -546,15 +546,35 @@ describe('summarizePromptAbComparison', () => {
       candidatePromptId: 'prune-on',
       evaluationTaskIds: ['t1', 't2'],
       baselineRuns: [[
-        { ...completed('t1', true), contextBudgetSummary: baselineInactive },
-        { ...completed('t2', true), contextBudgetSummary: baselineInactive },
+        { ...completed('t1', true), contextBudgetPolicy: { enabled: false }, contextBudgetSummary: baselineInactive },
+        { ...completed('t2', true), contextBudgetPolicy: { enabled: false }, contextBudgetSummary: baselineInactive },
       ]],
       candidateRuns: [[
-        { ...completed('t1', true), contextBudgetSummary: candidateActive },
-        { ...completed('t2', true), contextBudgetSummary: candidateInactive },
+        {
+          ...completed('t1', true),
+          contextBudgetPolicy: {
+            enabled: true,
+            name: 'harbor-cell-context-budget',
+            staleToolResultPrune: { enabled: true, maxResultEstimatedTokens: 2048, minRecentTurnsFull: 2 },
+            minRecentTurns: 2,
+          },
+          contextBudgetSummary: candidateActive,
+        },
+        {
+          ...completed('t2', true),
+          contextBudgetPolicy: {
+            enabled: true,
+            name: 'harbor-cell-context-budget',
+            staleToolResultPrune: { enabled: true, maxResultEstimatedTokens: 2048, minRecentTurnsFull: 2 },
+            minRecentTurns: 2,
+          },
+          contextBudgetSummary: candidateInactive,
+        },
       ]],
     });
 
+    assert.equal(result.baseline.contextBudgetPolicy?.enabledAttempts, 0);
+    assert.equal(result.candidate.contextBudgetPolicy?.enabledAttempts, 2);
     assert.deepEqual(result.candidate.contextBudget, {
       diagnosticAttempts: 2,
       activatedAttempts: 1,
@@ -571,9 +591,13 @@ describe('summarizePromptAbComparison', () => {
       renderPromptAbComparisonMarkdown(result),
       /Context budget: A activated=0\/2 pruned=0 retrieved=0, B activated=1\/2 pruned=2 retrieved=1/,
     );
+    assert.match(
+      renderPromptAbComparisonMarkdown(result),
+      /Context budget policy: A enabled=0\/2 snapshots=\[{"enabled":false}\], B enabled=2\/2 snapshots=/,
+    );
   });
 
-  test('does not call a small task majority statistically significant', () => {
+  test('keeps sign test auxiliary while using non-inferiority as the decision', () => {
     const taskIds = Array.from({ length: 16 }, (_, index) => `t${index}`);
     const result = summarizePromptAbComparison({
       runId: 'ab-run',
@@ -591,11 +615,12 @@ describe('summarizePromptAbComparison', () => {
 
     assert.equal(result.taskLevel.wins, 9);
     assert.equal(result.taskLevel.losses, 7);
-    assert.equal(result.decision, 'inconclusive');
-    assert.equal(result.reason, 'sign_test_not_significant');
+    assert.equal(result.taskLevel.signTestPValue !== null && result.taskLevel.signTestPValue > 0.05, true);
+    assert.equal(result.decision, 'non_inferior');
+    assert.equal(result.reason, 'pass_rate_delta_within_non_inferiority_margin');
   });
 
-  test('uses an exact task-level sign test for a directional decision', () => {
+  test('keeps an exact task-level sign test as an auxiliary metric', () => {
     const taskIds = Array.from({ length: 16 }, (_, index) => `t${index}`);
     const result = summarizePromptAbComparison({
       runId: 'ab-run',
@@ -613,8 +638,39 @@ describe('summarizePromptAbComparison', () => {
 
     assert.equal(result.taskLevel.wins, 13);
     assert.equal(result.taskLevel.losses, 3);
-    assert.equal(result.decision, 'candidate_better');
-    assert.equal(result.reason, 'task_level_sign_test_p<=0.05');
+    assert.equal(result.taskLevel.signTestPValue !== null && result.taskLevel.signTestPValue <= 0.05, true);
+    assert.equal(result.decision, 'non_inferior');
+    assert.equal(result.reason, 'pass_rate_delta_within_non_inferiority_margin');
+  });
+
+  test('uses a 10pp non-inferiority margin for prune comparisons', () => {
+    const ninePointLoss = summarizePromptAbComparison({
+      runId: 'ab-run',
+      roundId: 'ab-summary',
+      baselinePromptId: 'prune-off',
+      candidatePromptId: 'prune-on',
+      evaluationTaskIds: Array.from({ length: 100 }, (_, index) => `t${index}`),
+      baselineRuns: [Array.from({ length: 100 }, (_, index) => completed(`t${index}`, index < 100))],
+      candidateRuns: [Array.from({ length: 100 }, (_, index) => completed(`t${index}`, index < 91))],
+    });
+    assert.equal(ninePointLoss.nonInferiorityMargin, 0.1);
+    assert.equal(ninePointLoss.passRateDelta, -0.09);
+    assert.equal(ninePointLoss.decision, 'non_inferior');
+    assert.equal(ninePointLoss.reason, 'pass_rate_delta_within_non_inferiority_margin');
+    assert.match(renderPromptAbComparisonMarkdown(ninePointLoss), /Non-inferiority margin: 0.1/);
+
+    const elevenPointLoss = summarizePromptAbComparison({
+      runId: 'ab-run',
+      roundId: 'ab-summary',
+      baselinePromptId: 'prune-off',
+      candidatePromptId: 'prune-on',
+      evaluationTaskIds: Array.from({ length: 100 }, (_, index) => `t${index}`),
+      baselineRuns: [Array.from({ length: 100 }, (_, index) => completed(`t${index}`, index < 100))],
+      candidateRuns: [Array.from({ length: 100 }, (_, index) => completed(`t${index}`, index < 89))],
+    });
+    assert.equal(elevenPointLoss.passRateDelta, -0.11);
+    assert.equal(elevenPointLoss.decision, 'inferior');
+    assert.equal(elevenPointLoss.reason, 'pass_rate_delta_below_non_inferiority_margin');
   });
 
   test('treats pair-level timeout asymmetry as inconclusive even when total timeouts match', () => {
@@ -672,7 +728,7 @@ describe('runPromptAbComparison', () => {
       });
 
       assert.equal(result.candidatePromptId, 'maka-improved-v1');
-      assert.equal(result.decision, 'inconclusive');
+      assert.equal(result.decision, 'non_inferior');
       assert.equal(result.taskLevel.wins, 2);
       assert.deepEqual(calls, [
         'ab-baseline-r0-t1:t1',

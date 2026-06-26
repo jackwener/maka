@@ -164,6 +164,56 @@ describe('runHarborCell', () => {
     });
   });
 
+  test('env entrypoint records a context budget policy snapshot', async () => {
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const off = await runHarborCellFromEnv({
+        MAKA_BACKEND: 'fake',
+        MAKA_INSTRUCTION: 'solve with prune off',
+        MAKA_WORKDIR: workspaceDir,
+        MAKA_OUTPUT_DIR: outputDir,
+        MAKA_STORAGE_ROOT: storageRoot,
+        MAKA_CONTEXT_BUDGET: 'off',
+      }, {
+        registerBackends: registerCellBackend,
+      });
+      assert.deepEqual(off.output.contextBudgetPolicy, { enabled: false });
+    });
+
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const on = await runHarborCellFromEnv({
+        MAKA_BACKEND: 'fake',
+        MAKA_INSTRUCTION: 'solve with prune on',
+        MAKA_WORKDIR: workspaceDir,
+        MAKA_OUTPUT_DIR: outputDir,
+        MAKA_STORAGE_ROOT: storageRoot,
+        MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on',
+        MAKA_CONTEXT_STALE_TOOL_RESULT_MAX_TOKENS: '256',
+        MAKA_CONTEXT_ARCHIVE_RETRIEVAL: 'on',
+        MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MODE: 'eager',
+      }, {
+        registerBackends: registerCellBackend,
+      });
+      assert.deepEqual(on.output.contextBudgetPolicy, {
+        enabled: true,
+        name: 'harbor-cell-context-budget',
+        staleToolResultPrune: {
+          enabled: true,
+          maxResultEstimatedTokens: 256,
+          minRecentTurnsFull: 2,
+        },
+        archiveRetrieval: {
+          enabled: true,
+          mode: 'eager',
+          maxResults: 3,
+          maxEstimatedTokens: 8192,
+          maxBytes: 1024 * 1024,
+          order: 'newest_first',
+        },
+        minRecentTurns: 2,
+      });
+    });
+  });
+
   test('env entrypoint defaults to the process cwd when MAKA_WORKDIR is absent', async () => {
     await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
       const instructionFile = join(outputDir, 'instruction.txt');
@@ -457,6 +507,92 @@ describe('runHarborCell', () => {
         },
         minRecentTurns: 2,
       });
+    });
+  });
+
+  test('Harbor ai-sdk backend leaves context budget policy off when explicitly disabled', async () => {
+    await withDirs(async ({ workspaceDir }) => {
+      const registry = new BackendRegistry();
+      const toolExecutor = fakeToolExecutor();
+      const register = buildAiSdkCellBackendRegistration({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        env: {
+          DEEPSEEK_API_KEY: 'test-key',
+          MAKA_CONTEXT_BUDGET: 'off',
+          MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on',
+          MAKA_CONTEXT_ARCHIVE_RETRIEVAL: 'on',
+        },
+        now: () => 123,
+        newId: () => 'id',
+      });
+      await register(registry, {
+        config: {
+          id: 'harbor-ai-sdk',
+          backend: 'ai-sdk',
+          llmConnectionSlug: 'deepseek',
+          model: 'deepseek-v4-flash',
+        },
+        task: { id: 'harbor-cell', instruction: 'solve', workspaceDir },
+        workspaceDir,
+        realBackendIsolation: { kind: 'external', label: 'Harbor task container', toolExecutor },
+        toolExecutor,
+      });
+
+      const backend = await registry.build('ai-sdk', backendContext(workspaceDir));
+      const backendInput = (backend as unknown as {
+        input: { contextBudget?: unknown };
+      }).input;
+      assert.equal(backendInput.contextBudget, undefined);
+    });
+  });
+
+  test('Harbor context budget env ignores malformed positive integers instead of truncating them', async () => {
+    await withDirs(async ({ workspaceDir }) => {
+      const registry = new BackendRegistry();
+      const toolExecutor = fakeToolExecutor();
+      const register = buildAiSdkCellBackendRegistration({
+        provider: 'deepseek',
+        model: 'deepseek-v4-flash',
+        env: {
+          DEEPSEEK_API_KEY: 'test-key',
+          MAKA_CONTEXT_MIN_RECENT_TURNS: '0',
+          MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on',
+          MAKA_CONTEXT_STALE_TOOL_RESULT_MAX_TOKENS: '123abc',
+          MAKA_CONTEXT_STALE_TOOL_RESULT_MIN_RECENT_TURNS: '-1',
+          MAKA_CONTEXT_ARCHIVE_RETRIEVAL: 'on',
+          MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MAX_RESULTS: '-1',
+          MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MAX_TOKENS: '',
+        },
+        now: () => 123,
+        newId: () => 'id',
+      });
+      await register(registry, {
+        config: {
+          id: 'harbor-ai-sdk',
+          backend: 'ai-sdk',
+          llmConnectionSlug: 'deepseek',
+          model: 'deepseek-v4-flash',
+        },
+        task: { id: 'harbor-cell', instruction: 'solve', workspaceDir },
+        workspaceDir,
+        realBackendIsolation: { kind: 'external', label: 'Harbor task container', toolExecutor },
+        toolExecutor,
+      });
+
+      const backend = await registry.build('ai-sdk', backendContext(workspaceDir));
+      const backendInput = (backend as unknown as {
+        input: { contextBudget?: NonNullable<unknown> };
+      }).input as { contextBudget?: {
+        minRecentTurns?: number;
+        staleToolResultPrune?: { maxResultEstimatedTokens: number; minRecentTurnsFull: number };
+        archiveRetrieval?: { maxResults: number; maxEstimatedTokens: number };
+      } };
+      assert.equal(backendInput.contextBudget?.minRecentTurns, 2);
+      assert.equal(backendInput.contextBudget?.staleToolResultPrune?.maxResultEstimatedTokens, 2048);
+      assert.equal(backendInput.contextBudget?.staleToolResultPrune?.minRecentTurnsFull, 2);
+      assert.equal(backendInput.contextBudget?.archiveRetrieval?.maxResults, 3);
+      assert.equal(backendInput.contextBudget?.archiveRetrieval?.maxEstimatedTokens, 8192);
     });
   });
 

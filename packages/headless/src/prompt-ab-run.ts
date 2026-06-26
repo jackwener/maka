@@ -56,6 +56,7 @@ export async function runPromptAbComparison(input: RunPromptAbComparisonInput): 
     ...(input.reps !== undefined ? { reps: input.reps } : {}),
     ...(input.maxConcurrency !== undefined ? { maxConcurrency: input.maxConcurrency } : {}),
     ...(input.budgetMs !== undefined ? { budgetMs: input.budgetMs } : {}),
+    ...(input.nonInferiorityMargin !== undefined ? { nonInferiorityMargin: input.nonInferiorityMargin } : {}),
     runArm: async ({ roundId, arm, task }) => runComparisonTaskArm({
       input,
       task,
@@ -83,6 +84,7 @@ export function summarizePromptAbComparison(input: SummarizePromptAbComparisonIn
       baselineRuns: input.baselineRuns,
       candidateRuns: input.candidateRuns,
       ...(input.budgetMs !== undefined ? { budgetMs: input.budgetMs } : {}),
+      ...(input.nonInferiorityMargin !== undefined ? { nonInferiorityMargin: input.nonInferiorityMargin } : {}),
     }),
     baselinePromptId: input.baselinePromptId,
     candidatePromptId: input.candidatePromptId,

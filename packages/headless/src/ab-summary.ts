@@ -1,9 +1,11 @@
 import type { FixedPromptTaskWalEvent } from './fixed-prompt-controller.js';
+import { assertRatio } from './numeric-guards.js';
 import type {
   AbArmSummary,
   AbAttemptPairSummary,
   AbComparisonSummary,
   AbContextBudgetSummary,
+  AbContextBudgetPolicySummary,
   AbDecision,
   AbTaskArmSummary,
   AbTaskComparison,
@@ -11,15 +13,23 @@ import type {
   SummarizeAbComparisonInput,
 } from './ab-types.js';
 
+const DEFAULT_NON_INFERIORITY_MARGIN = 0.10;
+
 export function summarizeAbComparison(input: SummarizeAbComparisonInput): AbComparisonSummary {
   assertSameRunCount(input.baselineRuns, input.candidateRuns);
+  const nonInferiorityMargin = input.nonInferiorityMargin !== undefined
+    ? assertRatio('nonInferiorityMargin', input.nonInferiorityMargin)
+    : DEFAULT_NON_INFERIORITY_MARGIN;
   const reps = input.baselineRuns.length;
   const taskIds = [...input.evaluationTaskIds];
   const baseline = summarizeArm(input.baselineRuns, taskIds, reps);
   const candidate = summarizeArm(input.candidateRuns, taskIds, reps);
   const taskLevel = summarizeTasks(input.baselineRuns, input.candidateRuns, taskIds, reps);
   const pairedAttempts = summarizeAttemptPairs(input.baselineRuns, input.candidateRuns, taskIds);
-  const { decision, reason } = decide(taskLevel, baseline, candidate, pairedAttempts);
+  const passRateDelta = baseline.passRate !== null && candidate.passRate !== null
+    ? roundRateDelta(candidate.passRate - baseline.passRate)
+    : null;
+  const { decision, reason } = decide(baseline, candidate, pairedAttempts, passRateDelta, nonInferiorityMargin);
 
   return {
     runId: input.runId,
@@ -29,6 +39,8 @@ export function summarizeAbComparison(input: SummarizeAbComparisonInput): AbComp
     taskCount: taskIds.length,
     reps,
     ...(input.budgetMs !== undefined ? { budgetMs: input.budgetMs } : {}),
+    nonInferiorityMargin,
+    passRateDelta,
     decision,
     reason,
     baseline,
@@ -52,6 +64,7 @@ function summarizeArm(
     .filter((event) => event.type !== 'task_budget_exhausted')
     .map((event) => event.durationMs);
   const contextBudget = summarizeContextBudget(observed);
+  const contextBudgetPolicy = summarizeContextBudgetPolicy(observed);
   return {
     attempts,
     observed: observed.length,
@@ -66,7 +79,24 @@ function summarizeArm(
     coverageRate: attempts > 0 ? valid.length / attempts : 1,
     totalCostUsd: sum(valid.filter((event) => event.type !== 'task_budget_exhausted').map((event) => event.tokenSummary.costUsd)),
     meanDurationMs: durations.length > 0 ? sum(durations) / durations.length : null,
+    ...(contextBudgetPolicy ? { contextBudgetPolicy } : {}),
     ...(contextBudget ? { contextBudget } : {}),
+  };
+}
+
+function summarizeContextBudgetPolicy(events: readonly FixedPromptTaskWalEvent[]): AbContextBudgetPolicySummary | undefined {
+  const snapshots = events
+    .map((event) => ('contextBudgetPolicy' in event ? event.contextBudgetPolicy : undefined))
+    .filter((policy): policy is NonNullable<typeof policy> => policy !== undefined);
+  if (snapshots.length === 0) return undefined;
+  const unique = new Map<string, typeof snapshots[number]>();
+  for (const snapshot of snapshots) {
+    unique.set(canonicalJson(snapshot), snapshot);
+  }
+  return {
+    attempts: snapshots.length,
+    enabledAttempts: snapshots.filter((snapshot) => snapshot.enabled).length,
+    snapshots: [...unique.keys()].sort().map((key) => unique.get(key)!),
   };
 }
 
@@ -213,10 +243,11 @@ function summarizeAttemptPairs(
 }
 
 function decide(
-  taskLevel: AbTaskLevelSummary,
   baseline: AbArmSummary,
   candidate: AbArmSummary,
   pairedAttempts: AbAttemptPairSummary,
+  passRateDelta: number | null,
+  nonInferiorityMargin: number,
 ): { decision: AbDecision; reason: string } {
   const coverage = Math.min(baseline.coverageRate, candidate.coverageRate);
   if (coverage < 0.9) return { decision: 'inconclusive', reason: 'low_effective_coverage' };
@@ -226,17 +257,11 @@ function decide(
   if (pairedAttempts.infraOrPlumbingDiscordantPairIds.length > 0) {
     return { decision: 'inconclusive', reason: 'asymmetric_infra_or_plumbing' };
   }
-  const meanDelta = taskLevel.meanPassRateDelta ?? 0;
-  if (taskLevel.signTestPValue === null || taskLevel.signTestPValue > 0.05) {
-    return { decision: 'inconclusive', reason: 'sign_test_not_significant' };
+  if (passRateDelta === null) return { decision: 'inconclusive', reason: 'missing_pass_rate_delta' };
+  if (passRateDelta >= -nonInferiorityMargin) {
+    return { decision: 'non_inferior', reason: 'pass_rate_delta_within_non_inferiority_margin' };
   }
-  if (taskLevel.wins > taskLevel.losses && meanDelta > 0) {
-    return { decision: 'candidate_better', reason: 'task_level_sign_test_p<=0.05' };
-  }
-  if (taskLevel.losses > taskLevel.wins && meanDelta < 0) {
-    return { decision: 'baseline_better', reason: 'task_level_sign_test_p<=0.05' };
-  }
-  return { decision: 'inconclusive', reason: 'sign_test_direction_mismatch' };
+  return { decision: 'inferior', reason: 'pass_rate_delta_below_non_inferiority_margin' };
 }
 
 function isValidBudgetedOutcome(
@@ -281,6 +306,21 @@ function binomialProbability(n: number, k: number, p: number): number {
 
 function sum(values: readonly number[]): number {
   return values.reduce((total, value) => total + value, 0);
+}
+
+function roundRateDelta(value: number): number {
+  return Math.round(value * 1_000_000_000_000) / 1_000_000_000_000;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries.map(([key, entryValue]) => `${JSON.stringify(key)}:${canonicalJson(entryValue)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 function assertSameRunCount(

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   buildAiSdkCellBackendRegistration,
+  buildHarborCellContextBudgetPolicySnapshot,
   runHarborCell,
 } from '#harbor-cell';
 
@@ -19,13 +20,28 @@ const HOST_BACKEND_ENV_KEYS = [
   'MAKA_OUTPUT_DIR',
   'MAKA_STORAGE_ROOT',
 ];
+export const CONTEXT_ENV_KEYS = [
+  'MAKA_CONTEXT_BUDGET',
+  'MAKA_CONTEXT_HISTORY_BUDGET_TOKENS',
+  'MAKA_CONTEXT_HISTORY_BUDGET_TURNS',
+  'MAKA_CONTEXT_MIN_RECENT_TURNS',
+  'MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE',
+  'MAKA_CONTEXT_STALE_TOOL_RESULT_MAX_TOKENS',
+  'MAKA_CONTEXT_STALE_TOOL_RESULT_MIN_RECENT_TURNS',
+  'MAKA_CONTEXT_ARCHIVE_RETRIEVAL',
+  'MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MODE',
+  'MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MAX_RESULTS',
+  'MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MAX_TOKENS',
+  'MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MAX_BYTES',
+];
 
-try {
+export async function main() {
   const env = process.env;
   const provider = env.MAKA_PROVIDER || providerFromModel(env.MAKA_MODEL || env.HARBOR_MODEL || 'deepseek/deepseek-v4-flash');
   const model = env.MAKA_MODEL || stripProvider(env.HARBOR_MODEL || 'deepseek/deepseek-v4-flash', provider);
   const outputDir = env.MAKA_OUTPUT_DIR || join(process.cwd(), 'agent');
   const storageRoot = env.MAKA_STORAGE_ROOT || join(outputDir, 'maka-storage');
+  const contextBudgetPolicy = buildHarborCellContextBudgetPolicySnapshot(env);
   const now = Date.now;
   const newId = randomId;
 
@@ -41,6 +57,7 @@ try {
     cwd: env.MAKA_WORKDIR || process.cwd(),
     outputDir,
     storageRoot,
+    ...(contextBudgetPolicy ? { contextBudgetPolicy } : {}),
     registerBackends: buildAiSdkCellBackendRegistration({
       provider,
       model,
@@ -63,13 +80,9 @@ try {
     outputPath: result.outputPath,
     runtimeEventsPath: result.runtimeEventsPath,
   }));
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`maka run-host-cell failed: ${message}`);
-  process.exitCode = 1;
 }
 
-async function backendEnv(env, provider) {
+export async function backendEnv(env, provider) {
   const keyEnvName = env.MAKA_HOST_API_KEY_ENV_NAME || defaultKeyEnvName(provider);
   const apiKey = await hostApiKey(env);
   const result = {
@@ -80,8 +93,8 @@ async function backendEnv(env, provider) {
   for (const key of HOST_BACKEND_ENV_KEYS) {
     if (env[key] !== undefined) result[key] = env[key];
   }
-  for (const [key, value] of Object.entries(env)) {
-    if (key.startsWith('MAKA_CONTEXT_') && value !== undefined) result[key] = value;
+  for (const key of CONTEXT_ENV_KEYS) {
+    if (env[key] !== undefined) result[key] = env[key];
   }
   return result;
 }
@@ -164,4 +177,12 @@ function requiredEnv(env, name) {
 
 function randomId() {
   return globalThis.crypto?.randomUUID?.() ?? `host_cell_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+}
+
+if (process.argv[1] && new URL(process.argv[1], 'file:').href === import.meta.url) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`maka run-host-cell failed: ${message}`);
+    process.exitCode = 1;
+  });
 }
