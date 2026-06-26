@@ -22,7 +22,6 @@ export interface ActiveToolResultPruneInput {
   messages: readonly ModelMessage[];
   policy: ActiveToolResultPrunePolicy | undefined;
   stepNumber: number;
-  sessionId: string;
   turnId: string;
   charsPerToken?: number;
   eligibleToolCallIds?: ReadonlySet<string>;
@@ -36,6 +35,13 @@ export interface ActiveToolResultPruneResult {
   messages: ModelMessage[];
   rewritten: number;
   archiveFailures: number;
+  diagnosticPatch: ActiveToolResultPruneDiagnosticPatch;
+}
+
+export interface ActiveToolResultPruneDiagnosticPatch {
+  activePrunedToolResults?: number;
+  activeArchiveFailures?: number;
+  activeEstimatedTokensSaved?: number;
 }
 
 type ToolResultPartish = {
@@ -49,7 +55,7 @@ type ToolResultPartish = {
 
 type Replacement =
   | { changed: false; archiveFailure?: boolean }
-  | { changed: true; part: ToolResultPartish };
+  | { changed: true; part: ToolResultPartish; estimatedTokensSaved: number };
 
 export async function rewriteActiveToolResultsInMessages(
   input: ActiveToolResultPruneInput,
@@ -57,18 +63,18 @@ export async function rewriteActiveToolResultsInMessages(
   const policy = input.policy;
   const minStepNumber = Math.max(0, Math.floor(policy?.minStepNumber ?? 1));
   if (policy?.enabled !== true || input.stepNumber < minStepNumber) {
-    return { messages: [...input.messages], rewritten: 0, archiveFailures: 0 };
+    return { messages: [...input.messages], rewritten: 0, archiveFailures: 0, diagnosticPatch: {} };
   }
 
   const maxResultEstimatedTokens =
     finitePositive(policy.maxCurrentResultEstimatedTokens)
     ?? DEFAULT_MAX_CURRENT_RESULT_ESTIMATED_TOKENS;
-  const archiveRequired = policy.archiveRequired !== false;
   const charsPerToken = input.charsPerToken ?? DEFAULT_CHARS_PER_TOKEN;
   const archivedPlaceholders = input.archivedPlaceholders ?? new Map<string, ActiveArchivedToolResultPlaceholder>();
 
   let rewritten = 0;
   let archiveFailures = 0;
+  let activeEstimatedTokensSaved = 0;
   let anyChanged = false;
   const nextMessages: ModelMessage[] = [];
 
@@ -93,7 +99,6 @@ export async function rewriteActiveToolResultsInMessages(
         turnId: input.turnId,
         charsPerToken,
         maxResultEstimatedTokens,
-        archiveRequired,
         eligibleToolCallIds: input.eligibleToolCallIds,
         archiveToolResult: input.archiveToolResult,
         archivedPlaceholders,
@@ -101,6 +106,7 @@ export async function rewriteActiveToolResultsInMessages(
 
       if (replacement.changed) {
         rewritten += 1;
+        activeEstimatedTokensSaved += replacement.estimatedTokensSaved;
         anyChanged = true;
         if (!nextContent) nextContent = originalContent.slice(0, index);
         nextContent.push(replacement.part);
@@ -121,6 +127,11 @@ export async function rewriteActiveToolResultsInMessages(
     messages: anyChanged ? nextMessages : [...input.messages],
     rewritten,
     archiveFailures,
+    diagnosticPatch: {
+      ...(rewritten > 0 ? { activePrunedToolResults: rewritten } : {}),
+      ...(archiveFailures > 0 ? { activeArchiveFailures: archiveFailures } : {}),
+      ...(activeEstimatedTokensSaved > 0 ? { activeEstimatedTokensSaved } : {}),
+    },
   };
 }
 
@@ -130,7 +141,6 @@ async function rewriteToolResultPart(input: {
   turnId: string;
   charsPerToken: number;
   maxResultEstimatedTokens: number;
-  archiveRequired: boolean;
   eligibleToolCallIds?: ReadonlySet<string>;
   archiveToolResult?: ActiveToolResultPruneInput['archiveToolResult'];
   archivedPlaceholders: Map<string, ActiveArchivedToolResultPlaceholder>;
@@ -145,6 +155,9 @@ async function rewriteToolResultPart(input: {
   const payload = extractPayload(input.part);
   if (!payload) return { changed: false };
   if (isActiveArchivedToolResultPlaceholder(payload.value)) return { changed: false };
+  if (typeof payload.value === 'string' && isActiveArchivedToolResultPlaceholderText(payload.value)) {
+    return { changed: false };
+  }
 
   const serializedResult = serializeToolResultForArchive(payload.value);
   const originalEstimatedTokens = estimateTokens(serializedResult.length, input.charsPerToken);
@@ -174,13 +187,13 @@ async function rewriteToolResultPart(input: {
     } catch {
       archived = undefined;
     }
-    if (!archived?.artifactId && input.archiveRequired) {
+    if (!isUsableArtifactId(archived?.artifactId)) {
       return { changed: false, archiveFailure: true };
     }
     placeholder = {
       kind: ACTIVE_ARCHIVED_TOOL_RESULT_PLACEHOLDER_KIND,
       rewriteVersion: ARCHIVED_TOOL_RESULT_REWRITE_VERSION,
-      artifactId: archived?.artifactId ?? '',
+      artifactId: archived.artifactId,
       turnId: input.turnId,
       toolCallId: input.part.toolCallId,
       toolName: input.part.toolName,
@@ -192,9 +205,16 @@ async function rewriteToolResultPart(input: {
     input.archivedPlaceholders.set(cacheKey, placeholder);
   }
 
+  const placeholderText = payload.field === 'output'
+    && (payload.outputKind === 'text' || payload.outputKind === 'error-text')
+    ? activePlaceholderText(placeholder)
+    : serializeToolResultForArchive(placeholder);
+  const placeholderEstimatedTokens = estimateTokens(placeholderText.length, input.charsPerToken);
+
   return {
     changed: true,
     part: replacePayload(input.part, payload, placeholder),
+    estimatedTokensSaved: Math.max(0, originalEstimatedTokens - placeholderEstimatedTokens),
   };
 }
 
@@ -253,6 +273,7 @@ export function isActiveArchivedToolResultPlaceholder(
   return candidate.kind === ACTIVE_ARCHIVED_TOOL_RESULT_PLACEHOLDER_KIND
     && candidate.rewriteVersion === ARCHIVED_TOOL_RESULT_REWRITE_VERSION
     && typeof candidate.artifactId === 'string'
+    && isUsableArtifactId(candidate.artifactId)
     && typeof candidate.turnId === 'string'
     && candidate.turnId.length > 0
     && typeof candidate.toolCallId === 'string'
@@ -276,6 +297,18 @@ function isToolResultPartish(value: unknown): value is ToolResultPartish {
 
 function activePlaceholderText(placeholder: ActiveArchivedToolResultPlaceholder): string {
   return JSON.stringify(placeholder);
+}
+
+function isActiveArchivedToolResultPlaceholderText(value: string): boolean {
+  try {
+    return isActiveArchivedToolResultPlaceholder(JSON.parse(value));
+  } catch {
+    return false;
+  }
+}
+
+function isUsableArtifactId(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function utf8ByteLength(value: string): number {

@@ -8,10 +8,18 @@ import {
   appendFixedPromptWalEvent,
   FIXED_PROMPT_WAL_SCHEMA_VERSION,
   hashSystemPrompt,
+  PROMPT_CANDIDATE_FAILURE_PATTERNS,
   type PromptCandidateCommittedEvent,
+  type PromptCandidateFailurePattern,
+  type PromptCandidateRationale,
 } from './fixed-prompt-controller.js';
 
 const execFileAsync = promisify(execFile);
+
+const CANDIDATE_RATIONALE_MAX_TASK_IDS = 16;
+const CANDIDATE_RATIONALE_MAX_TEXT_CHARS = 280;
+const CANDIDATE_RATIONALE_MAX_SERIALIZED_CHARS = 2000;
+const FORBIDDEN_RATIONALE_TEXT_RE = /```|\r|\n|held[-_]out|verifier|expected[- ]output|\/app\/|tests\/|test\.sh|canary|runtime-events|events\.jsonl|raw trace/i;
 
 export interface TrajectoryDigest {
   taskId: string;
@@ -54,6 +62,10 @@ export type RewardHackScanResult =
   | { decision: 'quarantine'; reason: 'no_model_visible_events' }
   | { decision: 'quarantine'; reason: 'verifier_pattern'; matchedPatterns: readonly string[] };
 
+export type CandidateFailurePattern = PromptCandidateFailurePattern;
+
+export type CandidateRationale = PromptCandidateRationale;
+
 export interface MetaAgentPromptInput {
   runId: string;
   roundId: string;
@@ -66,6 +78,7 @@ export interface MetaAgentPromptInput {
 export interface MetaAgentPromptResult {
   systemPrompt: string;
   summary: string;
+  candidateRationale: CandidateRationale;
 }
 
 export type MetaAgent = (input: MetaAgentPromptInput) => Promise<MetaAgentPromptResult>;
@@ -156,6 +169,7 @@ export async function runPromptCandidateRound(
     resultsTsv,
     heldInDigests: input.heldInDigests,
   });
+  const candidateRationale = validateCandidateRationale(result.candidateRationale, input.heldInTaskIds);
 
   await writeFile(input.systemPromptPath, result.systemPrompt, 'utf8');
   let commitSha: string;
@@ -175,6 +189,8 @@ export async function runPromptCandidateRound(
       commitSha,
       summary: result.summary,
       systemPrompt: result.systemPrompt,
+      heldInTaskIds: input.heldInTaskIds,
+      candidateRationale,
     }));
   } catch (error) {
     await input.git.rollbackCommit(commitSha);
@@ -360,7 +376,9 @@ export function createScriptedMetaAgent(input: CreateScriptedMetaAgentInput): Me
 export function renderMetaAgentPrompt(input: MetaAgentPromptInput): string {
   return [
     'You are improving one system prompt for benchmark tasks.',
-    'Return JSON only: {"systemPrompt":"...","summary":"..."}.',
+    'Return JSON only: {"systemPrompt":"...","summary":"...","candidateRationale":{"failurePattern":"coverage_regression|tool_failed|max_tokens|runtime_error|verification_failed|other","hypothesis":"short plain text","targetedFix":"short plain text","predictedFixes":["held-in-task-id"],"riskTasks":["held-in-task-id"]}}.',
+    'candidateRationale.predictedFixes and riskTasks may only reference held-in task ids from the prompt.',
+    'Do not include held-out tasks, verifier internals, expected outputs, raw traces, file paths, code fences, or multiline text in candidateRationale.',
     '',
     '# Program',
     input.program,
@@ -406,13 +424,83 @@ export function parseMetaAgentResult(raw: string): MetaAgentPromptResult {
   if (!isRecord(parsed)) throw new Error('meta-agent output must be a JSON object');
   const systemPrompt = parsed.systemPrompt;
   const summary = parsed.summary;
+  const candidateRationale = parseCandidateRationaleShape(parsed.candidateRationale);
   if (typeof systemPrompt !== 'string' || systemPrompt.length === 0) {
     throw new Error('meta-agent output systemPrompt must be a non-empty string');
   }
   if (typeof summary !== 'string' || summary.length === 0) {
     throw new Error('meta-agent output summary must be a non-empty string');
   }
-  return { systemPrompt, summary };
+  return { systemPrompt, summary, candidateRationale };
+}
+
+function validateCandidateRationale(value: unknown, heldInTaskIds: readonly string[]): CandidateRationale {
+  const candidateRationale = parseCandidateRationaleShape(value);
+  validateHeldInTaskIds(candidateRationale.predictedFixes, 'predictedFixes', heldInTaskIds);
+  validateHeldInTaskIds(candidateRationale.riskTasks, 'riskTasks', heldInTaskIds);
+  return candidateRationale;
+}
+
+function parseCandidateRationaleShape(value: unknown): CandidateRationale {
+  if (!isRecord(value)) {
+    throw new Error('candidateRationale must be a JSON object');
+  }
+  const serialized = JSON.stringify(value);
+  if (serialized.length > CANDIDATE_RATIONALE_MAX_SERIALIZED_CHARS) {
+    throw new Error(`candidateRationale must serialize to at most ${CANDIDATE_RATIONALE_MAX_SERIALIZED_CHARS} characters`);
+  }
+  if (!PROMPT_CANDIDATE_FAILURE_PATTERNS.includes(value.failurePattern as PromptCandidateFailurePattern)) {
+    throw new Error(`candidateRationale.failurePattern must be one of: ${PROMPT_CANDIDATE_FAILURE_PATTERNS.join(', ')}`);
+  }
+  const hypothesis = parseRationaleTextShape(value.hypothesis, 'hypothesis');
+  const targetedFix = parseRationaleTextShape(value.targetedFix, 'targetedFix');
+  const predictedFixes = parseTaskIdArrayShape(value.predictedFixes, 'predictedFixes');
+  const riskTasks = parseTaskIdArrayShape(value.riskTasks, 'riskTasks');
+  return {
+    failurePattern: value.failurePattern as CandidateFailurePattern,
+    hypothesis,
+    targetedFix,
+    predictedFixes,
+    riskTasks,
+  };
+}
+
+function parseRationaleTextShape(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error(`candidateRationale.${field} must be a non-empty string`);
+  }
+  if (value.length > CANDIDATE_RATIONALE_MAX_TEXT_CHARS) {
+    throw new Error(`candidateRationale.${field} must be at most ${CANDIDATE_RATIONALE_MAX_TEXT_CHARS} characters`);
+  }
+  if (FORBIDDEN_RATIONALE_TEXT_RE.test(value)) {
+    throw new Error(`candidateRationale.${field} contains forbidden prompt-memory content`);
+  }
+  return value;
+}
+
+function validateHeldInTaskIds(value: unknown, field: string, heldInTaskIds: readonly string[]): void {
+  const taskIds = parseTaskIdArrayShape(value, field);
+  const heldIn = new Set(heldInTaskIds);
+  for (const item of taskIds) {
+    if (!heldIn.has(item)) {
+      throw new Error(`candidateRationale.${field} contains non-held-in task id: ${item}`);
+    }
+  }
+}
+
+function parseTaskIdArrayShape(value: unknown, field: string): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new Error(`candidateRationale.${field} must be an array`);
+  }
+  if (value.length > CANDIDATE_RATIONALE_MAX_TASK_IDS) {
+    throw new Error(`candidateRationale.${field} must contain at most ${CANDIDATE_RATIONALE_MAX_TASK_IDS} items`);
+  }
+  for (const item of value) {
+    if (typeof item !== 'string' || item.length === 0) {
+      throw new Error(`candidateRationale.${field} must contain non-empty task id strings`);
+    }
+  }
+  return value;
 }
 
 function promptCandidateCommittedEvent(input: {
@@ -423,6 +511,8 @@ function promptCandidateCommittedEvent(input: {
   commitSha: string;
   summary: string;
   systemPrompt: string;
+  heldInTaskIds: readonly string[];
+  candidateRationale: CandidateRationale;
 }): PromptCandidateCommittedEvent {
   return {
     schemaVersion: FIXED_PROMPT_WAL_SCHEMA_VERSION,
@@ -434,7 +524,22 @@ function promptCandidateCommittedEvent(input: {
     commitSha: input.commitSha,
     summary: input.summary,
     promptHash: hashSystemPrompt(input.systemPrompt),
+    heldInTaskSetHash: hashHeldInTaskSet(input.heldInTaskIds),
+    candidateRationaleHash: hashCandidateRationale(input.candidateRationale),
+    candidateRationale: input.candidateRationale,
   };
+}
+
+function hashHeldInTaskSet(heldInTaskIds: readonly string[]): string {
+  return sha256Json([...new Set(heldInTaskIds)].sort((a, b) => a.localeCompare(b)));
+}
+
+function hashCandidateRationale(candidateRationale: CandidateRationale): string {
+  return sha256Json(candidateRationale);
+}
+
+function sha256Json(value: unknown): string {
+  return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
 }
 
 export function assertOnlySystemPromptChanged(

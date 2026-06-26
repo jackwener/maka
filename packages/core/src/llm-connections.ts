@@ -162,7 +162,7 @@ export const PROVIDER_DEFAULTS: Record<ProviderType, ProviderDefaults> = {
   'kimi-coding-plan': {
     label: 'Kimi Coding Plan',
     description: 'Kimi for Coding over Anthropic-compatible protocol.',
-    baseUrl: 'https://api.moonshot.cn/anthropic',
+    baseUrl: 'https://api.kimi.com/coding/v1',
     authKind: 'api_key',
     backendKind: 'ai-sdk',
     fallbackModels: ['kimi-for-coding'],
@@ -170,7 +170,7 @@ export const PROVIDER_DEFAULTS: Record<ProviderType, ProviderDefaults> = {
     protocol: 'anthropic',
     category: 'domestic',
     catalogBadge: 'Coding',
-    signupUrl: 'https://platform.moonshot.cn/console/api-keys',
+    signupUrl: 'https://www.kimi.com/code/console',
   },
   openai: {
     label: 'OpenAI',
@@ -222,7 +222,7 @@ export const PROVIDER_DEFAULTS: Record<ProviderType, ProviderDefaults> = {
     protocol: 'openai',
     category: 'domestic',
     catalogBadge: 'API',
-    signupUrl: 'https://platform.moonshot.cn/console/api-keys',
+    signupUrl: 'https://platform.kimi.com/console/api-keys',
   },
   'zai-coding-plan': {
     label: 'Z.AI Coding Plan',
