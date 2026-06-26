@@ -617,6 +617,37 @@ describe('runHarborCell', () => {
     }
   });
 
+  test('Harbor context budget env rejects explicit malformed numeric knobs', () => {
+    assert.throws(
+      () => buildHarborCellContextBudgetBackendOptions({
+        MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on',
+        MAKA_CONTEXT_HISTORY_BUDGET_TOKENS: '1000x',
+      }),
+      /MAKA_CONTEXT_HISTORY_BUDGET_TOKENS must be a non-negative integer, got "1000x"/,
+    );
+    assert.throws(
+      () => buildHarborCellContextBudgetBackendOptions({
+        MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on',
+        MAKA_CONTEXT_HISTORY_BUDGET_TURNS: '-1',
+      }),
+      /MAKA_CONTEXT_HISTORY_BUDGET_TURNS must be a non-negative integer, got "-1"/,
+    );
+    assert.throws(
+      () => buildHarborCellContextBudgetBackendOptions({
+        MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on',
+        MAKA_CONTEXT_MIN_RECENT_TURNS: '1.5',
+      }),
+      /MAKA_CONTEXT_MIN_RECENT_TURNS must be a non-negative integer, got "1.5"/,
+    );
+    assert.throws(
+      () => buildHarborCellContextBudgetBackendOptions({
+        MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on',
+        MAKA_CONTEXT_STALE_TOOL_RESULT_MIN_RECENT_TURNS: 'old',
+      }),
+      /MAKA_CONTEXT_STALE_TOOL_RESULT_MIN_RECENT_TURNS must be a non-negative integer, got "old"/,
+    );
+  });
+
   test('Harbor context budget env rejects explicit malformed archive retrieval mode', async () => {
     await withDirs(async ({ workspaceDir }) => {
       const registry = new BackendRegistry();

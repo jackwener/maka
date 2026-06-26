@@ -15,6 +15,7 @@ import type {
   AbTaskArmSummary,
   AbTaskComparison,
   AbTaskLevelSummary,
+  AbTokenCostSummary,
   SummarizeAbComparisonInput,
 } from './ab-types.js';
 
@@ -78,12 +79,12 @@ function summarizeArm(
   const observedAttempts = observedArmAttempts(runs, taskIds, arm);
   const observed = observedAttempts.map((attempt) => attempt.event);
   const valid = observed.filter(isValidBudgetedOutcome);
+  const budgetedRuns = valid.filter((event) => event.type !== 'task_budget_exhausted');
   const passed = valid.filter((event) => event.passed).length;
-  const durations = valid
-    .filter((event) => event.type !== 'task_budget_exhausted')
-    .map((event) => event.durationMs);
+  const durations = budgetedRuns.map((event) => event.durationMs);
   const contextBudget = summarizeContextBudget(observedAttempts);
   const contextBudgetPolicy = summarizeContextBudgetPolicy(observed);
+  const tokenCostSummary = summarizeTokenCost(budgetedRuns);
   return {
     attempts,
     observed: observed.length,
@@ -96,10 +97,29 @@ function summarizeArm(
     plumbingFailed: observed.filter((event) => event.type === 'task_plumbing_failed').length,
     missing: attempts - observed.length,
     coverageRate: attempts > 0 ? valid.length / attempts : 1,
-    totalCostUsd: sum(valid.filter((event) => event.type !== 'task_budget_exhausted').map((event) => event.tokenSummary.costUsd)),
+    totalCostUsd: tokenCostSummary.costUsd,
     meanDurationMs: durations.length > 0 ? sum(durations) / durations.length : null,
+    tokenCostSummary,
     ...(contextBudgetPolicy ? { contextBudgetPolicy } : {}),
     ...(contextBudget ? { contextBudget } : {}),
+  };
+}
+
+function summarizeTokenCost(
+  events: readonly Extract<FixedPromptTaskWalEvent, { type: 'task_completed' }>[],
+): AbTokenCostSummary {
+  const durations = events.map((event) => event.durationMs);
+  return {
+    input: sum(events.map((event) => event.tokenSummary.input)),
+    cachedInput: sum(events.map((event) => event.tokenSummary.cachedInput)),
+    cacheHitInput: sum(events.map((event) => event.tokenSummary.cacheHitInput)),
+    cacheMissInput: sum(events.map((event) => event.tokenSummary.cacheMissInput)),
+    cacheWriteInput: sum(events.map((event) => event.tokenSummary.cacheWriteInput)),
+    output: sum(events.map((event) => event.tokenSummary.output)),
+    reasoning: sum(events.map((event) => event.tokenSummary.reasoning)),
+    total: sum(events.map((event) => event.tokenSummary.total)),
+    costUsd: sum(events.map((event) => event.tokenSummary.costUsd)),
+    meanDurationMs: durations.length > 0 ? sum(durations) / durations.length : null,
   };
 }
 

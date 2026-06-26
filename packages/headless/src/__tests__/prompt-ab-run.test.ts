@@ -598,6 +598,55 @@ describe('summarizePromptAbComparison', () => {
     );
   });
 
+  test('summarizes A/B token cost usage for prune benefit review', () => {
+    const taskIds = Array.from({ length: 1000 }, (_, index) => `t${index}`);
+    const result = summarizePromptAbComparison({
+      runId: 'ab-run',
+      roundId: 'ab-summary',
+      baselinePromptId: 'prune-off',
+      candidatePromptId: 'prune-on',
+      evaluationTaskIds: taskIds,
+      baselineRuns: [taskIds.map((taskId) => withUsage(
+        completed(taskId, true),
+        { input: 100, cacheHitInput: 20, cacheMissInput: 70, cacheWriteInput: 10, output: 30, reasoning: 5, total: 135, costUsd: 3, durationMs: 1000 },
+      ))],
+      candidateRuns: [taskIds.map((taskId) => withUsage(
+        completed(taskId, true),
+        { input: 60, cacheHitInput: 15, cacheMissInput: 40, cacheWriteInput: 5, output: 25, reasoning: 5, total: 90, costUsd: 2, durationMs: 800 },
+      ))],
+    });
+
+    assert.equal(result.decision, 'non_inferior');
+    assert.deepEqual(result.baseline.tokenCostSummary, {
+      input: 100_000,
+      cachedInput: 20_000,
+      cacheHitInput: 20_000,
+      cacheMissInput: 70_000,
+      cacheWriteInput: 10_000,
+      output: 30_000,
+      reasoning: 5000,
+      total: 135_000,
+      costUsd: 3000,
+      meanDurationMs: 1000,
+    });
+    assert.deepEqual(result.candidate.tokenCostSummary, {
+      input: 60_000,
+      cachedInput: 15_000,
+      cacheHitInput: 15_000,
+      cacheMissInput: 40_000,
+      cacheWriteInput: 5000,
+      output: 25_000,
+      reasoning: 5000,
+      total: 90_000,
+      costUsd: 2000,
+      meanDurationMs: 800,
+    });
+
+    const markdown = renderPromptAbComparisonMarkdown(result);
+    assert.match(markdown, /Token\/cost: A input=100000 cache_hit=20000 cache_miss=70000 cache_write=10000 output=30000 total=135000 cost_usd=3000 mean_duration_ms=1000/);
+    assert.match(markdown, /B input=60000 cache_hit=15000 cache_miss=40000 cache_write=5000 output=25000 total=90000 cost_usd=2000 mean_duration_ms=800/);
+  });
+
   test('records activated attempts and investigation refs for follow-up', () => {
     const activatedSummary = contextBudgetSummary({ prunedToolResults: 1, archivePlaceholders: 1 });
     const result = summarizePromptAbComparison({
@@ -1049,6 +1098,39 @@ function completed(taskId: string, passed: boolean): FixedPromptTaskCompletedEve
     durationMs: 100,
     runtimeEventsPath: `/logs/${taskId}/runtime-events.jsonl`,
     harbor: { reward: passed ? 1 : 0 },
+  };
+}
+
+function withUsage(
+  event: FixedPromptTaskCompletedEvent,
+  usage: {
+    input: number;
+    cacheHitInput: number;
+    cacheMissInput: number;
+    cacheWriteInput: number;
+    output: number;
+    reasoning: number;
+    total: number;
+    costUsd: number;
+    durationMs: number;
+  },
+): FixedPromptTaskCompletedEvent {
+  return {
+    ...event,
+    tokenSummary: {
+      input: usage.input,
+      cachedInput: usage.cacheHitInput,
+      cacheHitInput: usage.cacheHitInput,
+      cacheMissInput: usage.cacheMissInput,
+      cacheWriteInput: usage.cacheWriteInput,
+      cacheMissInputSource: 'explicit',
+      output: usage.output,
+      reasoning: usage.reasoning,
+      total: usage.total,
+      costUsd: usage.costUsd,
+      pricingSource: 'runtime',
+    },
+    durationMs: usage.durationMs,
   };
 }
 

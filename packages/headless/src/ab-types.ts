@@ -62,8 +62,22 @@ export interface AbArmSummary {
   coverageRate: number;
   totalCostUsd: number;
   meanDurationMs: number | null;
+  tokenCostSummary: AbTokenCostSummary;
   contextBudgetPolicy?: AbContextBudgetPolicySummary;
   contextBudget?: AbContextBudgetSummary;
+}
+
+export interface AbTokenCostSummary {
+  input: number;
+  cachedInput: number;
+  cacheHitInput: number;
+  cacheMissInput: number;
+  cacheWriteInput: number;
+  output: number;
+  reasoning: number;
+  total: number;
+  costUsd: number;
+  meanDurationMs: number | null;
 }
 
 export interface AbContextBudgetPolicySummary {

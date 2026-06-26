@@ -410,12 +410,15 @@ export function buildHarborCellContextBudgetBackendOptions(
     name: env.MAKA_CONTEXT_BUDGET_NAME ?? 'harbor-cell-context-budget',
   };
   const charsPerToken = numericEnv(env.MAKA_CONTEXT_CHARS_PER_TOKEN);
-  const maxHistoryEstimatedTokens = numericEnv(
-    env.MAKA_CONTEXT_MAX_HISTORY_ESTIMATED_TOKENS ??
-    env.MAKA_CONTEXT_HISTORY_BUDGET_TOKENS,
-  );
-  const maxHistoryTurns = numericEnv(env.MAKA_CONTEXT_MAX_HISTORY_TURNS ?? env.MAKA_CONTEXT_HISTORY_BUDGET_TURNS);
-  const minRecentTurns = numericEnv(env.MAKA_CONTEXT_MIN_RECENT_TURNS);
+  const maxHistoryEstimatedTokens = firstContextNonNegativeIntEnv(env, [
+    'MAKA_CONTEXT_MAX_HISTORY_ESTIMATED_TOKENS',
+    'MAKA_CONTEXT_HISTORY_BUDGET_TOKENS',
+  ]);
+  const maxHistoryTurns = firstContextNonNegativeIntEnv(env, [
+    'MAKA_CONTEXT_MAX_HISTORY_TURNS',
+    'MAKA_CONTEXT_HISTORY_BUDGET_TURNS',
+  ]);
+  const minRecentTurns = firstContextNonNegativeIntEnv(env, ['MAKA_CONTEXT_MIN_RECENT_TURNS']);
   if (charsPerToken !== undefined) contextBudget.charsPerToken = charsPerToken;
   if (maxHistoryEstimatedTokens !== undefined) contextBudget.maxHistoryEstimatedTokens = maxHistoryEstimatedTokens;
   if (maxHistoryTurns !== undefined) contextBudget.maxHistoryTurns = maxHistoryTurns;
@@ -428,10 +431,10 @@ export function buildHarborCellContextBudgetBackendOptions(
       env.MAKA_CONTEXT_STALE_TOOL_RESULT_MAX_TOKENS,
       'MAKA_CONTEXT_STALE_TOOL_RESULT_MAX_ESTIMATED_TOKENS',
     );
-    const minRecentTurnsFull = numericEnv(
-      env.MAKA_CONTEXT_STALE_TOOL_RESULT_MIN_RECENT_TURNS_FULL ??
-      env.MAKA_CONTEXT_STALE_TOOL_RESULT_MIN_RECENT_TURNS,
-    );
+    const minRecentTurnsFull = firstContextNonNegativeIntEnv(env, [
+      'MAKA_CONTEXT_STALE_TOOL_RESULT_MIN_RECENT_TURNS_FULL',
+      'MAKA_CONTEXT_STALE_TOOL_RESULT_MIN_RECENT_TURNS',
+    ]);
     contextBudget.staleToolResultPrune = {
       enabled: true,
       ...(maxResultEstimatedTokens !== undefined ? { maxResultEstimatedTokens } : {}),
@@ -445,7 +448,7 @@ export function buildHarborCellContextBudgetBackendOptions(
       env.MAKA_CONTEXT_ACTIVE_TOOL_RESULT_PRUNE_MAX_ESTIMATED_TOKENS,
       'MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MAX_ESTIMATED_TOKENS',
     );
-    const minStepNumber = numericEnv(env.MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MIN_STEP_NUMBER);
+    const minStepNumber = firstContextNonNegativeIntEnv(env, ['MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MIN_STEP_NUMBER']);
     const archiveRequiredRaw =
       env.MAKA_CONTEXT_ACTIVE_TOOL_RESULT_ARCHIVE_REQUIRED ??
       env.MAKA_CONTEXT_ACTIVE_TOOL_RESULT_PRUNE_ARCHIVE_REQUIRED;
@@ -672,6 +675,24 @@ function positiveIntEnv(raw: string | undefined, name: string): number | undefin
   const value = raw?.trim();
   if (value === undefined || value === '') return undefined;
   if (!/^[1-9]\d*$/.test(value)) throw new Error(`${name} must be a positive integer, got ${JSON.stringify(raw)}`);
+  return Number(value);
+}
+
+function firstContextNonNegativeIntEnv(
+  env: RunHarborCellEnv,
+  names: readonly string[],
+): number | undefined {
+  for (const name of names) {
+    const raw = env[name];
+    if (raw !== undefined) return contextNonNegativeIntEnv(raw, name);
+  }
+  return undefined;
+}
+
+function contextNonNegativeIntEnv(raw: string | undefined, name: string): number | undefined {
+  const value = raw?.trim();
+  if (value === undefined || value === '') return undefined;
+  if (!/^\d+$/.test(value)) throw new Error(`${name} must be a non-negative integer, got ${JSON.stringify(raw)}`);
   return Number(value);
 }
 

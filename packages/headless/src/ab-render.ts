@@ -4,6 +4,7 @@ import type {
   AbContextBudgetSummary,
   AbDecision,
   AbPairInvestigationRef,
+  AbTokenCostSummary,
 } from './ab-types.js';
 
 export function renderAbComparisonMarkdown(summary: AbComparisonSummary): string {
@@ -25,6 +26,7 @@ export function renderAbComparisonMarkdown(summary: AbComparisonSummary): string
     `- Evaluation pass-rate delta: B-A=${rate(summary.passRateDelta)}`,
     `- Task-level delta: mean=${rate(summary.taskLevel.meanPassRateDelta)}, median=${rate(summary.taskLevel.medianPassRateDelta)}, wins=${summary.taskLevel.wins}, losses=${summary.taskLevel.losses}, ties=${summary.taskLevel.ties}, sign_test_p=${rate(summary.taskLevel.signTestPValue)}, missing=${summary.taskLevel.missingTaskIds.length}`,
     `- Attempt-pair auxiliary: wins=${summary.pairedAttempts.wins}, losses=${summary.pairedAttempts.losses}, ties=${summary.pairedAttempts.ties}, missing=${summary.pairedAttempts.missingPairIds.length}`,
+    `- Token/cost: A ${renderTokenCost(summary.baseline.tokenCostSummary)}, B ${renderTokenCost(summary.candidate.tokenCostSummary)}`,
     `- Budget outcomes: A timed_out=${summary.baseline.budgetExhausted}, B timed_out=${summary.candidate.budgetExhausted}`,
     `- Infra outcomes: A infra_failed=${summary.baseline.infraFailed}, B infra_failed=${summary.candidate.infraFailed}; A plumbing_failed=${summary.baseline.plumbingFailed}, B plumbing_failed=${summary.candidate.plumbingFailed}`,
     ...(contextBudgetPolicyLine ? [contextBudgetPolicyLine] : []),
@@ -46,6 +48,10 @@ export function renderAbComparisonMarkdown(summary: AbComparisonSummary): string
     lines.push(...investigationRefLines);
   }
   return `${lines.join('\n')}\n`;
+}
+
+function renderTokenCost(summary: AbTokenCostSummary): string {
+  return `input=${summary.input} cache_hit=${summary.cacheHitInput} cache_miss=${summary.cacheMissInput} cache_write=${summary.cacheWriteInput} output=${summary.output} total=${summary.total} cost_usd=${summary.costUsd} mean_duration_ms=${summary.meanDurationMs ?? 'null'}`;
 }
 
 function renderInvestigationRefLines(summary: AbComparisonSummary): string[] {
