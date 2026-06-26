@@ -546,7 +546,10 @@ function positiveIntEnv(raw: string | undefined, name: string, fallback?: number
 function parseArchiveRetrievalMode(
   value: string | undefined,
 ): NonNullable<ContextBudgetPolicy['archiveRetrieval']>['mode'] | undefined {
-  return value === 'eager' || value === 'history_search_gated' ? value : undefined;
+  const trimmed = value?.trim();
+  if (trimmed === undefined || trimmed === '') return undefined;
+  if (trimmed === 'eager' || trimmed === 'history_search_gated') return trimmed;
+  throw new Error(`MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MODE must be one of eager, history_search_gated, got ${JSON.stringify(value)}`);
 }
 
 function buildHarborCellToolResultArchiveHooks(env: RunHarborCellEnv): {

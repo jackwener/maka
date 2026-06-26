@@ -117,6 +117,59 @@ describe('runRuntimePolicyAbComparison', () => {
       ]);
     });
   });
+
+  test('resumes runtime-policy arms only when their context env identity is unchanged', async () => {
+    await withDir(async (dir) => {
+      const promptPath = join(dir, 'system-prompt.md');
+      const resultsJsonlPath = join(dir, 'results.jsonl');
+      await writeFile(promptPath, 'shared prompt\n', 'utf8');
+      const task = { id: 't1', path: '/tasks/t1' };
+      const pruneOff = { id: 'prune-off', contextEnv: { MAKA_CONTEXT_BUDGET: 'off' } } as const;
+      const pruneOn = {
+        id: 'prune-on',
+        contextEnv: { MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on' },
+      } as const;
+      const pruneOnChanged = {
+        id: 'prune-on',
+        contextEnv: {
+          MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on',
+          MAKA_CONTEXT_STALE_TOOL_RESULT_MAX_TOKENS: '4096',
+        },
+      } as const;
+      const calls: string[] = [];
+      const run = async (arms: Parameters<typeof runRuntimePolicyAbComparison>[0]['arms']) => {
+        await runRuntimePolicyAbComparison({
+          runId: 'runtime-ab-run',
+          config,
+          systemPromptPath: promptPath,
+          resultsJsonlPath,
+          evaluationTasks: [task],
+          reps: 1,
+          arms,
+          resumeFingerprint: 'caller-salt',
+          harborRunner: async (input) => {
+            calls.push(`${input.roundId}:${JSON.stringify(input.agentEnv ?? {})}`);
+            return harborOutput(input);
+          },
+          now: () => 100,
+          newId: idFactory(),
+        });
+      };
+
+      await run([pruneOff, pruneOn]);
+      assert.equal(calls.length, 2);
+
+      calls.length = 0;
+      await run([pruneOff, pruneOnChanged]);
+      assert.deepEqual(calls, [
+        'ab-prune-on-r0-t1:{"MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE":"on","MAKA_CONTEXT_STALE_TOOL_RESULT_MAX_TOKENS":"4096"}',
+      ]);
+
+      calls.length = 0;
+      await run([pruneOff, pruneOnChanged]);
+      assert.deepEqual(calls, []);
+    });
+  });
 });
 
 function harborOutput(input: HarborTaskRunInput): HarborTaskRunOutput {

@@ -586,6 +586,42 @@ describe('runHarborCell', () => {
     }
   });
 
+  test('Harbor context budget env rejects explicit malformed archive retrieval mode', async () => {
+    await withDirs(async ({ workspaceDir }) => {
+      const registry = new BackendRegistry();
+      const toolExecutor = fakeToolExecutor();
+
+      await assert.rejects(
+        async () => {
+          const register = buildAiSdkCellBackendRegistration({
+            provider: 'deepseek',
+            model: 'deepseek-v4-flash',
+            env: {
+              DEEPSEEK_API_KEY: 'test-key',
+              MAKA_CONTEXT_ARCHIVE_RETRIEVAL: 'on',
+              MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MODE: 'histroy_search_gated',
+            },
+            now: () => 123,
+            newId: () => 'id',
+          });
+          await register(registry, {
+            config: {
+              id: 'harbor-ai-sdk',
+              backend: 'ai-sdk',
+              llmConnectionSlug: 'deepseek',
+              model: 'deepseek-v4-flash',
+            },
+            task: { id: 'harbor-cell', instruction: 'solve', workspaceDir },
+            workspaceDir,
+            realBackendIsolation: { kind: 'external', label: 'Harbor task container', toolExecutor },
+            toolExecutor,
+          });
+        },
+        /MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MODE must be one of eager, history_search_gated, got "histroy_search_gated"/,
+      );
+    });
+  });
+
   test('Harbor context budget env keeps defaults for unset or blank positive integers', async () => {
     await withDirs(async ({ workspaceDir }) => {
       const registry = new BackendRegistry();
@@ -598,6 +634,7 @@ describe('runHarborCell', () => {
           MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on',
           MAKA_CONTEXT_STALE_TOOL_RESULT_MAX_TOKENS: '',
           MAKA_CONTEXT_ARCHIVE_RETRIEVAL: 'on',
+          MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MODE: '',
           MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MAX_RESULTS: '',
           MAKA_CONTEXT_ARCHIVE_RETRIEVAL_MAX_TOKENS: '',
         },
@@ -623,13 +660,14 @@ describe('runHarborCell', () => {
       }).input as { contextBudget?: {
         minRecentTurns?: number;
         staleToolResultPrune?: { maxResultEstimatedTokens: number; minRecentTurnsFull: number };
-        archiveRetrieval?: { maxResults: number; maxEstimatedTokens: number };
+        archiveRetrieval?: { mode?: string; maxResults: number; maxEstimatedTokens: number };
       } };
       assert.equal(backendInput.contextBudget?.minRecentTurns, 2);
       assert.equal(backendInput.contextBudget?.staleToolResultPrune?.maxResultEstimatedTokens, 2048);
       assert.equal(backendInput.contextBudget?.staleToolResultPrune?.minRecentTurnsFull, 2);
       assert.equal(backendInput.contextBudget?.archiveRetrieval?.maxResults, 3);
       assert.equal(backendInput.contextBudget?.archiveRetrieval?.maxEstimatedTokens, 8192);
+      assert.equal(backendInput.contextBudget?.archiveRetrieval?.mode, undefined);
     });
   });
 

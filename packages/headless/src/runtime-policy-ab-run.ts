@@ -77,6 +77,7 @@ export function buildRuntimePolicyAbRunManifest(input: RuntimePolicyAbRunManifes
 export async function runRuntimePolicyAbComparison(
   input: RunRuntimePolicyAbComparisonInput,
 ): Promise<RuntimePolicyAbComparisonSummary> {
+  const sharedConfigFingerprint = runtimePolicySharedConfigFingerprint(input.config);
   return runAbComparison({
     runId: input.runId,
     arms: [runtimeArmSpec(input.arms[0]), runtimeArmSpec(input.arms[1])],
@@ -89,6 +90,11 @@ export async function runRuntimePolicyAbComparison(
       const runtimeArm = input.arms.find((candidate) => candidate.id === arm.id);
       if (!runtimeArm) throw new Error(`runtime policy A/B arm ${arm.id} is not configured`);
       const contextEnv = sanitizeContextEnv(runtimeArm.contextEnv);
+      const resumeFingerprint = runtimePolicyResumeFingerprint({
+        sharedConfigFingerprint,
+        armContextEnvFingerprint: contextEnvFingerprint(contextEnv),
+        callerResumeFingerprint: input.resumeFingerprint,
+      });
       const result = await runFixedPromptController({
         runId: input.runId,
         roundId,
@@ -97,7 +103,7 @@ export async function runRuntimePolicyAbComparison(
         resultsJsonlPath: input.resultsJsonlPath,
         resultsTsvPath: `${input.resultsJsonlPath}.${roundId}.tsv`,
         tasks: [task],
-        ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
+        resumeFingerprint,
         harborRunner: (runnerInput) => input.harborRunner({ ...runnerInput, agentEnv: contextEnv }),
         ...(input.now ? { now: input.now } : {}),
         ...(input.newId ? { newId: input.newId } : {}),
@@ -137,6 +143,24 @@ function sanitizeContextEnv(
 
 function contextEnvFingerprint(env: Partial<Record<RuntimePolicyContextEnvKey, string>>): string {
   return `sha256:${createHash('sha256').update(canonicalJson(sanitizeContextEnv(env))).digest('hex')}`;
+}
+
+function runtimePolicySharedConfigFingerprint(config: Config): string {
+  const { systemPrompt: _systemPrompt, ...effectiveConfig } = config;
+  return `sha256:${createHash('sha256').update(canonicalJson(effectiveConfig)).digest('hex')}`;
+}
+
+function runtimePolicyResumeFingerprint(input: {
+  sharedConfigFingerprint: string;
+  armContextEnvFingerprint: string;
+  callerResumeFingerprint?: string;
+}): string {
+  return `sha256:${createHash('sha256').update(canonicalJson({
+    version: 'maka-runtime-policy-resume-v1',
+    sharedConfigFingerprint: input.sharedConfigFingerprint,
+    armContextEnvFingerprint: input.armContextEnvFingerprint,
+    callerResumeFingerprint: input.callerResumeFingerprint,
+  })).digest('hex')}`;
 }
 
 function canonicalJson(value: unknown): string {
