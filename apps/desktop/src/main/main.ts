@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, safeStorage, screen, shell } from 'electron';
 import { isExternalUrl } from './external-link-guard.js';
 import { readSavedBounds, writeSavedBounds, type SavedBounds } from './window-state.js';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { copyFile, mkdir, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { release as osRelease, arch as osArch } from 'node:os';
@@ -80,7 +80,10 @@ import { buildWebSearchAgentTool, WEB_SEARCH_TOOL_NAME } from './web-search/agen
 import { buildRiveWorkflowTool } from './rive-workflow-tool.js';
 import { resolveTavilyApiKey } from './web-search/credentials.js';
 import { runThreadSearch } from './search/thread-search.js';
-import { persistArchivedToolResultToArtifacts } from './tool-result-archive-artifacts.js';
+import {
+  persistArchivedToolResultToArtifacts,
+  readArchivedToolResultFromArtifacts,
+} from './tool-result-archive-artifacts.js';
 import {
   normalizeBranchFromTurnInput,
   normalizePermissionResponse,
@@ -776,19 +779,7 @@ async function persistArchivedToolResult(
 async function readArchivedToolResult(
   event: ToolResultArchiveReaderInput,
 ): Promise<ToolResultArchiveReadResult> {
-  const record = await artifactStore.get(event.artifactId);
-  if (!record) return { ok: false, reason: 'not_found' };
-  if (record.status === 'deleted') return { ok: false, reason: 'deleted' };
-  if (record.source !== 'tool_result_archive') return { ok: false, reason: 'source_mismatch' };
-  if (record.sessionId !== event.sessionId) return { ok: false, reason: 'session_mismatch' };
-  if (record.sizeBytes !== event.originalBytes) return { ok: false, reason: 'size_mismatch' };
-
-  const read = await artifactStore.readText(event.artifactId, {
-    maxBytes: event.maxBytes ?? event.originalBytes,
-  });
-  if (!read.ok) return read;
-  if (sha256(read.text) !== event.bodySha256) return { ok: false, reason: 'corrupt' };
-  return { ok: true, serializedResult: read.text };
+  return readArchivedToolResultFromArtifacts(artifactStore, event);
 }
 
 async function resolveToolArtifactSourcePath(cwd: string, sourcePath: string): Promise<string | null> {
@@ -1055,10 +1046,6 @@ function parseHistoryCompactMode(value: string | undefined): NonNullable<Context
 
 function parseArchiveRetrievalMode(value: string | undefined): NonNullable<ContextBudgetPolicy['archiveRetrieval']>['mode'] | undefined {
   return value === 'history_search_gated' || value === 'eager' ? value : undefined;
-}
-
-function sha256(text: string): string {
-  return createHash('sha256').update(text).digest('hex');
 }
 
 function buildSubscriptionModelFetch(

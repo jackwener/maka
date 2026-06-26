@@ -263,10 +263,11 @@ describe('AiSdkBackend model history', () => {
     assert.equal(prompt.includes(oldResult.body), false);
   });
 
-  test('preserves existing archive refs when preparing stale tool-result pruning', async () => {
+  test('preserves existing archive refs while adding newly archived refs', async () => {
     const model = completionModel();
-    const oldResult = { body: 'EXISTING_ARCHIVE_REF_PAYLOAD'.repeat(20) };
-    const oldSerialized = JSON.stringify(oldResult);
+    const existingResult = { body: 'EXISTING_ARCHIVE_REF_PAYLOAD'.repeat(20) };
+    const newResult = { body: 'NEW_ARCHIVE_REF_PAYLOAD'.repeat(20) };
+    const existingSerialized = JSON.stringify(existingResult);
     const backend = new AiSdkBackend({
       sessionId: 'session-1',
       header: header(),
@@ -290,15 +291,19 @@ describe('AiSdkBackend model history', () => {
             toolCallId: 'tool-1',
             toolName: 'Read',
             artifactId: 'artifact-existing-rt-result',
-            bodySha256: sha256(oldSerialized),
-            originalEstimatedTokens: oldSerialized.length,
-            originalBytes: utf8Bytes(oldSerialized),
+            bodySha256: sha256(existingSerialized),
+            originalEstimatedTokens: existingSerialized.length,
+            originalBytes: utf8Bytes(existingSerialized),
             rewriteVersion: ARCHIVED_TOOL_RESULT_REWRITE_VERSION,
             reason: 'stale_tool_result_pruned_before_compact',
           }],
         },
         charsPerToken: 1,
       },
+      archiveToolResult: async (event) =>
+        event.runtimeEventId === 'rt-new-result'
+          ? { artifactId: 'artifact-new-rt-result' }
+          : undefined,
     });
 
     await drain(backend.send({
@@ -318,14 +323,30 @@ describe('AiSdkBackend model history', () => {
           turnId: 'turn-prev',
           role: 'tool',
           author: 'tool',
-          content: { kind: 'function_response', id: 'tool-1', name: 'Read', result: oldResult, isError: false },
+          content: { kind: 'function_response', id: 'tool-1', name: 'Read', result: existingResult, isError: false },
+        }),
+        runtimeEvent({
+          id: 'rt-new-call',
+          turnId: 'turn-new',
+          role: 'model',
+          author: 'agent',
+          content: { kind: 'function_call', id: 'tool-2', name: 'Read', args: { path: 'new.txt' } },
+        }),
+        runtimeEvent({
+          id: 'rt-new-result',
+          turnId: 'turn-new',
+          role: 'tool',
+          author: 'tool',
+          content: { kind: 'function_response', id: 'tool-2', name: 'Read', result: newResult, isError: false },
         }),
       ],
     }));
 
     const prompt = JSON.stringify(compactPrompt(model));
     assert.match(prompt, /"artifactId":"artifact-existing-rt-result"/);
-    assert.equal(prompt.includes(oldResult.body), false);
+    assert.match(prompt, /"artifactId":"artifact-new-rt-result"/);
+    assert.equal(prompt.includes(existingResult.body), false);
+    assert.equal(prompt.includes(newResult.body), false);
   });
 
   test('history search does not re-add stale full tool results after archive pruning', async () => {

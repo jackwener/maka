@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { ArtifactStore } from '@maka/storage';
-import type { ToolResultArchiveRecorderInput } from '@maka/runtime';
+import {
+  ARCHIVED_TOOL_RESULT_PLACEHOLDER_KIND,
+  type ToolResultArchiveReaderInput,
+  type ToolResultArchiveReadResult,
+  type ToolResultArchiveRecorderInput,
+} from '@maka/runtime';
 
 export async function persistArchivedToolResultToArtifacts(
   artifactStore: Pick<ArtifactStore, 'create' | 'get' | 'readText'>,
@@ -9,12 +14,12 @@ export async function persistArchivedToolResultToArtifacts(
   const id = stableToolResultArchiveArtifactId(event);
   const existing = await artifactStore.get(id);
   if (existing?.status === 'live') {
-    if (existing.source !== 'tool_result_archive') throw new Error('tool result archive artifact id conflict: source mismatch');
-    if (existing.sessionId !== event.sessionId) throw new Error('tool result archive artifact id conflict: session mismatch');
-    if (existing.sizeBytes !== event.originalBytes) throw new Error('tool result archive artifact id conflict: size mismatch');
-    const read = await artifactStore.readText(id, { maxBytes: event.originalBytes });
+    const read = await readArchivedToolResultFromArtifacts(artifactStore, {
+      ...event,
+      kind: ARCHIVED_TOOL_RESULT_PLACEHOLDER_KIND,
+      artifactId: id,
+    });
     if (!read.ok) throw new Error(`tool result archive artifact id conflict: ${read.reason}`);
-    if (sha256(read.text) !== event.bodySha256) throw new Error('tool result archive artifact id conflict: hash mismatch');
     return { artifactId: id };
   }
 
@@ -30,6 +35,25 @@ export async function persistArchivedToolResultToArtifacts(
     summary: `Archived ${event.toolName} tool result for context budget replay`,
   });
   return { artifactId: artifact.id };
+}
+
+export async function readArchivedToolResultFromArtifacts(
+  artifactStore: Pick<ArtifactStore, 'get' | 'readText'>,
+  event: ToolResultArchiveReaderInput,
+): Promise<ToolResultArchiveReadResult> {
+  const record = await artifactStore.get(event.artifactId);
+  if (!record) return { ok: false, reason: 'not_found' };
+  if (record.status === 'deleted') return { ok: false, reason: 'deleted' };
+  if (record.source !== 'tool_result_archive') return { ok: false, reason: 'source_mismatch' };
+  if (record.sessionId !== event.sessionId) return { ok: false, reason: 'session_mismatch' };
+  if (record.sizeBytes !== event.originalBytes) return { ok: false, reason: 'size_mismatch' };
+
+  const read = await artifactStore.readText(event.artifactId, {
+    maxBytes: event.maxBytes ?? event.originalBytes,
+  });
+  if (!read.ok) return read;
+  if (sha256(read.text) !== event.bodySha256) return { ok: false, reason: 'corrupt' };
+  return { ok: true, serializedResult: read.text };
 }
 
 export function stableToolResultArchiveArtifactId(event: Pick<
