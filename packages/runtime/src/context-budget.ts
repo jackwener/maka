@@ -979,24 +979,53 @@ export function selectSynthesisCacheForReplay(
     return { events: [...events], selectedBlocks, diagnosticPatch };
   }
 
-  const coveredTurns = new Set<string>();
   const coveredEventIds = new Set<string>();
+  const coveredToolCallIds = new Set<string>();
+  const insertions = new Map<number, RuntimeEvent[]>();
+  const trailingInsertions: RuntimeEvent[] = [];
   for (const block of selectedBlocks) {
-    for (const turnId of block.coverage.turnIds) coveredTurns.add(turnId);
+    const blockEventIds = new Set(block.coverage.runtimeEventIds);
+    const blockToolCallIds = new Set(block.coverage.toolCallIds);
     for (const eventId of block.coverage.runtimeEventIds) coveredEventIds.add(eventId);
+    for (const toolCallId of block.coverage.toolCallIds) coveredToolCallIds.add(toolCallId);
     for (const ref of block.sourceRefs) {
-      if ('turnId' in ref) coveredTurns.add(ref.turnId);
-      if ('runtimeEventId' in ref) coveredEventIds.add(ref.runtimeEventId);
+      if ('runtimeEventId' in ref) {
+        coveredEventIds.add(ref.runtimeEventId);
+        blockEventIds.add(ref.runtimeEventId);
+      }
+      if ('toolCallId' in ref) {
+        coveredToolCallIds.add(ref.toolCallId);
+        blockToolCallIds.add(ref.toolCallId);
+      }
+    }
+    const insertionIndex = events.findIndex((event) =>
+      blockEventIds.has(event.id) ||
+      (event.content?.kind === 'function_call' && blockToolCallIds.has(event.content.id))
+    );
+    const synthetic = synthesisBlockRuntimeEvent(block, options.sessionId);
+    if (insertionIndex >= 0) {
+      const existing = insertions.get(insertionIndex);
+      if (existing) existing.push(synthetic);
+      else insertions.set(insertionIndex, [synthetic]);
+    } else {
+      trailingInsertions.push(synthetic);
     }
   }
-  const retained = events.filter((event) =>
-    !coveredEventIds.has(event.id) && !coveredTurns.has(turnKey(event))
-  );
+  const replayEvents: RuntimeEvent[] = [];
+  for (const [index, event] of events.entries()) {
+    const synthetic = insertions.get(index);
+    if (synthetic) replayEvents.push(...synthetic);
+    if (
+      coveredEventIds.has(event.id) ||
+      (event.content?.kind === 'function_call' && coveredToolCallIds.has(event.content.id))
+    ) {
+      continue;
+    }
+    replayEvents.push(event);
+  }
+  replayEvents.push(...trailingInsertions);
   return {
-    events: [
-      ...retained,
-      ...selectedBlocks.map((block) => synthesisBlockRuntimeEvent(block, options.sessionId)),
-    ],
+    events: replayEvents,
     selectedBlocks,
     diagnosticPatch,
   };
