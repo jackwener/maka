@@ -156,6 +156,7 @@ export interface AbInvestigationRefs {
 }
 
 export interface AbNonInferioritySummary {
+  method: 'paired_risk_difference' | 'independent_risk_difference' | 'unavailable';
   confidenceLevel: number;
   lowerBound: number | null;
 }

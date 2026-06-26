@@ -521,8 +521,8 @@ describe('summarizePromptAbComparison', () => {
       budgetMs: 600_000,
     });
 
-    assert.equal(result.decision, 'inconclusive');
-    assert.equal(result.reason, 'asymmetric_budget_exhaustion');
+    assert.equal(result.decision, 'inferior');
+    assert.equal(result.reason, 'pass_rate_delta_below_non_inferiority_margin');
     assert.equal(result.candidate.passRate, 0);
     assert.equal(result.candidate.budgetExhausted, 1);
     assert.equal(result.candidate.infraFailed, 0);
@@ -732,22 +732,114 @@ describe('summarizePromptAbComparison', () => {
     assert.equal(elevenPointLoss.reason, 'pass_rate_delta_below_non_inferiority_margin');
   });
 
-  test('treats pair-level timeout asymmetry as inconclusive even when total timeouts match', () => {
+  test('uses paired risk-difference lower bound for paired non-inferiority boundary cases', () => {
+    const taskIds = Array.from({ length: 100 }, (_, index) => `t${index}`);
+    const powered = summarizePromptAbComparison({
+      runId: 'ab-run',
+      roundId: 'ab-summary',
+      baselinePromptId: 'prune-off',
+      candidatePromptId: 'prune-on',
+      evaluationTaskIds: taskIds,
+      baselineRuns: [taskIds.map((taskId, index) => completed(taskId, index >= 45))],
+      candidateRuns: [taskIds.map((taskId, index) => completed(taskId, index >= 45 && index < 95))],
+    });
+
+    assert.equal(powered.passRateDelta, -0.05);
+    assert.equal(powered.pairedAttempts.losses, 5);
+    assert.equal(powered.pairedAttempts.ties, 95);
+    assert.equal(powered.nonInferiority.method, 'paired_risk_difference');
+    assert.equal(powered.nonInferiority.lowerBound !== null && powered.nonInferiority.lowerBound >= -0.1, true);
+    assert.equal(powered.decision, 'non_inferior');
+    assert.equal(powered.reason, 'non_inferiority_lower_bound_within_margin');
+
+    const smallTaskIds = Array.from({ length: 20 }, (_, index) => `small-${index}`);
+    const underpowered = summarizePromptAbComparison({
+      runId: 'ab-run',
+      roundId: 'ab-summary',
+      baselinePromptId: 'prune-off',
+      candidatePromptId: 'prune-on',
+      evaluationTaskIds: smallTaskIds,
+      baselineRuns: [smallTaskIds.map((taskId, index) => completed(taskId, index >= 9))],
+      candidateRuns: [smallTaskIds.map((taskId, index) => completed(taskId, index >= 9 && index < 19))],
+    });
+    assert.equal(underpowered.passRateDelta, -0.05);
+    assert.equal(underpowered.nonInferiority.method, 'paired_risk_difference');
+    assert.equal(underpowered.nonInferiority.lowerBound !== null && underpowered.nonInferiority.lowerBound < -0.1, true);
+    assert.equal(underpowered.decision, 'inconclusive');
+    assert.equal(underpowered.reason, 'non_inferiority_confidence_interval_crosses_margin');
+
+    const inferior = summarizePromptAbComparison({
+      runId: 'ab-run',
+      roundId: 'ab-summary',
+      baselinePromptId: 'prune-off',
+      candidatePromptId: 'prune-on',
+      evaluationTaskIds: taskIds,
+      baselineRuns: [taskIds.map((taskId, index) => completed(taskId, index >= 44))],
+      candidateRuns: [taskIds.map((taskId, index) => completed(taskId, index >= 44 && index < 89))],
+    });
+    assert.equal(inferior.passRateDelta, -0.11);
+    assert.equal(inferior.nonInferiority.method, 'paired_risk_difference');
+    assert.equal(inferior.decision, 'inferior');
+    assert.equal(inferior.reason, 'pass_rate_delta_below_non_inferiority_margin');
+  });
+
+  test('counts baseline timeout and candidate pass as an effective B advantage', () => {
     const result = summarizePromptAbComparison({
       runId: 'ab-run',
       roundId: 'ab-summary',
       baselinePromptId: 'maka-baseline',
       candidatePromptId: 'candidate',
-      evaluationTaskIds: ['t1', 't2'],
-      baselineRuns: [[budgetExhausted('t1'), completed('t2', true)]],
-      candidateRuns: [[completed('t1', true), budgetExhausted('t2')]],
+      evaluationTaskIds: ['t1'],
+      baselineRuns: [[budgetExhausted('t1')]],
+      candidateRuns: [[completed('t1', true)]],
     });
 
     assert.equal(result.baseline.budgetExhausted, 1);
+    assert.equal(result.candidate.passed, 1);
+    assert.equal(result.pairedAttempts.wins, 1);
+    assert.deepEqual(result.pairedAttempts.budgetDiscordantPairIds, ['t1#r0']);
+    assert.equal(result.decision, 'non_inferior');
+    assert.equal(result.reason, 'non_inferiority_lower_bound_within_margin');
+  });
+
+  test('counts baseline pass and candidate timeout as an effective B loss', () => {
+    const result = summarizePromptAbComparison({
+      runId: 'ab-run',
+      roundId: 'ab-summary',
+      baselinePromptId: 'maka-baseline',
+      candidatePromptId: 'candidate',
+      evaluationTaskIds: ['t1'],
+      baselineRuns: [[completed('t1', true)]],
+      candidateRuns: [[budgetExhausted('t1')]],
+    });
+
+    assert.equal(result.baseline.passed, 1);
     assert.equal(result.candidate.budgetExhausted, 1);
-    assert.deepEqual(result.pairedAttempts.budgetDiscordantPairIds, ['t1#r0', 't2#r0']);
-    assert.equal(result.decision, 'inconclusive');
-    assert.equal(result.reason, 'asymmetric_budget_exhaustion');
+    assert.equal(result.pairedAttempts.losses, 1);
+    assert.deepEqual(result.pairedAttempts.budgetDiscordantPairIds, ['t1#r0']);
+    assert.equal(result.decision, 'inferior');
+    assert.equal(result.reason, 'pass_rate_delta_below_non_inferiority_margin');
+  });
+
+  test('reports budget-discordant refs without blocking a powered non-inferiority decision', () => {
+    const taskIds = Array.from({ length: 100 }, (_, index) => `t${index}`);
+    const result = summarizePromptAbComparison({
+      runId: 'ab-run',
+      roundId: 'ab-summary',
+      baselinePromptId: 'prune-off',
+      candidatePromptId: 'prune-on',
+      evaluationTaskIds: taskIds,
+      baselineRuns: [[budgetExhausted('t0'), ...taskIds.slice(1).map((taskId) => completed(taskId, true))]],
+      candidateRuns: [taskIds.map((taskId) => completed(taskId, true))],
+    });
+
+    assert.deepEqual(result.pairedAttempts.budgetDiscordantPairIds, ['t0#r0']);
+    assert.equal(result.investigationRefs.budgetDiscordantPairs[0]?.pairId, 't0#r0');
+    assert.equal(result.decision, 'non_inferior');
+    assert.equal(result.reason, 'non_inferiority_lower_bound_within_margin');
+    const markdown = renderPromptAbComparisonMarkdown(result);
+    assert.match(markdown, /Budget Discordant Refs/);
+    assert.match(markdown, /t0#r0/);
   });
 });
 

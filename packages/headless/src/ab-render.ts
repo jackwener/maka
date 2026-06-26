@@ -20,7 +20,7 @@ export function renderAbComparisonMarkdown(summary: AbComparisonSummary): string
     `- Decision: ${decisionLabel(summary.decision)} (${summary.reason})`,
     `- Budget: ${summary.budgetMs !== undefined ? `${Math.round(summary.budgetMs / 1000)}s task budget` : 'not recorded'}`,
     `- Non-inferiority margin: ${rate(summary.nonInferiorityMargin)}`,
-    `- Non-inferiority lower bound: ${rate(summary.nonInferiority.lowerBound)} (${rate(summary.nonInferiority.confidenceLevel)} one-sided confidence)`,
+    `- Non-inferiority lower bound: ${rate(summary.nonInferiority.lowerBound)} (${rate(summary.nonInferiority.confidenceLevel)} one-sided confidence, ${summary.nonInferiority.method})`,
     `- Evaluation pass rate: A=${summary.baseline.passed}/${summary.baseline.valid} = ${rate(summary.baseline.passRate)}, B=${summary.candidate.passed}/${summary.candidate.valid} = ${rate(summary.candidate.passRate)}`,
     `- Evaluation pass-rate delta: B-A=${rate(summary.passRateDelta)}`,
     `- Task-level delta: mean=${rate(summary.taskLevel.meanPassRateDelta)}, median=${rate(summary.taskLevel.medianPassRateDelta)}, wins=${summary.taskLevel.wins}, losses=${summary.taskLevel.losses}, ties=${summary.taskLevel.ties}, sign_test_p=${rate(summary.taskLevel.signTestPValue)}, missing=${summary.taskLevel.missingTaskIds.length}`,

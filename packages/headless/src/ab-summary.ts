@@ -37,7 +37,7 @@ export function summarizeAbComparison(input: SummarizeAbComparisonInput): AbComp
   const passRateDelta = baseline.passRate !== null && candidate.passRate !== null
     ? roundRateDelta(candidate.passRate - baseline.passRate)
     : null;
-  const nonInferiority = summarizeNonInferiority(baseline, candidate, passRateDelta);
+  const nonInferiority = summarizeNonInferiority(baseline, candidate, pairedAttempts, passRateDelta);
   const { decision, reason } = decide(baseline, candidate, pairedAttempts, passRateDelta, nonInferiority, nonInferiorityMargin);
 
   return {
@@ -362,9 +362,7 @@ function decide(
 ): { decision: AbDecision; reason: string } {
   const coverage = Math.min(baseline.coverageRate, candidate.coverageRate);
   if (coverage < 0.9) return { decision: 'inconclusive', reason: 'low_effective_coverage' };
-  if (pairedAttempts.budgetDiscordantPairIds.length > 0) {
-    return { decision: 'inconclusive', reason: 'asymmetric_budget_exhaustion' };
-  }
+  if (pairedAttempts.missingPairIds.length > 0) return { decision: 'inconclusive', reason: 'missing_attempt_pair' };
   if (pairedAttempts.infraOrPlumbingDiscordantPairIds.length > 0) {
     return { decision: 'inconclusive', reason: 'asymmetric_infra_or_plumbing' };
   }
@@ -379,19 +377,51 @@ function decide(
 function summarizeNonInferiority(
   baseline: AbArmSummary,
   candidate: AbArmSummary,
+  pairedAttempts: AbAttemptPairSummary,
   passRateDelta: number | null,
 ): AbNonInferioritySummary {
   if (passRateDelta === null || baseline.passRate === null || candidate.passRate === null || baseline.valid === 0 || candidate.valid === 0) {
-    return { confidenceLevel: NON_INFERIORITY_CONFIDENCE_LEVEL, lowerBound: null };
+    return { method: 'unavailable', confidenceLevel: NON_INFERIORITY_CONFIDENCE_LEVEL, lowerBound: null };
+  }
+  if (hasCompleteValidPairing(baseline, candidate, pairedAttempts)) {
+    const standardError = pairedRiskDifferenceStandardError(pairedAttempts, passRateDelta);
+    return {
+      method: 'paired_risk_difference',
+      confidenceLevel: NON_INFERIORITY_CONFIDENCE_LEVEL,
+      lowerBound: roundRateDelta(clampRateDelta(passRateDelta - ONE_SIDED_95_Z * standardError)),
+    };
   }
   const standardError = Math.sqrt(
     (baseline.passRate * (1 - baseline.passRate)) / baseline.valid
     + (candidate.passRate * (1 - candidate.passRate)) / candidate.valid,
   );
   return {
+    method: 'independent_risk_difference',
     confidenceLevel: NON_INFERIORITY_CONFIDENCE_LEVEL,
     lowerBound: roundRateDelta(clampRateDelta(passRateDelta - ONE_SIDED_95_Z * standardError)),
   };
+}
+
+function hasCompleteValidPairing(
+  baseline: AbArmSummary,
+  candidate: AbArmSummary,
+  pairedAttempts: AbAttemptPairSummary,
+): boolean {
+  return pairedAttempts.observedPairs > 0
+    && pairedAttempts.missingPairIds.length === 0
+    && pairedAttempts.observedPairs === baseline.valid
+    && pairedAttempts.observedPairs === candidate.valid;
+}
+
+function pairedRiskDifferenceStandardError(
+  pairedAttempts: AbAttemptPairSummary,
+  meanDifference: number,
+): number {
+  const n = pairedAttempts.observedPairs;
+  if (n <= 1) return 0;
+  const sumSquaredDifferences = pairedAttempts.wins + pairedAttempts.losses;
+  const sampleVariance = Math.max(0, (sumSquaredDifferences - n * meanDifference ** 2) / (n - 1));
+  return Math.sqrt(sampleVariance / n);
 }
 
 function isValidBudgetedOutcome(
