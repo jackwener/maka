@@ -38,8 +38,11 @@ export function isRsiR2FailurePattern(value: unknown): value is RsiR2FailurePatt
 }
 
 export function promptSafeToken(value: string, fallback: string): string {
-  if (!PROMPT_SAFE_TOKEN_RE.test(fallback)) {
+  if (typeof fallback !== 'string' || !PROMPT_SAFE_TOKEN_RE.test(fallback)) {
     throw new Error('fallback must be prompt-safe');
+  }
+  if (typeof value !== 'string') {
+    throw new Error('value must be prompt-safe');
   }
   return PROMPT_SAFE_TOKEN_RE.test(value) ? value : fallback;
 }
@@ -67,7 +70,7 @@ export function canonicalRsiTokenList(
     throw new Error(`${options.fieldName} exceeds ${options.maxItems} items`);
   }
   const canonical = values.map((value, index) => {
-    if (!PROMPT_SAFE_TOKEN_RE.test(value)) {
+    if (typeof value !== 'string' || !PROMPT_SAFE_TOKEN_RE.test(value)) {
       throw new Error(`${options.fieldName}[${index}] must be prompt-safe`);
     }
     return value;

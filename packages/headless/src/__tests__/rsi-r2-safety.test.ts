@@ -25,6 +25,14 @@ describe('RSI R2 safety primitives', () => {
       () => promptSafeToken('tool with spaces', 'bad fallback'),
       /fallback must be prompt-safe/i,
     );
+    assert.throws(
+      () => promptSafeToken(123 as unknown as string, 'fallback'),
+      /value must be prompt-safe/i,
+    );
+    assert.throws(
+      () => promptSafeToken('tool with spaces', 123 as unknown as string),
+      /fallback must be prompt-safe/i,
+    );
   });
 
   test('validates bounded prompt text before it can become durable feedback', () => {
@@ -112,6 +120,15 @@ describe('RSI R2 safety primitives', () => {
       }),
       /evidenceRefs\[0\] must be prompt-safe/i,
     );
+    for (const unsafe of [123, true, {}]) {
+      assert.throws(
+        () => canonicalRsiTokenList([unsafe as unknown as string], {
+          fieldName: 'evidenceRefs',
+          maxItems: 4,
+        }),
+        /evidenceRefs\[0\] must be prompt-safe/i,
+      );
+    }
   });
 
   test('hashes held-in task sets independent of order while rejecting unsafe ids', () => {
