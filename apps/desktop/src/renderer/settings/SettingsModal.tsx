@@ -337,15 +337,20 @@ function BotBrandLogo(props: {
       aria-hidden="true"
       style={{ ['--bot-brand-color' as string]: brand.color }}
     >
-      {/* WAWQAQ msg `c8a9fc6f` 2026-06-25: real brand icon (Iconify
-          `simple-icons` set, lazy-loaded from the Iconify CDN). The
-          monogram (`brand.glyph`) stays as the `IconifyIcon` `fallback`
-          so the tile isn't blank during the first paint while the
-          remote SVG is in flight. */}
+      {/* PR-BOT-LOGO-NEUTRAL-PLATE-0 (WAWQAQ msg `f3d263b4`
+          2026-06-26): real iOS-app-icon style. The brand SVG carries
+          the brand-color disc + white official mark (Telegram blue
+          gradient + paper plane, WeChat green + double-bubble,
+          Discord blurple + Clyde, Feishu 3-color staircase, …) —
+          see `packages/ui/src/bot-brand-icons.ts`. width/height
+          100% so the brand tile fills `.settingsBotLogo` edge-to-
+          edge; the parent plate is transparent so the brand-color
+          disc IS the visible tile. `brand.glyph` (`微` / `企` / etc.)
+          fallback only renders if the local SVG fails to register. */}
       <IconifyIcon
         icon={brand.iconifyId}
-        width="60%"
-        height="60%"
+        width="100%"
+        height="100%"
         aria-hidden="true"
         fallback={<>{brand.glyph}</>}
       />

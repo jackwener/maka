@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, safeStorage, screen, shell } from 'electron';
 import { isExternalUrl } from './external-link-guard.js';
 import { readSavedBounds, writeSavedBounds, type SavedBounds } from './window-state.js';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { copyFile, mkdir, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { release as osRelease, arch as osArch } from 'node:os';
@@ -52,6 +52,7 @@ import type {
   SessionEvent,
   SessionHeader,
   SessionListFilter,
+  StoredMessage,
   SettingsTestResult,
   UpdateAppSettingsResult,
   UpdateConnectionInput,
@@ -80,6 +81,10 @@ import { buildWebSearchAgentTool, WEB_SEARCH_TOOL_NAME } from './web-search/agen
 import { buildRiveWorkflowTool } from './rive-workflow-tool.js';
 import { resolveTavilyApiKey } from './web-search/credentials.js';
 import { runThreadSearch } from './search/thread-search.js';
+import {
+  persistArchivedToolResultToArtifacts,
+  readArchivedToolResultFromArtifacts,
+} from './tool-result-archive-artifacts.js';
 import {
   normalizeBranchFromTurnInput,
   normalizePermissionResponse,
@@ -769,35 +774,13 @@ async function persistToolArtifacts(cwd: string, event: ToolArtifactRecorderInpu
 async function persistArchivedToolResult(
   event: ToolResultArchiveRecorderInput,
 ): Promise<{ artifactId: string }> {
-  const artifact = await artifactStore.create({
-    sessionId: event.sessionId,
-    turnId: event.turnId,
-    name: `tool-result-${event.runtimeEventId}.json`,
-    kind: 'file',
-    content: event.serializedResult,
-    mimeType: 'application/json',
-    source: 'tool_result_archive',
-    summary: `Archived ${event.toolName} tool result for context budget replay`,
-  });
-  return { artifactId: artifact.id };
+  return persistArchivedToolResultToArtifacts(artifactStore, event);
 }
 
 async function readArchivedToolResult(
   event: ToolResultArchiveReaderInput,
 ): Promise<ToolResultArchiveReadResult> {
-  const record = await artifactStore.get(event.artifactId);
-  if (!record) return { ok: false, reason: 'not_found' };
-  if (record.status === 'deleted') return { ok: false, reason: 'deleted' };
-  if (record.source !== 'tool_result_archive') return { ok: false, reason: 'source_mismatch' };
-  if (record.sessionId !== event.sessionId) return { ok: false, reason: 'session_mismatch' };
-  if (record.sizeBytes !== event.originalBytes) return { ok: false, reason: 'size_mismatch' };
-
-  const read = await artifactStore.readText(event.artifactId, {
-    maxBytes: event.maxBytes ?? event.originalBytes,
-  });
-  if (!read.ok) return read;
-  if (sha256(read.text) !== event.bodySha256) return { ok: false, reason: 'corrupt' };
-  return { ok: true, serializedResult: read.text };
+  return readArchivedToolResultFromArtifacts(artifactStore, event);
 }
 
 async function resolveToolArtifactSourcePath(cwd: string, sourcePath: string): Promise<string | null> {
@@ -1064,10 +1047,6 @@ function parseHistoryCompactMode(value: string | undefined): NonNullable<Context
 
 function parseArchiveRetrievalMode(value: string | undefined): NonNullable<ContextBudgetPolicy['archiveRetrieval']>['mode'] | undefined {
   return value === 'history_search_gated' || value === 'eager' ? value : undefined;
-}
-
-function sha256(text: string): string {
-  return createHash('sha256').update(text).digest('hex');
 }
 
 function buildSubscriptionModelFetch(
@@ -2622,8 +2601,12 @@ function registerIpc(): void {
     emitSessionsChanged('created', session.id);
     return session;
   });
-  ipcMain.handle('sessions:readMessages', (_event, sessionId: string) =>
-    visualSmokeFixture ? store.readMessages(sessionId) : runtime.getMessages(sessionId));
+  ipcMain.handle('sessions:readMessages', async (_event, sessionId: string) => {
+    if (visualSmokeFixture) return store.readMessages(sessionId);
+    const messages = await runtime.getMessages(sessionId);
+    await runtime.markSessionRead(sessionId, latestStoredMessageTs(messages));
+    return messages;
+  });
   ipcMain.handle('sessions:listTurns', (_event, sessionId: string) => runtime.listTurns(sessionId));
   // PR-SEARCH-2: local thread search. Renderer-facing channel; the pure
   // helper in `./search/thread-search.ts` enforces all gates (G1 snippet
@@ -3673,10 +3656,10 @@ async function streamEvents(
       if (isTurnStatusChangingSessionEvent(event)) {
         emitSessionsChanged('turn-status-change', sessionId);
       }
-      if (!finalAppendBroadcasted && isFinalSessionEvent(event)) {
-        emitSessionsChanged('message-appended', sessionId);
-        finalAppendBroadcasted = true;
-      }
+    }
+    if (!finalAppendBroadcasted) {
+      emitSessionsChanged('message-appended', sessionId);
+      finalAppendBroadcasted = true;
     }
   } catch (error) {
     const event = {
@@ -3695,6 +3678,7 @@ async function streamEvents(
     emitSessionsChanged('turn-status-change', sessionId);
     if (!finalAppendBroadcasted) {
       emitSessionsChanged('message-appended', sessionId);
+      finalAppendBroadcasted = true;
     }
   }
 }
@@ -3996,6 +3980,7 @@ async function collectBotReply(
   let userAppendBroadcasted = false;
   let finalAppendBroadcasted = false;
   let latestText = '';
+  let earlyReply: string | undefined;
   try {
     for await (const event of iterator) {
       if (!userAppendBroadcasted) {
@@ -4008,7 +3993,7 @@ async function collectBotReply(
         return '这条请求需要在 Maka 桌面端审批后才能继续。';
       }
       if (event.type === 'error') {
-        return `Maka 处理失败：${event.message}`;
+        earlyReply = `Maka 处理失败：${event.message}`;
       }
       if (isStatusChangingSessionEvent(event)) {
         emitSessionsChanged('status-change', sessionId);
@@ -4016,10 +4001,10 @@ async function collectBotReply(
       if (isTurnStatusChangingSessionEvent(event)) {
         emitSessionsChanged('turn-status-change', sessionId);
       }
-      if (!finalAppendBroadcasted && isFinalSessionEvent(event)) {
-        emitSessionsChanged('message-appended', sessionId);
-        finalAppendBroadcasted = true;
-      }
+    }
+    if (!finalAppendBroadcasted) {
+      emitSessionsChanged('message-appended', sessionId);
+      finalAppendBroadcasted = true;
     }
   } catch (error) {
     safeSendToRenderer(`sessions:event:${sessionId}`, {
@@ -4034,14 +4019,13 @@ async function collectBotReply(
     } satisfies SessionEvent);
     emitSessionsChanged('status-change', sessionId);
     emitSessionsChanged('turn-status-change', sessionId);
-    if (!finalAppendBroadcasted) emitSessionsChanged('message-appended', sessionId);
+    if (!finalAppendBroadcasted) {
+      emitSessionsChanged('message-appended', sessionId);
+      finalAppendBroadcasted = true;
+    }
     return `Maka 处理失败：${errorMessage(error)}`;
   }
-  return latestText;
-}
-
-function isFinalSessionEvent(event: SessionEvent): boolean {
-  return event.type === 'text_complete' || event.type === 'complete' || event.type === 'abort' || event.type === 'error';
+  return earlyReply ?? latestText;
 }
 
 function isStatusChangingSessionEvent(event: SessionEvent): boolean {
@@ -4050,6 +4034,14 @@ function isStatusChangingSessionEvent(event: SessionEvent): boolean {
     event.type === 'complete' ||
     event.type === 'abort' ||
     event.type === 'error';
+}
+
+function latestStoredMessageTs(messages: readonly StoredMessage[]): number | undefined {
+  let latest: number | undefined;
+  for (const message of messages) {
+    if (Number.isFinite(message.ts)) latest = latest === undefined ? message.ts : Math.max(latest, message.ts);
+  }
+  return latest;
 }
 
 function isTurnStatusChangingSessionEvent(event: SessionEvent): boolean {

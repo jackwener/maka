@@ -46,14 +46,28 @@ addCollection(phData);
 // Register the local bot brand SVG collection so
 // `<IconifyIcon icon="maka-bot:telegram">` etc. resolve synchronously,
 // without hitting `api.iconify.design` at runtime. See
-// `bot-brand-icons.ts` for the source provenance and why only 4 of the
-// 6 bot brands are local today (kenji audit msg `e4cfbfb0` round-2 #2).
+// `bot-brand-icons.ts` for the source provenance. After
+// PR-BOT-LOGO-NEUTRAL-PLATE-0 (WAWQAQ msg `580de391` 2026-06-26)
+// six of the seven IM brands are local; lark/feishu remains on the
+// CDN with a documented gap.
 addCollection({
   prefix: MAKA_BOT_ICON_PREFIX,
   width: 24,
   height: 24,
   icons: Object.fromEntries(
-    Object.entries(MAKA_BOT_ICON_BODIES).map(([name, body]) => [name, { body }]),
+    Object.entries(MAKA_BOT_ICON_BODIES).map(([name, icon]) => {
+      // Only the body is required. Forward the optional viewBox
+      // fields so paths sourced from larger canvases (Ant Design's
+      // 1024 grid via `left/top/width/height`) render at the right
+      // intrinsic scale instead of getting clipped against the
+      // collection-level 24 default.
+      const entry: { body: string; left?: number; top?: number; width?: number; height?: number } = { body: icon.body };
+      if (icon.left !== undefined) entry.left = icon.left;
+      if (icon.top !== undefined) entry.top = icon.top;
+      if (icon.width !== undefined) entry.width = icon.width;
+      if (icon.height !== undefined) entry.height = icon.height;
+      return [name, entry];
+    }),
   ),
 });
 

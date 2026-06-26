@@ -99,6 +99,7 @@ import {
   recordSessionEventStreamEvent,
 } from './session-event-health';
 import { safeLocalStorageGet, safeLocalStorageSet } from './browser-storage';
+import { applyLocalSessionRead, createSessionListRefresher, type SessionListRefresher, type SessionReadBoundaries } from './session-read-state';
 import './styles.css';
 
 const NO_REAL_CONNECTION_CODE = 'NO_REAL_CONNECTION';
@@ -255,6 +256,22 @@ function AppShell() {
   const toastApi = useToast();
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const sessionsRef = useRef<SessionSummary[]>([]);
+  const sessionReadBoundariesRef = useRef<SessionReadBoundaries>({});
+  const sessionListRefresherRef = useRef<SessionListRefresher | null>(null);
+  if (!sessionListRefresherRef.current) {
+    sessionListRefresherRef.current = createSessionListRefresher({
+      listSessions: () => window.maka.sessions.list(),
+      readBoundaries: () => sessionReadBoundariesRef.current,
+      currentSessions: () => sessionsRef.current,
+      commitSessions: (next) => {
+        sessionsRef.current = next;
+        setSessions(next);
+      },
+      onError: (error) => {
+        toastApi.error('刷新会话列表失败', generalizedErrorMessageChinese(error, '刷新会话列表失败，请稍后重试。'));
+      },
+    });
+  }
   const [activeId, setActiveIdState] = useState<string | undefined>();
   // P3: session ids with a live embedded-browser view. The right-side
   // BrowserPanel mounts only for these, so ordinary chats reserve no space.
@@ -1145,7 +1162,10 @@ function AppShell() {
     }));
     void window.maka.sessions.readMessages(activeId)
       .then((next) => {
-        if (!disposed && activeIdRef.current === activeId) setMessages(next);
+        if (!disposed && activeIdRef.current === activeId) {
+          markSessionReadLocally(activeId, next);
+          setMessages(next);
+        }
       })
       .catch((error) => {
         if (!disposed && activeIdRef.current === activeId) {
@@ -1240,15 +1260,7 @@ function AppShell() {
   }, [navSelection]);
 
   async function refreshSessions(): Promise<SessionSummary[]> {
-    try {
-      const next = await window.maka.sessions.list();
-      sessionsRef.current = next;
-      setSessions(next);
-      return next;
-    } catch (error) {
-      toastApi.error('刷新会话列表失败', generalizedErrorMessageChinese(error, '刷新会话列表失败，请稍后重试。'));
-      return sessionsRef.current;
-    }
+    return sessionListRefresherRef.current!.refresh();
   }
 
   async function refreshShellSettings() {
@@ -1277,6 +1289,14 @@ function AppShell() {
   function upsertSessionSummary(session: SessionSummary): void {
     setSessions((current) => {
       const next = [session, ...current.filter((entry) => entry.id !== session.id)];
+      sessionsRef.current = next;
+      return next;
+    });
+  }
+
+  function markSessionReadLocally(sessionId: string, readMessages: readonly StoredMessage[]): void {
+    setSessions((current) => {
+      const next = applyLocalSessionRead(sessionReadBoundariesRef.current, current, sessionId, readMessages);
       sessionsRef.current = next;
       return next;
     });
@@ -2118,6 +2138,7 @@ function AppShell() {
     try {
       const next = await window.maka.sessions.readMessages(sessionId);
       if (activeIdRef.current === sessionId) {
+        markSessionReadLocally(sessionId, next);
         setMessages(next);
         setMessageLoadErrorBySession((current) => {
           if (!current[sessionId]) return current;
@@ -2158,6 +2179,7 @@ function AppShell() {
         if (activeIdRef.current !== sessionId) return;
         const hasSentUserTurn = next.some((message) => message.type === 'user' && message.turnId === turnId);
         if (hasSentUserTurn) {
+          markSessionReadLocally(sessionId, next);
           setMessages(next);
           return;
         }

@@ -160,6 +160,7 @@ export interface SessionStore {
   appendMessage(sessionId: string, m: StoredMessage): Promise<void>;
   appendMessages(sessionId: string, ms: StoredMessage[]): Promise<void>;
   updateHeader(sessionId: string, patch: Partial<SessionHeader>): Promise<SessionHeader>;
+  markSessionReadThrough(sessionId: string, readThroughTs: number): Promise<SessionHeader>;
   archive(sessionId: string): Promise<void>;
   unarchive(sessionId: string): Promise<void>;
   setFlagged(sessionId: string, isFlagged: boolean): Promise<void>;
@@ -352,6 +353,12 @@ export class SessionManager {
     await this.deps.store.setFlagged(sessionId, isFlagged);
     const header = await this.deps.store.readHeader(sessionId).catch(() => undefined);
     if (header) this.runtimeKernel.updateCachedHeader(sessionId, header);
+  }
+
+  async markSessionRead(sessionId: string, readThroughTs: number | undefined): Promise<void> {
+    if (readThroughTs === undefined || !Number.isFinite(readThroughTs)) return;
+    const next = await this.deps.store.markSessionReadThrough(sessionId, readThroughTs);
+    this.runtimeKernel.updateCachedHeader(sessionId, next);
   }
 
   async renameSession(sessionId: string, name: string): Promise<void> {

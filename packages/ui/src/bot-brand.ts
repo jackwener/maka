@@ -23,17 +23,24 @@ export interface BotBrand {
 // audit 2026-06-25 msg `e4cfbfb0` finding #2).
 //
 // `maka-bot:*` ids are pre-bundled SVG bodies that render offline.
-// `simple-icons:*` ids still rely on Iconify's CDN — Simple Icons
-// dropped (or never carried) Feishu/Lark and DingTalk standalone
-// icons, so until we source them from each brand's official kit they
-// fall back to the colored-tile-with-glyph state when offline. Track
-// the gap on @kenji audit follow-up.
+// See `bot-brand-icons.ts` header for the per-channel sourcing
+// (Logos CC-BY for telegram + discord; Feishu official staircase
+// for feishu; iOS-app-icon style locally composed for wechat /
+// wecom / dingtalk / qq).
+//
+// PR-BOT-LOGO-NEUTRAL-PLATE-0 (WAWQAQ msg `f3d263b4` 2026-06-26)
+// replaces the previous monochrome silhouettes with iOS-app-icon
+// style real brand tiles — each `maka-bot:*` SVG body is now a
+// brand-color disc with the official white mark, matching the
+// realism of `provider-brand-marks.tsx` for model providers.
+// All 7 IM channels render fully offline; nothing falls through
+// to the Iconify CDN.
 export const BOT_BRAND: Record<BotProvider, BotBrand> = {
   telegram: { color: '#229ED9', glyph: 'T', iconifyId: 'maka-bot:telegram', configDocUrl: 'https://core.telegram.org/bots/tutorial' },
-  feishu:   { color: '#00C6B7', glyph: '飞', iconifyId: 'simple-icons:lark', configDocUrl: 'https://open.feishu.cn/document/server-docs/bot-v3' },
-  wecom:    { color: '#0089FF', glyph: '企', iconifyId: 'maka-bot:wechat', configDocUrl: 'https://developer.work.weixin.qq.com/document/' },
+  feishu:   { color: '#00C6B7', glyph: '飞', iconifyId: 'maka-bot:feishu', configDocUrl: 'https://open.feishu.cn/document/server-docs/bot-v3' },
+  wecom:    { color: '#0089FF', glyph: '企', iconifyId: 'maka-bot:wecom', configDocUrl: 'https://developer.work.weixin.qq.com/document/' },
   wechat:   { color: '#07C160', glyph: '微', iconifyId: 'maka-bot:wechat', configDocUrl: 'https://developers.weixin.qq.com/doc/offiaccount/Getting_Started/Overview.html' },
   discord:  { color: '#5865F2', glyph: 'D', iconifyId: 'maka-bot:discord', configDocUrl: 'https://discord.com/developers/docs/intro' },
-  dingtalk: { color: '#1372FB', glyph: '钉', iconifyId: 'simple-icons:dingtalk', configDocUrl: 'https://open.dingtalk.com/document/' },
+  dingtalk: { color: '#1372FB', glyph: '钉', iconifyId: 'maka-bot:dingtalk', configDocUrl: 'https://open.dingtalk.com/document/' },
   qq:       { color: '#EB1923', glyph: 'Q', iconifyId: 'maka-bot:qq', configDocUrl: 'https://bot.q.qq.com/wiki/' },
 };

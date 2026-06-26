@@ -258,6 +258,25 @@ describe('permission response IPC boundary', () => {
     );
   });
 
+  it('broadcasts the final message-appended refresh only after the runtime iterator drains', async () => {
+    const mainPath = fileURLToPath(new URL('../../../src/main/main.ts', import.meta.url));
+    const main = await readFile(mainPath, 'utf8');
+    const streamEvents = main.match(/async function streamEvents\([\s\S]*?\n\}/)?.[0] ?? '';
+    const collectBotReply = main.match(/async function collectBotReply\([\s\S]*?\n\}/)?.[0] ?? '';
+
+    assert.match(streamEvents, /for await \(const event of iterator\) \{[\s\S]*safeSendToRenderer\(`sessions:event:\$\{sessionId\}`, event\);/);
+    assert.match(
+      streamEvents,
+      /for await \(const event of iterator\) \{[\s\S]*\n    \}\n    if \(!finalAppendBroadcasted\) \{\n      emitSessionsChanged\('message-appended', sessionId\);\n      finalAppendBroadcasted = true;\n    \}/,
+      'post-drain refresh lets active renderer reads clear the hasUnread=true written by finalize()',
+    );
+    assert.doesNotMatch(
+      collectBotReply,
+      /event\.type === 'error'[\s\S]*return `Maka 处理失败：\$\{event\.message\}`/,
+      'bot error replies must drain before returning so the final refresh follows finalize()',
+    );
+  });
+
   it('scopes session event error feedback to the active chat surface', async () => {
     const rendererPath = fileURLToPath(new URL('../../../src/renderer/main.tsx', import.meta.url));
     const renderer = await readFile(rendererPath, 'utf8');
@@ -303,12 +322,6 @@ describe('permission response IPC boundary', () => {
       'session refresh failures must preserve the last successful list instead of clearing the sidebar',
     );
     assert.ok(refreshSessions, 'refreshSessions() must exist');
-    assert.match(
-      refreshSessions[0],
-      /try \{[\s\S]*window\.maka\.sessions\.list\(\)[\s\S]*sessionsRef\.current = next[\s\S]*setSessions\(next\)[\s\S]*return next[\s\S]*\} catch \(error\) \{[\s\S]*toastApi\.error\('刷新会话列表失败', generalizedErrorMessageChinese\(error, '刷新会话列表失败，请稍后重试。'\)\)[\s\S]*return sessionsRef\.current/,
-      'refreshSessions() is called fire-and-forget and must catch list failures without dropping the current list',
-    );
-    assert.doesNotMatch(refreshSessions[0], /toastApi\.error\('刷新会话列表失败', cleanErrorMessage\(error\)\)/);
     assert.doesNotMatch(
       refreshSessions[0],
       /setActiveId\(/,

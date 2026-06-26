@@ -1,0 +1,165 @@
+import assert from 'node:assert/strict';
+import { describe, it } from 'node:test';
+import type { SessionSummary, StoredMessage } from '@maka/core';
+import {
+  applyLocalSessionRead,
+  applySessionReadOverrides,
+  createSessionListRefresher,
+  rememberSessionReadBoundary,
+  type SessionReadBoundaries,
+} from '../../renderer/session-read-state.js';
+
+describe('renderer session read state', () => {
+  it('keeps a late stale list response from restoring unread on a locally read session', async () => {
+    const readBoundaries: SessionReadBoundaries = {};
+    const staleList = deferred<SessionSummary[]>();
+
+    const listAfterLocalRead = staleList.promise.then((sessions) => applySessionReadOverrides(sessions, readBoundaries));
+    rememberSessionReadBoundary(readBoundaries, 's1', [messageAt(200)]);
+    staleList.resolve([session({ id: 's1', hasUnread: true, lastMessageAt: 200 })]);
+
+    assert.equal((await listAfterLocalRead)[0]?.hasUnread, false);
+  });
+
+  it('allows a newer message to restore unread after the local read boundary', () => {
+    const readBoundaries: SessionReadBoundaries = {};
+    rememberSessionReadBoundary(readBoundaries, 's1', [messageAt(200)]);
+
+    const [next] = applySessionReadOverrides([
+      session({ id: 's1', hasUnread: true, lastMessageAt: 250 }),
+    ], readBoundaries);
+
+    assert.equal(next?.hasUnread, true);
+  });
+
+  it('keeps the same list reference when no read override applies', () => {
+    const sessions = [session({ id: 's1', hasUnread: true, lastMessageAt: 250 })];
+
+    const next = applySessionReadOverrides(sessions, {});
+
+    assert.equal(next, sessions);
+  });
+
+  it('keeps newer unread when an older local read result arrives later', () => {
+    const readBoundaries: SessionReadBoundaries = {};
+
+    const [next] = applyLocalSessionRead(
+      readBoundaries,
+      [session({ id: 's1', hasUnread: true, lastMessageAt: 250 })],
+      's1',
+      [messageAt(200)],
+    );
+
+    assert.equal(next?.lastMessageAt, 250);
+    assert.equal(next?.hasUnread, true);
+  });
+
+  it('clears unread when a local read reaches the current last message', () => {
+    const readBoundaries: SessionReadBoundaries = {};
+
+    const [next] = applyLocalSessionRead(
+      readBoundaries,
+      [session({ id: 's1', hasUnread: true, lastMessageAt: 200 })],
+      's1',
+      [messageAt(200)],
+    );
+
+    assert.equal(next?.lastMessageAt, 200);
+    assert.equal(next?.hasUnread, false);
+  });
+
+  it('keeps a newer unread list when an older list response arrives later', async () => {
+    const readBoundaries: SessionReadBoundaries = {};
+    const staleList = deferred<SessionSummary[]>();
+    const newerList = deferred<SessionSummary[]>();
+    const listCalls = [staleList.promise, newerList.promise];
+    let currentSessions: SessionSummary[] = [];
+    const refresher = createSessionListRefresher({
+      listSessions: async () => listCalls.shift() ?? [],
+      readBoundaries: () => readBoundaries,
+      currentSessions: () => currentSessions,
+      commitSessions: (next) => {
+        currentSessions = next;
+      },
+      onError: () => {},
+    });
+
+    rememberSessionReadBoundary(readBoundaries, 's1', [messageAt(200)]);
+    const staleRefresh = refresher.refresh();
+    const newerRefresh = refresher.refresh();
+    newerList.resolve([session({ id: 's1', hasUnread: true, lastMessageAt: 250 })]);
+    await newerRefresh;
+    staleList.resolve([session({ id: 's1', hasUnread: true, lastMessageAt: 200 })]);
+    await staleRefresh;
+
+    assert.equal(currentSessions[0]?.lastMessageAt, 250);
+    assert.equal(currentSessions[0]?.hasUnread, true);
+  });
+
+  it('keeps the current list when the latest list refresh fails', async () => {
+    const readBoundaries: SessionReadBoundaries = {};
+    const original = [session({ id: 's1', hasUnread: true, lastMessageAt: 250 })];
+    const errors: unknown[] = [];
+    let currentSessions = original;
+    const refresher = createSessionListRefresher({
+      listSessions: async () => {
+        throw new Error('list failed');
+      },
+      readBoundaries: () => readBoundaries,
+      currentSessions: () => currentSessions,
+      commitSessions: (next) => {
+        currentSessions = next;
+      },
+      onError: (error) => {
+        errors.push(error);
+      },
+    });
+
+    const result = await refresher.refresh();
+
+    assert.equal(result, original);
+    assert.equal(currentSessions, original);
+    assert.equal(errors.length, 1);
+  });
+});
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
+}
+
+function session(overrides: Partial<SessionSummary> & { id: string }): SessionSummary {
+  return {
+    id: overrides.id,
+    name: overrides.name ?? 'Session',
+    isFlagged: overrides.isFlagged ?? false,
+    isArchived: overrides.isArchived ?? false,
+    labels: overrides.labels ?? [],
+    hasUnread: overrides.hasUnread ?? false,
+    lastMessageAt: overrides.lastMessageAt,
+    lastMessagePreview: overrides.lastMessagePreview,
+    status: overrides.status ?? 'active',
+    blockedReason: overrides.blockedReason,
+    statusUpdatedAt: overrides.statusUpdatedAt,
+    parentSessionId: overrides.parentSessionId,
+    branchOfTurnId: overrides.branchOfTurnId,
+    backend: overrides.backend ?? 'ai-sdk',
+    llmConnectionSlug: overrides.llmConnectionSlug ?? 'default',
+    model: overrides.model ?? 'default',
+    permissionMode: overrides.permissionMode ?? 'ask',
+  };
+}
+
+function messageAt(ts: number): StoredMessage {
+  return {
+    type: 'assistant',
+    id: `m-${ts}`,
+    turnId: `t-${ts}`,
+    ts,
+    text: 'ok',
+    modelId: 'test-model',
+  };
+}
