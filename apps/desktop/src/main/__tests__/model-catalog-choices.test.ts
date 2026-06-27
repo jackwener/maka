@@ -100,12 +100,20 @@ describe('model catalog picker helpers', () => {
         models: [{ id: 'gemini-2.5-pro', displayName: 'Gemini 2.5 Pro' }],
         modelSource: 'fetched',
       }),
+      connection({
+        slug: 'deepseek-api',
+        name: 'DeepSeek account',
+        providerType: 'deepseek',
+        models: [{ id: 'deepseek-v4-flash' }],
+        modelSource: 'fetched',
+      }),
     ], '');
 
     assert.deepEqual(options, [
       ['claude-work::shared-model', 'Shared Model · Claude Subscription (Pro / Max OAuth) · claude-work'],
       ['claude-home::shared-model', 'Shared Model · Claude Subscription (Pro / Max OAuth) · claude-home'],
       ['gemini-account::gemini-2.5-pro', 'Gemini 2.5 Pro'],
+      ['deepseek-api::deepseek-v4-flash', 'DeepSeek V4 Flash'],
     ]);
     assert.ok(options.every(([, label]) => !label.includes('@example.com')));
   });

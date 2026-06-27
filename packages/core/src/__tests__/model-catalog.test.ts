@@ -229,4 +229,27 @@ describe('ModelCatalogEntry', () => {
     assert.equal(fallbackEntry?.id, 'gpt-5.5');
     assert.equal(fallbackEntry?.displayName, 'GPT 5.5');
   });
+
+  it('enriches provider model ids with models.dev display names', () => {
+    const [fetchedEntry] = buildModelCatalogEntries({
+      providerType: 'deepseek',
+      defaultModel: 'deepseek-v4-flash',
+      models: [{ id: 'deepseek-v4-flash' }],
+      modelSource: 'fetched',
+      modelsFetchedAt: 1_800_000_000_000,
+    });
+
+    assert.equal(fetchedEntry?.id, 'deepseek-v4-flash');
+    assert.equal(fetchedEntry?.displayName, 'DeepSeek V4 Flash');
+
+    const [fallbackEntry] = buildModelCatalogEntries({
+      providerType: 'deepseek',
+      defaultModel: 'deepseek-reasoner',
+      fallbackModels: ['deepseek-reasoner'],
+      modelSource: 'fallback',
+    });
+
+    assert.equal(fallbackEntry?.id, 'deepseek-reasoner');
+    assert.equal(fallbackEntry?.displayName, 'DeepSeek Reasoner');
+  });
 });

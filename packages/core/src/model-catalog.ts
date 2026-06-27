@@ -6,6 +6,7 @@ import type {
 } from './llm-connections.js';
 import { PROVIDER_DEFAULTS } from './llm-connections.js';
 import type { PricingConfig } from './usage-stats/types.js';
+import { lookupModelMetadata } from './model-metadata.js';
 
 export type ModelCapabilitySource =
   | 'provider_api'
@@ -278,17 +279,9 @@ function displayNameForModel(providerType: ProviderType, model: ModelInfo): { di
 }
 
 function displayNameForKnownModel(providerType: ProviderType, id: string): { displayName?: string } {
-  if (providerType !== 'codex-subscription') return {};
-  const displayName = CODEX_SUBSCRIPTION_MODEL_DISPLAY_NAMES[id.trim()];
+  const displayName = lookupModelMetadata(providerType, id).displayName;
   return displayName ? { displayName } : {};
 }
-
-const CODEX_SUBSCRIPTION_MODEL_DISPLAY_NAMES: Record<string, string> = {
-  'gpt-5.5': 'GPT 5.5',
-  'gpt-5.4': 'GPT 5.4',
-  'gpt-5.4-mini': 'GPT 5.4 mini',
-  'gpt-5.3-codex-spark': 'GPT 5.3 Codex Spark',
-};
 
 function deriveUnavailableReason(input: BuildModelCatalogInput, model: ModelInfo): ModelUnavailableReason {
   if (input.providerAvailable === false) return 'provider_removed';
