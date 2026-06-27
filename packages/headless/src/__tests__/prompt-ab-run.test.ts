@@ -594,9 +594,57 @@ describe('summarizePromptAbComparison', () => {
       archiveRetrievalSkipped: 0,
       archiveRetrievalFailures: 0,
     });
+    assert.deepEqual(result.candidate.activePruneSubset, {
+      taskCount: 1,
+      attempts: 1,
+      observed: 1,
+      valid: 1,
+      passed: 1,
+      passRate: 1,
+      completed: 1,
+      budgetExhausted: 0,
+      infraFailed: 0,
+      plumbingFailed: 0,
+      missing: 0,
+      coverageRate: 1,
+      totalCostUsd: 0.01,
+      meanDurationMs: 100,
+      tokenCostSummary: {
+        input: 1,
+        cachedInput: 0,
+        cacheHitInput: 0,
+        cacheMissInput: 1,
+        cacheWriteInput: 0,
+        output: 1,
+        reasoning: 0,
+        total: 2,
+        costUsd: 0.01,
+        meanDurationMs: 100,
+      },
+      contextBudget: {
+        diagnosticAttempts: 1,
+        activatedAttempts: 1,
+        activatedAttemptIds: ['event-t1-pass'],
+        diagnosticEvents: 1,
+        prunedToolResults: 2,
+        activePrunedToolResults: 3,
+        activeEstimatedTokensSaved: 450,
+        activeArchiveFailures: 1,
+        archivePlaceholders: 2,
+        archiveWriteFailures: 0,
+        retrievedArchiveToolResults: 1,
+        retrievedArchiveEstimatedTokens: 120,
+        archiveRetrievalSkipped: 0,
+        archiveRetrievalFailures: 0,
+      },
+    });
     assert.match(
       renderPromptAbComparisonMarkdown(result),
-      /Context budget: A activated=0\/2 stale_pruned=0 active_pruned=0 active_tokens_saved=0 active_archive_failures=0 retrieved=0, B activated=1\/2 stale_pruned=2 active_pruned=3 active_tokens_saved=450 active_archive_failures=1 retrieved=1/,
+      /Context budget: A activated=0\/2 stale_pruned=0 active_pruned=0 active_tokens_saved=0 active_archive_failures=0 archive_placeholders=0 archive_write_failures=0 retrieved=0 retrieved_tokens=0 retrieval_skipped=0 retrieval_failures=0, B activated=1\/2 stale_pruned=2 active_pruned=3 active_tokens_saved=450 active_archive_failures=1 archive_placeholders=2 archive_write_failures=0 retrieved=1 retrieved_tokens=120 retrieval_skipped=0 retrieval_failures=0/,
+    );
+    assert.match(
+      renderPromptAbComparisonMarkdown(result),
+      /Active prune subset: A tasks=0 activated=0\/0 pass_rate=null passed=0\/0 completed=0 timed_out=0 infra_failed=0 plumbing_failed=0 cost_usd=0 input=0 total=0 active_pruned=0 active_tokens_saved=0 active_archive_failures=0, B tasks=1 activated=1\/1 pass_rate=1 passed=1\/1 completed=1 timed_out=0 infra_failed=0 plumbing_failed=0 cost_usd=0\.01 input=1 total=2 active_pruned=3 active_tokens_saved=450 active_archive_failures=1/,
     );
     assert.match(
       renderPromptAbComparisonMarkdown(result),
@@ -655,15 +703,17 @@ describe('summarizePromptAbComparison', () => {
 
   test('records activated attempts and investigation refs for follow-up', () => {
     const activatedSummary = contextBudgetSummary({ activePrunedToolResults: 1, activeEstimatedTokensSaved: 50 });
+    const staleOnlySummary = contextBudgetSummary({ prunedToolResults: 1, archivePlaceholders: 1 });
     const result = summarizePromptAbComparison({
       runId: 'ab-run',
       roundId: 'ab-summary',
       baselinePromptId: 'prune-off',
-      candidatePromptId: 'prune-on',
-      evaluationTaskIds: ['b-loss', 'activated', 'budget'],
+      candidatePromptId: 'active-prune-on',
+      evaluationTaskIds: ['b-loss', 'activated', 'stale-only', 'budget'],
       baselineRuns: [[
         withTrace(completed('b-loss', true), 'A', 'b-loss'),
         withTrace(completed('activated', true), 'A', 'activated'),
+        withTrace(completed('stale-only', true), 'A', 'stale-only'),
         withTrace(completed('budget', true), 'A', 'budget'),
       ]],
       candidateRuns: [[
@@ -673,12 +723,19 @@ describe('summarizePromptAbComparison', () => {
           id: 'event-B-activated-r0',
           contextBudgetSummary: activatedSummary,
         },
+        {
+          ...withTrace(completed('stale-only', true), 'B', 'stale-only'),
+          id: 'event-B-stale-only-r0',
+          contextBudgetSummary: staleOnlySummary,
+        },
         { ...budgetExhausted('budget'), id: 'event-B-budget-r0', roundId: 'ab-prune-on-r0-budget' },
       ]],
     });
 
     assert.deepEqual(result.candidate.contextBudget?.activatedAttemptIds, ['event-B-activated-r0']);
+    assert.deepEqual(result.candidate.activePruneSubset?.contextBudget?.activatedAttemptIds, ['event-B-activated-r0']);
     assert.equal(result.investigationRefs.activatedAttempts[0]?.taskId, 'activated');
+    assert.equal(result.investigationRefs.activatedAttempts.some((ref) => ref.taskId === 'stale-only'), false);
     assert.equal(result.investigationRefs.activatedAttempts[0]?.rep, 0);
     assert.equal(result.investigationRefs.activatedAttempts[0]?.runtimeEventsPath, '/logs/B/activated/runtime-events.jsonl');
     assert.equal(result.investigationRefs.activatedAttempts[0]?.traceEventsPath, '/traces/B/activated/events.jsonl');

@@ -84,6 +84,7 @@ function summarizeArm(
   const passed = valid.filter((event) => event.passed).length;
   const durations = budgetedRuns.map((event) => event.durationMs);
   const contextBudget = summarizeContextBudget(observedAttempts);
+  const activePruneSubset = summarizeActivePruneSubset(observedAttempts);
   const contextBudgetPolicy = summarizeContextBudgetPolicy(observed);
   const tokenCostSummary = summarizeTokenCost(budgetedRuns);
   return {
@@ -102,6 +103,39 @@ function summarizeArm(
     meanDurationMs: durations.length > 0 ? sum(durations) / durations.length : null,
     tokenCostSummary,
     ...(contextBudgetPolicy ? { contextBudgetPolicy } : {}),
+    ...(contextBudget ? { contextBudget } : {}),
+    ...(activePruneSubset ? { activePruneSubset } : {}),
+  };
+}
+
+function summarizeActivePruneSubset(attempts: readonly ObservedAttempt[]): AbArmSummary['activePruneSubset'] {
+  const activeAttempts = attempts.filter(
+    (attempt) => 'contextBudgetSummary' in attempt.event && isActivePruneActivated(attempt.event.contextBudgetSummary),
+  );
+  if (activeAttempts.length === 0) return undefined;
+  const observed = activeAttempts.map((attempt) => attempt.event);
+  const valid = observed.filter(isValidBudgetedOutcome);
+  const budgetedRuns = valid.filter((event) => event.type !== 'task_budget_exhausted');
+  const passed = valid.filter((event) => event.passed).length;
+  const durations = budgetedRuns.map((event) => event.durationMs);
+  const tokenCostSummary = summarizeTokenCost(budgetedRuns);
+  const contextBudget = summarizeContextBudget(activeAttempts);
+  return {
+    taskCount: new Set(activeAttempts.map((attempt) => attempt.taskId)).size,
+    attempts: activeAttempts.length,
+    observed: observed.length,
+    valid: valid.length,
+    passed,
+    passRate: valid.length > 0 ? passed / valid.length : null,
+    completed: observed.filter((event) => event.type === 'task_completed').length,
+    budgetExhausted: observed.filter((event) => event.type === 'task_budget_exhausted').length,
+    infraFailed: observed.filter((event) => event.type === 'task_infra_failed').length,
+    plumbingFailed: observed.filter((event) => event.type === 'task_plumbing_failed').length,
+    missing: 0,
+    coverageRate: 1,
+    totalCostUsd: tokenCostSummary.costUsd,
+    meanDurationMs: durations.length > 0 ? sum(durations) / durations.length : null,
+    tokenCostSummary,
     ...(contextBudget ? { contextBudget } : {}),
   };
 }
@@ -161,11 +195,11 @@ function summarizeContextBudget(attempts: readonly ObservedAttempt[]): AbContext
     .filter((summary): summary is NonNullable<typeof summary> => summary !== undefined);
   if (summaries.length === 0) return undefined;
   const activatedAttemptIds = attempts
-    .filter((attempt) => ('contextBudgetSummary' in attempt.event && isContextBudgetActivated(attempt.event.contextBudgetSummary)))
+    .filter((attempt) => ('contextBudgetSummary' in attempt.event && isActivePruneActivated(attempt.event.contextBudgetSummary)))
     .map((attempt) => attempt.event.id);
   return {
     diagnosticAttempts: summaries.length,
-    activatedAttempts: summaries.filter(isContextBudgetActivated).length,
+    activatedAttempts: summaries.filter(isActivePruneActivated).length,
     activatedAttemptIds,
     diagnosticEvents: sum(summaries.map((summary) => summary.diagnosticEvents)),
     prunedToolResults: sum(summaries.map((summary) => summary.prunedToolResults)),
@@ -181,8 +215,8 @@ function summarizeContextBudget(attempts: readonly ObservedAttempt[]): AbContext
   };
 }
 
-function isContextBudgetActivated(summary: HarborCellContextBudgetSummary | undefined): boolean {
-  return (summary?.prunedToolResults ?? 0) > 0 || (summary?.activePrunedToolResults ?? 0) > 0;
+function isActivePruneActivated(summary: HarborCellContextBudgetSummary | undefined): boolean {
+  return (summary?.activePrunedToolResults ?? 0) > 0;
 }
 
 function summarizeInvestigationRefs(
@@ -196,7 +230,7 @@ function summarizeInvestigationRefs(
   const budgetDiscordantPairs: AbPairInvestigationRef[] = [];
   const infraOrPlumbingDiscordantPairs: AbPairInvestigationRef[] = [];
   const activatedAttempts = [...baselineByPair.values(), ...candidateByPair.values()]
-    .filter((attempt) => ('contextBudgetSummary' in attempt.event && isContextBudgetActivated(attempt.event.contextBudgetSummary)))
+    .filter((attempt) => ('contextBudgetSummary' in attempt.event && isActivePruneActivated(attempt.event.contextBudgetSummary)))
     .map(attemptRef);
 
   for (let rep = 0; rep < baselineRuns.length; rep += 1) {
