@@ -176,9 +176,11 @@ describe('prompt candidate loop', () => {
 
       const unsafePromptAttribution = {
         candidateCommitSha: 'commit-secret',
-        predictedFixes: [{ taskId: 'task-a', outcome: 'improved' }],
-        riskTasks: [],
-        unexpectedHeldInFlips: [],
+        predictedFixes: [{ taskId: 'task-a', outcome: 'improved', candidateCommitSha: 'nested-commit-secret' }],
+        riskTasks: [{ taskId: 'task-a', outcome: 'safe', threshold: 'nested-threshold-secret' }],
+        unexpectedHeldInFlips: [
+          { taskId: 'task-a', from: 'fail', to: 'pass', heldOutMetric: 'nested-held-out-secret' },
+        ],
         decision: { decision: 'discard', reason: 'held_out_regressed' },
         decisionReason: 'coverage_regressed',
         rootCauseSignalMatch: 'matched',
@@ -208,8 +210,8 @@ describe('prompt candidate loop', () => {
       assert.ok(seenInput);
       assert.deepEqual(seenInput.promptAttribution, {
         predictedFixes: [{ taskId: 'task-a', outcome: 'improved' }],
-        riskTasks: [],
-        unexpectedHeldInFlips: [],
+        riskTasks: [{ taskId: 'task-a', outcome: 'safe' }],
+        unexpectedHeldInFlips: [{ taskId: 'task-a', from: 'fail', to: 'pass' }],
         rootCauseSignalMatch: 'matched',
       });
 
@@ -219,6 +221,11 @@ describe('prompt candidate loop', () => {
       assert.equal(rendered.includes('held_out_regressed'), false);
       assert.equal(rendered.includes('coverage_regressed'), false);
       assert.equal(rendered.includes('decisionReason'), false);
+      assert.equal(rendered.includes('nested-commit-secret'), false);
+      assert.equal(rendered.includes('nested-threshold-secret'), false);
+      assert.equal(rendered.includes('nested-held-out-secret'), false);
+      assert.equal(rendered.includes('heldOutMetric'), false);
+      assert.equal(rendered.includes('threshold'), false);
       assert.equal(rendered.includes('"decision"'), false);
       assert.match(rendered, /"predictedFixes"/);
       assert.match(rendered, /"rootCauseSignalMatch"/);

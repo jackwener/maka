@@ -38,12 +38,7 @@ export interface RsiPromptAttribution {
   rootCauseSignalMatch: RsiRootCauseSignalMatch;
 }
 
-export interface ProjectRsiPromptAttributionInput {
-  predictedFixes: ReadonlyArray<{ taskId: string; outcome: RsiPredictedFixOutcome }>;
-  riskTasks: ReadonlyArray<{ taskId: string; outcome: RsiRiskTaskOutcome }>;
-  unexpectedHeldInFlips: ReadonlyArray<{ taskId: string; from: string; to: string }>;
-  rootCauseSignalMatch: RsiRootCauseSignalMatch;
-}
+export type ProjectRsiPromptAttributionInput = RsiPromptAttribution;
 
 export interface BuildRsiControllerAttributionInput {
   runId: string;
@@ -97,9 +92,9 @@ export function buildRsiControllerAttribution(
 
 export function projectRsiPromptAttribution(attribution: ProjectRsiPromptAttributionInput): RsiPromptAttribution {
   return {
-    predictedFixes: attribution.predictedFixes,
-    riskTasks: attribution.riskTasks,
-    unexpectedHeldInFlips: attribution.unexpectedHeldInFlips,
+    predictedFixes: attribution.predictedFixes.map(({ taskId, outcome }) => ({ taskId, outcome })),
+    riskTasks: attribution.riskTasks.map(({ taskId, outcome }) => ({ taskId, outcome })),
+    unexpectedHeldInFlips: attribution.unexpectedHeldInFlips.map(({ taskId, from, to }) => ({ taskId, from, to })),
     rootCauseSignalMatch: attribution.rootCauseSignalMatch,
   };
 }

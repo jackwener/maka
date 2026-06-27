@@ -599,6 +599,33 @@ describe('prompt structural smoke report', () => {
     assert.deepEqual(report.failures, []);
   });
 
+  test('passes R2 smoke when nested controller-only fields stay out of prompt projection', () => {
+    const events = [
+      committedEvent('round-1', 'run-1', promptHashForRound('round-1'), ['task-1'], candidateRationale({
+        predictedFixes: ['task-1'],
+        riskTasks: ['task-1'],
+      })),
+      completedEvent('round-1', 'task-1', 0.1),
+      decisionEvent('round-1', 'discard', 'held_in_within_noise', 'run-1', { decision: 'clean' }),
+      attributionEvent('round-1', ({
+        predictedFixes: [{ taskId: 'task-1', outcome: 'improved', candidateCommitSha: 'nested-commit-secret' }],
+        riskTasks: [{ taskId: 'task-1', outcome: 'safe', threshold: 'nested-threshold-secret' }],
+        unexpectedHeldInFlips: [
+          { taskId: 'task-1', from: 'fail', to: 'pass', heldOutMetric: 'nested-held-out-secret' },
+        ],
+      } as unknown) as Partial<Extract<FixedPromptWalEvent, { type: 'rsi_controller_attribution' }>>),
+    ];
+
+    const report = promptStructuralSmokeReport({
+      events,
+      minimumRounds: 1,
+      requireRsiR2Evidence: true,
+    });
+
+    assert.equal(report.status, 'pass');
+    assert.deepEqual(report.failures, []);
+  });
+
   test('fails R2 smoke when prompt attribution projection contains held-out markers', () => {
     const events = [
       committedEvent('round-1', 'run-1', promptHashForRound('round-1'), ['held-out-secret']),
