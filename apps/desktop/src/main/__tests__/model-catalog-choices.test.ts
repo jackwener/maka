@@ -131,7 +131,7 @@ describe('model catalog picker helpers', () => {
     ], 'openai-api::custom-model');
 
     assert.deepEqual(options, [
-      ['openai-api::gpt-4o-mini', 'gpt-4o-mini'],
+      ['openai-api::gpt-4o-mini', 'GPT-4o mini'],
       ['openai-api::custom-model', 'custom-model'],
     ]);
   });

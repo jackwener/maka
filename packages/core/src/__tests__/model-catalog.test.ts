@@ -5,7 +5,7 @@ import {
   buildModelCatalogEntries,
   validateChatDefaultModel,
 } from '../model-catalog.js';
-import type { LlmConnection, ModelInfo } from '../llm-connections.js';
+import type { LlmConnection, ModelInfo, ProviderType } from '../llm-connections.js';
 
 describe('ModelCatalogEntry', () => {
   it('normalizes Z.ai fetched models as provider_api facts without guessing unknown capabilities', () => {
@@ -231,16 +231,37 @@ describe('ModelCatalogEntry', () => {
   });
 
   it('enriches provider model ids with models.dev display names', () => {
-    const [fetchedEntry] = buildModelCatalogEntries({
-      providerType: 'deepseek',
-      defaultModel: 'deepseek-v4-flash',
-      models: [{ id: 'deepseek-v4-flash' }],
-      modelSource: 'fetched',
-      modelsFetchedAt: 1_800_000_000_000,
-    });
-
-    assert.equal(fetchedEntry?.id, 'deepseek-v4-flash');
-    assert.equal(fetchedEntry?.displayName, 'DeepSeek V4 Flash');
+    assert.deepEqual(
+      ([
+        ['anthropic', 'claude-sonnet-4-5-20250929'],
+        ['claude-subscription', 'claude-opus-4-1-20250805'],
+        ['openai', 'gpt-4o-mini'],
+        ['google', 'gemini-2.5-flash'],
+        ['gemini-cli', 'gemini-2.5-pro'],
+        ['deepseek', 'deepseek-v4-flash'],
+        ['zai-coding-plan', 'glm-4.7'],
+        ['codex-subscription', 'gpt-5.5'],
+      ] as Array<[ProviderType, string]>).map(([providerType, model]) => {
+        const [entry] = buildModelCatalogEntries({
+          providerType,
+          defaultModel: model,
+          models: [{ id: model }],
+          modelSource: 'fetched',
+          modelsFetchedAt: 1_800_000_000_000,
+        });
+        return [entry?.id, entry?.displayName];
+      }),
+      [
+        ['claude-sonnet-4-5-20250929', 'Claude Sonnet 4.5'],
+        ['claude-opus-4-1-20250805', 'Claude Opus 4.1'],
+        ['gpt-4o-mini', 'GPT-4o mini'],
+        ['gemini-2.5-flash', 'Gemini 2.5 Flash'],
+        ['gemini-2.5-pro', 'Gemini 2.5 Pro'],
+        ['deepseek-v4-flash', 'DeepSeek V4 Flash'],
+        ['glm-4.7', 'GLM-4.7'],
+        ['gpt-5.5', 'GPT 5.5'],
+      ],
+    );
 
     const [fallbackEntry] = buildModelCatalogEntries({
       providerType: 'deepseek',
@@ -251,5 +272,51 @@ describe('ModelCatalogEntry', () => {
 
     assert.equal(fallbackEntry?.id, 'deepseek-reasoner');
     assert.equal(fallbackEntry?.displayName, 'DeepSeek Reasoner');
+  });
+
+  it('does not invent provider metadata when models.dev has no matching model id', () => {
+    assert.deepEqual(
+      ([
+        ['google', 'gemini-1.5-pro'],
+        ['moonshot', 'moonshot-v1-8k'],
+        ['kimi-coding-plan', 'kimi-for-coding'],
+      ] as const).map(([providerType, model]) => {
+        const [entry] = buildModelCatalogEntries({
+          providerType,
+          defaultModel: model,
+          models: [{ id: model }],
+          modelSource: 'fetched',
+          modelsFetchedAt: 1_800_000_000_000,
+        });
+        return [entry?.id, entry?.displayName];
+      }),
+      [
+        ['gemini-1.5-pro', undefined],
+        ['moonshot-v1-8k', undefined],
+        ['kimi-for-coding', undefined],
+      ],
+    );
+  });
+
+  it('does not apply provider metadata to custom or local model ids', () => {
+    assert.deepEqual(
+      ([
+        ['openai-compatible', 'gpt-4o-mini'],
+        ['ollama', 'gemini-2.5-pro'],
+      ] as const).map(([providerType, model]) => {
+        const [entry] = buildModelCatalogEntries({
+          providerType,
+          defaultModel: model,
+          models: [{ id: model }],
+          modelSource: 'fetched',
+          modelsFetchedAt: 1_800_000_000_000,
+        });
+        return [entry?.id, entry?.displayName];
+      }),
+      [
+        ['gpt-4o-mini', undefined],
+        ['gemini-2.5-pro', undefined],
+      ],
+    );
   });
 });
