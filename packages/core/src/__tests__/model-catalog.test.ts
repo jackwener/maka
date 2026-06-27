@@ -1,10 +1,11 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import {
+  buildConnectionModelCatalogEntries,
   buildModelCatalogEntries,
   validateChatDefaultModel,
 } from '../model-catalog.js';
-import type { ModelInfo } from '../llm-connections.js';
+import type { LlmConnection, ModelInfo } from '../llm-connections.js';
 
 describe('ModelCatalogEntry', () => {
   it('normalizes Z.ai fetched models as provider_api facts without guessing unknown capabilities', () => {
@@ -147,5 +148,61 @@ describe('ModelCatalogEntry', () => {
     assert.equal(entry?.unavailableReason, 'none');
     assert.equal(entry?.canUseAsChatDefault, true);
     assert.deepEqual(entry?.capabilities, {});
+  });
+
+  it('builds a connection-scoped catalog from fetched connection models', () => {
+    const connection: LlmConnection = {
+      slug: 'zai-live',
+      name: 'Z.AI account',
+      providerType: 'zai-coding-plan',
+      defaultModel: 'glm-saved',
+      enabled: true,
+      models: [{ id: 'glm-4.7' }],
+      modelSource: 'fetched',
+      modelsFetchedAt: 1_800_000_000_000,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    const entries = buildConnectionModelCatalogEntries({
+      connection,
+      savedModelIds: ['glm-session', 'glm-daily-review', 'glm-4.7', ' '],
+      now: 1_800_000_001_000,
+    });
+
+    assert.deepEqual(entries.map((entry) => entry.id), [
+      'glm-saved',
+      'glm-4.7',
+      'glm-session',
+      'glm-daily-review',
+    ]);
+    assert.equal(entries[0]?.connectionSlug, 'zai-live');
+    assert.equal(entries[0]?.unavailableReason, 'not_in_live_list');
+    assert.equal(entries[0]?.isDefault, true);
+    assert.equal(entries[1]?.source, 'provider_api');
+    assert.equal(entries[2]?.source, 'unknown');
+    assert.equal(entries[2]?.provenance.userChoice, true);
+  });
+
+  it('falls back to provider defaults for a connection without fetched models', () => {
+    const connection: LlmConnection = {
+      slug: 'openai-api',
+      name: 'OpenAI',
+      providerType: 'openai',
+      defaultModel: '',
+      enabled: true,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    const entries = buildConnectionModelCatalogEntries({ connection });
+
+    assert.deepEqual(
+      entries.slice(0, 2).map((entry) => [entry.id, entry.source, entry.provenance.modelSource]),
+      [
+        ['gpt-4o-mini', 'static_catalog', 'fallback'],
+        ['gpt-4o', 'static_catalog', 'fallback'],
+      ],
+    );
   });
 });

@@ -643,6 +643,7 @@ export {
 // model-catalog.ts
 export type {
   BuildModelCatalogInput,
+  BuildConnectionModelCatalogInput,
   KnownModelCapabilities,
   ModelCapabilitySource,
   ModelCatalogAvailability,
@@ -651,6 +652,7 @@ export type {
   ModelUnavailableReason,
 } from './model-catalog.js';
 export {
+  buildConnectionModelCatalogEntries,
   buildModelCatalogEntries,
   isModelExplicitlyUnsupportedForChat,
   validateChatDefaultModel,

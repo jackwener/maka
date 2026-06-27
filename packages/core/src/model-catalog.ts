@@ -1,8 +1,10 @@
 import type {
+  LlmConnection,
   ModelDiscoverySource,
   ModelInfo,
   ProviderType,
 } from './llm-connections.js';
+import { PROVIDER_DEFAULTS } from './llm-connections.js';
 import type { PricingConfig } from './usage-stats/types.js';
 
 export type ModelCapabilitySource =
@@ -55,7 +57,23 @@ export interface ModelCatalogEntry {
     modelSource?: ModelDiscoverySource;
     modelsFetchedAt?: number;
     pricingModelKey?: string;
+    userChoice?: true;
   };
+}
+
+export interface BuildConnectionModelCatalogInput {
+  connection: Pick<
+    LlmConnection,
+    'slug' | 'providerType' | 'defaultModel' | 'models' | 'modelSource' | 'modelsFetchedAt'
+  >;
+  savedModelIds?: Iterable<string | undefined | null>;
+  fallbackModels?: string[];
+  now?: number;
+  staleAfterMs?: number;
+  providerAvailable?: boolean;
+  authOk?: boolean;
+  pricing?: Iterable<PricingConfig>;
+  pricingSource?: 'builtin' | 'user_override';
 }
 
 export interface BuildModelCatalogInput {
@@ -72,6 +90,7 @@ export interface BuildModelCatalogInput {
   authOk?: boolean;
   pricing?: Iterable<PricingConfig>;
   pricingSource?: 'builtin' | 'user_override';
+  savedModelIds?: Iterable<string | undefined | null>;
 }
 
 const DEFAULT_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
@@ -96,9 +115,37 @@ export function buildModelCatalogEntries(input: BuildModelCatalogInput): ModelCa
   const defaultModel = input.defaultModel?.trim();
   if (defaultModel && !seen.has(defaultModel)) {
     entries.unshift(makeMissingDefaultEntry(input, defaultModel, source, modelSource));
+    seen.add(defaultModel);
+  }
+
+  for (const id of normalizedSavedModelIds(input.savedModelIds)) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    entries.push(makeMissingUserChoiceEntry(input, id, source, modelSource));
   }
 
   return entries;
+}
+
+export function buildConnectionModelCatalogEntries(input: BuildConnectionModelCatalogInput): ModelCatalogEntry[] {
+  const { connection } = input;
+  const defaults = PROVIDER_DEFAULTS[connection.providerType];
+  return buildModelCatalogEntries({
+    providerType: connection.providerType,
+    connectionSlug: connection.slug,
+    defaultModel: connection.defaultModel,
+    models: connection.models,
+    modelSource: connection.modelSource,
+    modelsFetchedAt: connection.modelsFetchedAt,
+    fallbackModels: input.fallbackModels ?? defaults.fallbackModels,
+    now: input.now,
+    staleAfterMs: input.staleAfterMs,
+    providerAvailable: input.providerAvailable,
+    authOk: input.authOk,
+    pricing: input.pricing,
+    pricingSource: input.pricingSource,
+    savedModelIds: input.savedModelIds,
+  });
 }
 
 export function validateChatDefaultModel(input: BuildModelCatalogInput): {
@@ -185,6 +232,38 @@ function makeMissingDefaultEntry(
   };
 }
 
+function makeMissingUserChoiceEntry(
+  input: BuildModelCatalogInput,
+  id: string,
+  source: ModelCatalogEntry['source'],
+  modelSource: ModelDiscoverySource,
+): ModelCatalogEntry {
+  const unavailableReason = input.providerAvailable === false
+    ? 'provider_removed'
+    : input.authOk === false
+      ? 'auth'
+      : source === 'provider_api'
+        ? 'not_in_live_list'
+        : 'none';
+  return {
+    id,
+    providerType: input.providerType,
+    ...(input.connectionSlug ? { connectionSlug: input.connectionSlug } : {}),
+    source: 'unknown',
+    capabilitySource: 'unknown',
+    unavailableReason,
+    availability: availabilityOf(unavailableReason),
+    canUseAsChatDefault: canUseUnavailableReasonAsDefault(unavailableReason),
+    isDefault: id === input.defaultModel,
+    capabilities: {},
+    provenance: {
+      modelSource,
+      ...(input.modelsFetchedAt ? { modelsFetchedAt: input.modelsFetchedAt } : {}),
+      userChoice: true,
+    },
+  };
+}
+
 function deriveUnavailableReason(input: BuildModelCatalogInput, model: ModelInfo): ModelUnavailableReason {
   if (input.providerAvailable === false) return 'provider_removed';
   if (input.authOk === false) return 'auth';
@@ -230,6 +309,19 @@ function availabilityOf(reason: ModelUnavailableReason): ModelCatalogAvailabilit
 
 function canUseUnavailableReasonAsDefault(reason: ModelUnavailableReason): boolean {
   return reason === 'none' || reason === 'stale';
+}
+
+function normalizedSavedModelIds(ids: Iterable<string | undefined | null> | undefined): string[] {
+  if (!ids) return [];
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const id of ids) {
+    const trimmed = id?.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+  return result;
 }
 
 function findPricing(input: BuildModelCatalogInput, id: string): ModelCatalogPricing | null {
