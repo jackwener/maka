@@ -507,6 +507,79 @@ describe('active full compact PR1 foundation', () => {
     assert.equal(rewritten.block?.archiveRefs?.[0]?.artifactId, 'artifact-call-archived');
     assert.match(String((rewritten.messages[0] as { content?: unknown }).content), /artifact-call-archived/);
   });
+
+  test('QEMU-style long process compact preserves state and archive refs without raw output', () => {
+    const messages = qemuStyleMessages();
+    const runtimeEvents = qemuStyleRuntimeEvents();
+
+    const index = buildActiveFullCompactSourceIndex({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      messages,
+      runtimeEvents,
+      stepNumber: 4,
+      charsPerToken: 4,
+    });
+    const selection = selectActiveFullCompactCoveredSpan(index, {
+      enabled: true,
+      minStepNumber: 1,
+      minRecentMessages: 1,
+      maxActiveEstimatedTokens: 1,
+      highWaterRatio: 0.1,
+      maxSummaryEstimatedTokens: 1200,
+    });
+    assert.equal(selection.decision, 'selected');
+    if (selection.decision !== 'selected') assert.fail('expected selected');
+    assert.equal(selection.endMessageIndex, messages.length - 2);
+
+    const rewritten = rewriteActiveFullCompactInMessages({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+      invocationId: 'inv-1',
+      messages,
+      runtimeEvents,
+      policy: {
+        enabled: true,
+        minStepNumber: 1,
+        minRecentMessages: 1,
+        maxActiveEstimatedTokens: 1,
+        highWaterRatio: 0.1,
+        maxSummaryEstimatedTokens: 1200,
+      },
+      stepNumber: 4,
+      now: 100,
+      charsPerToken: 4,
+    });
+
+    assert.equal(rewritten.decision, 'replaced');
+    assert.equal(rewritten.validation?.valid, true);
+    assert.ok(rewritten.block);
+    const replacementJson = JSON.stringify(rewritten.messages);
+    assert.match(replacementJson, /maka_active_full_compact_block/);
+    assert.doesNotMatch(replacementJson, /QEMU_RAW_BOOT_SPAM_DO_NOT_LEAK/);
+    assert.doesNotMatch(replacementJson, /QEMU_RAW_VERIFY_SPAM_DO_NOT_LEAK/);
+    assert.match(replacementJson, /pid=4242/);
+    assert.match(replacementJson, /127\.0\.0\.1:2222/);
+    assert.match(replacementJson, /guest reached login prompt/);
+    assert.match(replacementJson, /\/tmp\/qemu-run\.sh/);
+    assert.match(replacementJson, /\/workspace\/solution\.sh/);
+    assert.match(replacementJson, /VERIFIER FAILURE: expected ssh service reachable/);
+    assert.match(replacementJson, /Failed hypothesis: networking is broken because hostfwd was missing/);
+    assert.match(replacementJson, /Current hypothesis: sshd is not started inside the guest/);
+    assert.match(replacementJson, /Next action: retry SSH after boot and rerun verifier/);
+    assert.match(replacementJson, /artifact-qemu-boot/);
+    assert.match(replacementJson, /artifact-qemu-verify/);
+    assert.match(replacementJson, /providerSourceIds=/);
+    assert.equal(rewritten.messages[1], messages[messages.length - 1]);
+    assert.deepEqual(
+      rewritten.block.archiveRefs?.map((ref) => ref.artifactId).sort(),
+      ['artifact-qemu-boot', 'artifact-qemu-verify'],
+    );
+    assert.ok(rewritten.block.summary.commandsTried?.some((command) =>
+      command.command.includes('qemu-system-x86_64') && command.sourceIds?.length
+    ));
+  });
 });
 
 function textMessages(values: string[]): ModelMessage[] {
@@ -581,19 +654,157 @@ function runtimeEvent(
   };
 }
 
-function activePlaceholder(): ActiveArchivedToolResultPlaceholder {
+function activePlaceholder(input: Partial<ActiveArchivedToolResultPlaceholder> = {}): ActiveArchivedToolResultPlaceholder {
   return {
     kind: ACTIVE_ARCHIVED_TOOL_RESULT_PLACEHOLDER_KIND,
     rewriteVersion: ARCHIVED_TOOL_RESULT_REWRITE_VERSION,
-    artifactId: 'artifact-call-archived',
+    artifactId: input.artifactId ?? 'artifact-call-archived',
     turnId: 'turn-1',
-    toolCallId: 'call-archived',
-    toolName: 'Bash',
-    bodySha256: 'a'.repeat(64),
-    originalEstimatedTokens: 123,
-    originalBytes: 456,
+    toolCallId: input.toolCallId ?? 'call-archived',
+    toolName: input.toolName ?? 'Bash',
+    bodySha256: input.bodySha256 ?? 'a'.repeat(64),
+    originalEstimatedTokens: input.originalEstimatedTokens ?? 123,
+    originalBytes: input.originalBytes ?? 456,
     reason: 'active_current_turn_tool_result_pruned_before_next_step',
   };
+}
+
+function qemuStyleMessages(): ModelMessage[] {
+  return [
+    {
+      role: 'user',
+      content: 'Task constraints: boot a tiny VM-like process, expose SSH-like port 2222, modify only visible files, and run the public verifier without hidden benchmark shortcuts.',
+    },
+    {
+      role: 'assistant',
+      content: [{
+        type: 'tool-call',
+        toolCallId: 'call-qemu-boot',
+        toolName: 'Bash',
+        input: { command: 'qemu-system-x86_64 -net user,hostfwd=tcp::2222-:22 -daemonize -pidfile /tmp/qemu.pid', cwd: '/workspace' },
+      }],
+    } as unknown as ModelMessage,
+    {
+      role: 'tool',
+      content: [{
+        type: 'tool-result',
+        toolCallId: 'call-qemu-boot',
+        toolName: 'Bash',
+        result: activePlaceholder({
+          artifactId: 'artifact-qemu-boot',
+          toolCallId: 'call-qemu-boot',
+          bodySha256: 'b'.repeat(64),
+          originalEstimatedTokens: 6000,
+          originalBytes: 24000,
+        }),
+      }],
+    } as unknown as ModelMessage,
+    {
+      role: 'assistant',
+      content: 'Failed hypothesis: networking is broken because hostfwd was missing. Current hypothesis: sshd is not started inside the guest.',
+    },
+    {
+      role: 'assistant',
+      content: [{
+        type: 'tool-call',
+        toolCallId: 'call-write-artifacts',
+        toolName: 'Write',
+        input: { path: '/workspace/solution.sh', content: 'service ssh start\n' },
+      }],
+    } as unknown as ModelMessage,
+    {
+      role: 'tool',
+      content: [{
+        type: 'tool-result',
+        toolCallId: 'call-write-artifacts',
+        toolName: 'Write',
+        output: { type: 'text', value: 'wrote /workspace/solution.sh and updated /etc/network/interfaces' },
+      }],
+    } as unknown as ModelMessage,
+    {
+      role: 'assistant',
+      content: [{
+        type: 'tool-call',
+        toolCallId: 'call-qemu-verify',
+        toolName: 'Bash',
+        input: { command: '/workspace/solution.sh && ./public-verifier.sh', cwd: '/workspace' },
+      }],
+    } as unknown as ModelMessage,
+    {
+      role: 'tool',
+      content: [{
+        type: 'tool-result',
+        toolCallId: 'call-qemu-verify',
+        toolName: 'Bash',
+        result: activePlaceholder({
+          artifactId: 'artifact-qemu-verify',
+          toolCallId: 'call-qemu-verify',
+          bodySha256: 'c'.repeat(64),
+          originalEstimatedTokens: 7000,
+          originalBytes: 28000,
+        }),
+      }],
+    } as unknown as ModelMessage,
+    {
+      role: 'assistant',
+      content: 'Next action: retry SSH after boot and rerun verifier from the preserved tail.',
+    },
+  ];
+}
+
+function qemuStyleRuntimeEvents(): RuntimeEvent[] {
+  return [
+    runtimeEvent('event-qemu-user', 'user', 'user', {
+      kind: 'text',
+      text: 'Task constraints: boot a tiny VM-like process, expose SSH-like port 2222, modify only visible files, and run the public verifier without hidden benchmark shortcuts.',
+    }),
+    runtimeEvent('event-qemu-boot-call', 'model', 'agent', {
+      kind: 'function_call',
+      id: 'call-qemu-boot',
+      name: 'Bash',
+      args: { command: 'qemu-system-x86_64 -net user,hostfwd=tcp::2222-:22 -daemonize -pidfile /tmp/qemu.pid', cwd: '/workspace' },
+    }),
+    runtimeEvent('event-qemu-boot-result', 'tool', 'tool', {
+      kind: 'function_response',
+      id: 'call-qemu-boot',
+      name: 'Bash',
+      result: [
+        'qemu raw boot noise QEMU_RAW_BOOT_SPAM_DO_NOT_LEAK\n'.repeat(200),
+        'process pid=4242 background=true command=qemu-system-x86_64 cwd=/workspace',
+        'listening on 127.0.0.1:2222 for ssh forwarding',
+        'guest reached login prompt; ssh refused until service starts',
+        'artifact script /tmp/qemu-run.sh created',
+      ].join('\n'),
+    }),
+    runtimeEvent('event-qemu-write-call', 'model', 'agent', {
+      kind: 'function_call',
+      id: 'call-write-artifacts',
+      name: 'Write',
+      args: { path: '/workspace/solution.sh', content: 'service ssh start\n' },
+    }),
+    runtimeEvent('event-qemu-write-result', 'tool', 'tool', {
+      kind: 'function_response',
+      id: 'call-write-artifacts',
+      name: 'Write',
+      result: 'wrote /workspace/solution.sh and updated /etc/network/interfaces',
+    }),
+    runtimeEvent('event-qemu-verify-call', 'model', 'agent', {
+      kind: 'function_call',
+      id: 'call-qemu-verify',
+      name: 'Bash',
+      args: { command: '/workspace/solution.sh && ./public-verifier.sh', cwd: '/workspace' },
+    }),
+    runtimeEvent('event-qemu-verify-result', 'tool', 'tool', {
+      kind: 'function_response',
+      id: 'call-qemu-verify',
+      name: 'Bash',
+      result: [
+        'qemu verifier noise QEMU_RAW_VERIFY_SPAM_DO_NOT_LEAK\n'.repeat(200),
+        'public verifier exit code=1',
+        'VERIFIER FAILURE: expected ssh service reachable on 127.0.0.1:2222',
+      ].join('\n'),
+    }),
+  ];
 }
 
 function fixtureSummary(sourceIds: string[]): ActiveFullCompactSummary {

@@ -229,6 +229,7 @@ export {
   activeFullCompactDecisionDiagnosticPatch,
   activeFullCompactBlockToModelMessage,
   buildDeterministicActiveFullCompactSummary,
+  buildDeterministicProcessStateActiveFullCompactSummary,
   buildActiveFullCompactBlockFromSummary,
   buildActiveFullCompactSourceIndex,
   estimateActiveFullCompactTokens,
