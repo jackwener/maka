@@ -1354,7 +1354,8 @@ interface DailyReviewBridge {
    * panel still works as the MVP telemetry view.
    */
   runOnce?(opts: { mode: DailyReviewMode; modelKey?: string }): Promise<{ archiveId: string }>;
-  modelOptions?: ReadonlyArray<SettingsSelectOption<string>>;
+  modelChoices?: ReadonlyArray<ChatModelChoice>;
+  defaultModelValue?: string;
   listArchives?(): Promise<DailyReviewArchiveSummary[]>;
   getArchive?(archiveId: string): Promise<DailyReviewArchive>;
   deleteArchive?(archiveId: string): Promise<void>;
@@ -1422,8 +1423,10 @@ function DailyReviewPanel(props: {
   const [archiveLoading, setArchiveLoading] = useState(false);
   const [archiveError, setArchiveError] = useState<string | null>(null);
   const [archiveReloadToken, setArchiveReloadToken] = useState(0);
-  const modelOptions = props.bridge.modelOptions ?? [];
-  const [selectedModelKey, setSelectedModelKey] = useState<string>(modelOptions[0]?.[0] ?? '');
+  const modelChoices = props.bridge.modelChoices ?? [];
+  const defaultModelValue = props.bridge.defaultModelValue ?? '';
+  const [selectedModelValue, setSelectedModelValue] = useState<string>(defaultModelValue);
+  const [selectedModelKey, setSelectedModelKey] = useState<string>(defaultModelValue);
   const dailyReviewMountedRef = useRef(true);
   const summaryScopeKeyRef = useRef<string | null>(null);
   const pendingDailyReviewActionRef = useRef<string | null>(null);
@@ -1540,14 +1543,26 @@ function DailyReviewPanel(props: {
   }, [archiveReloadToken, selectedArchiveId, props.bridge]);
 
   useEffect(() => {
-    if (modelOptions.length === 0) {
+    if (!defaultModelValue && modelChoices.length === 0) {
+      setSelectedModelValue('');
       setSelectedModelKey('');
       return;
     }
-    setSelectedModelKey((current) =>
-      modelOptions.some(([value]) => value === current) ? current : modelOptions[0]![0],
-    );
-  }, [modelOptions]);
+    setSelectedModelValue((current) => {
+      if (current === defaultModelValue) return current;
+      if (modelChoices.some((choice) => modelChoiceValue(choice.connectionSlug, choice.model) === current)) {
+        return current;
+      }
+      return defaultModelValue;
+    });
+    setSelectedModelKey((current) => {
+      if (current === defaultModelValue) return current;
+      if (modelChoices.some((choice) => dailyReviewModelChoiceKey(choice.connectionSlug, choice.model) === current)) {
+        return current;
+      }
+      return defaultModelValue;
+    });
+  }, [defaultModelValue, modelChoices]);
 
   const dayLabel = (() => {
     if (range === 1) {
@@ -1591,6 +1606,12 @@ function DailyReviewPanel(props: {
   const dailyReviewActionBusy = pendingDailyReviewAction !== null;
   const hasDailyReviewActions = Boolean(props.onCopyMarkdown || props.onAppendMarkdown || props.onSaveMarkdown);
   const canManualRun = Boolean(props.bridge.runOnce);
+  const selectedModelChoice = modelChoices.find((choice) =>
+    modelChoiceValue(choice.connectionSlug, choice.model) === selectedModelValue,
+  );
+  const selectedModelLabel = selectedModelValue === defaultModelValue
+    ? '跟随每日回顾设置'
+    : selectedModelChoice?.model ?? '选择模型';
 
   async function triggerManualRun(mode: DailyReviewMode) {
     const runOnce = props.bridge.runOnce;
@@ -1648,14 +1669,22 @@ function DailyReviewPanel(props: {
       </section>
       {canManualRun && (
         <div className="maka-daily-review-quick-runs" aria-label="手动触发回顾">
-          {modelOptions.length > 0 && (
-            <SettingsSelect
-              value={selectedModelKey}
+          {(defaultModelValue || modelChoices.length > 0) && (
+            <NewChatModelPicker
+              label={selectedModelLabel}
+              choices={[...modelChoices]}
+              currentValue={selectedModelValue}
+              leadingOption={defaultModelValue ? { value: defaultModelValue, label: '跟随每日回顾设置' } : undefined}
               ariaLabel="每日回顾分析模型"
-              options={modelOptions}
-              onChange={setSelectedModelKey}
+              title={`每日回顾分析模型：${selectedModelLabel}`}
+              onValue={(value) => {
+                setSelectedModelValue(value);
+                if (value === defaultModelValue) setSelectedModelKey(defaultModelValue);
+              }}
+              onPick={(choice) => {
+                setSelectedModelKey(dailyReviewModelChoiceKey(choice.llmConnectionSlug, choice.model));
+              }}
               disabled={dailyReviewActionBusy}
-              width="select"
               className="maka-daily-review-model-select"
             />
           )}
@@ -1939,6 +1968,10 @@ function DailyReviewPanel(props: {
       )}
     </div>
   );
+}
+
+function dailyReviewModelChoiceKey(connectionSlug: string, model: string): string {
+  return `${connectionSlug}::${model}`;
 }
 
 function DailyReviewArchiveBody(props: { archive: DailyReviewArchive | null; loading: boolean }) {

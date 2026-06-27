@@ -63,10 +63,13 @@ describe('model catalog picker contract', () => {
       'utf8',
     );
 
-    assert.match(ui, /modelOptions\?:\s*ReadonlyArray<SettingsSelectOption<string>>/);
-    assert.match(ui, /<SettingsSelect[\s\S]*ariaLabel="每日回顾分析模型"[\s\S]*onChange=\{setSelectedModelKey\}/);
+    const panelBlock = ui.match(/function DailyReviewPanel[\s\S]*?function DailyReviewTotalsCell/)?.[0] ?? '';
+
+    assert.match(ui, /modelChoices\?:\s*ReadonlyArray<ChatModelChoice>/);
+    assert.match(panelBlock, /<NewChatModelPicker[\s\S]*ariaLabel="每日回顾分析模型"/);
+    assert.doesNotMatch(panelBlock, /<SettingsSelect/, 'Daily Review main surface must use the composer model picker, not Settings form chrome');
     assert.match(ui, /runOnce\(\{\s*mode,\s*modelKey:\s*selectedModelKey/);
-    assert.match(main, /buildCatalogDailyReviewModelOptions\(connections,/);
+    assert.match(main, /buildCatalogDailyReviewModelChoices\(connections\)/);
     assert.match(main, /runOnce\(input:\s*\{\s*mode:\s*DailyReviewMode;\s*modelKey\?:\s*string\s*\}\)/);
     assert.match(preload, /runOnce\(input:\s*\{\s*mode:\s*DailyReviewMode;\s*day\?:\s*number;\s*modelKey\?:\s*string\s*\}/);
     assert.match(mainProcess, /modelKeyOverride\?:\s*string/);
