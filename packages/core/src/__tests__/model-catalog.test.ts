@@ -3,64 +3,11 @@ import { describe, it } from 'node:test';
 import {
   buildConnectionModelCatalogEntries,
   buildModelCatalogEntries,
-  evaluateChatModelAvailability,
   validateChatDefaultModel,
 } from '../model-catalog.js';
 import type { LlmConnection, ModelInfo, ProviderType } from '../llm-connections.js';
 
 describe('ModelCatalogEntry', () => {
-  it('evaluates chat model availability with live inventory and stale cache semantics', () => {
-    assert.deepEqual(
-      evaluateChatModelAvailability({
-        model: 'glm-removed',
-        models: [{ id: 'glm-4.7' }],
-        modelSource: 'fetched',
-        modelsFetchedAt: 1_800_000_000_000,
-        now: 1_800_000_001_000,
-      }),
-      { ok: false, reason: 'not_in_live_list' },
-    );
-
-    assert.deepEqual(
-      evaluateChatModelAvailability({
-        model: 'claude-sonnet-4-5-20250929',
-        models: [{ id: 'claude-sonnet-4-5-20250929', capabilities: { reasoning: true } }],
-        modelSource: 'fetched',
-        modelsFetchedAt: 1_700_000_000_000,
-        now: 1_800_000_000_000,
-        staleAfterMs: 7 * 24 * 60 * 60 * 1000,
-      }),
-      {
-        ok: true,
-        model: 'claude-sonnet-4-5-20250929',
-        warning: 'stale',
-        entry: { id: 'claude-sonnet-4-5-20250929', capabilities: { reasoning: true } },
-      },
-    );
-  });
-
-  it('keeps auth and provider state ahead of live-list membership failures', () => {
-    assert.deepEqual(
-      evaluateChatModelAvailability({
-        model: 'glm-removed',
-        models: [{ id: 'glm-4.7' }],
-        modelSource: 'fetched',
-        authOk: false,
-      }),
-      { ok: false, reason: 'auth' },
-    );
-
-    assert.deepEqual(
-      evaluateChatModelAvailability({
-        model: 'glm-removed',
-        models: [{ id: 'glm-4.7' }],
-        modelSource: 'fetched',
-        providerAvailable: false,
-      }),
-      { ok: false, reason: 'provider_removed' },
-    );
-  });
-
   it('normalizes Z.ai fetched models as provider_api facts without guessing unknown capabilities', () => {
     const models: ModelInfo[] = [
       { id: 'glm-4.5' },
@@ -179,6 +126,27 @@ describe('ModelCatalogEntry', () => {
       validation.ok ? validation : { ok: validation.ok, reason: validation.reason },
       { ok: false, reason: 'not_in_live_list' },
     );
+  });
+
+  it('keeps auth and provider state ahead of live-list missing entries', () => {
+    const withAuthFailure = buildModelCatalogEntries({
+      providerType: 'zai-coding-plan',
+      defaultModel: 'glm-removed',
+      models: [{ id: 'glm-4.7' }],
+      modelSource: 'fetched',
+      authOk: false,
+    });
+
+    const withProviderFailure = buildModelCatalogEntries({
+      providerType: 'zai-coding-plan',
+      defaultModel: 'glm-removed',
+      models: [{ id: 'glm-4.7' }],
+      modelSource: 'fetched',
+      providerAvailable: false,
+    });
+
+    assert.equal(withAuthFailure[0]?.unavailableReason, 'auth');
+    assert.equal(withProviderFailure[0]?.unavailableReason, 'provider_removed');
   });
 
   it('keeps fallback missing saved choices recoverable instead of treating them as live-list removals', () => {

@@ -24,24 +24,6 @@ export type ModelUnavailableReason =
 
 export type ModelCatalogAvailability = 'available' | 'warning' | 'blocked';
 
-export type ChatModelAvailabilityReason =
-  | 'missing_model'
-  | 'empty_model_list'
-  | Exclude<ModelUnavailableReason, 'none' | 'stale'>;
-
-export type ChatModelAvailabilityResult =
-  | {
-      ok: true;
-      model: string;
-      entry?: ModelInfo;
-      warning?: Extract<ModelUnavailableReason, 'stale'>;
-    }
-  | {
-      ok: false;
-      reason: ChatModelAvailabilityReason;
-      entry?: ModelInfo;
-    };
-
 export interface KnownModelCapabilities {
   chat?: true;
   vision?: true;
@@ -216,54 +198,6 @@ export function validateChatDefaultModel(input: BuildModelCatalogInput): {
   return { ok: false, reason, entry };
 }
 
-export function evaluateChatModelAvailability(input: {
-  model?: string;
-  models?: ModelInfo[];
-  modelSource?: ModelDiscoverySource;
-  modelsFetchedAt?: number;
-  now?: number;
-  staleAfterMs?: number;
-  providerAvailable?: boolean;
-  authOk?: boolean;
-}): ChatModelAvailabilityResult {
-  const model = input.model?.trim();
-  if (!model) return { ok: false, reason: 'missing_model' };
-  const providerOrAuthReason = providerOrAuthUnavailableReason(input);
-  if (providerOrAuthReason) return { ok: false, reason: providerOrAuthReason };
-  if (input.models) {
-    const entries = new Map(
-      input.models
-        .map((entry): [string, ModelInfo] => [entry.id.trim(), entry])
-        .filter(([id]) => id.length > 0),
-    );
-    if (entries.size === 0) return { ok: false, reason: 'empty_model_list' };
-    const entry = entries.get(model);
-    if (!entry) return { ok: false, reason: 'not_in_live_list' };
-    const unavailableReason = deriveModelUnavailableReason(input, entry);
-    const blockingReason = blockingChatAvailabilityReason(unavailableReason);
-    if (blockingReason) {
-      return { ok: false, reason: blockingReason, entry };
-    }
-    return {
-      ok: true,
-      model,
-      entry,
-      ...(unavailableReason === 'stale' ? { warning: unavailableReason } : {}),
-    };
-  }
-
-  const unavailableReason = deriveModelUnavailableReason(input, { id: model });
-  const blockingReason = blockingChatAvailabilityReason(unavailableReason);
-  if (blockingReason) {
-    return { ok: false, reason: blockingReason };
-  }
-  return {
-    ok: true,
-    model,
-    ...(unavailableReason === 'stale' ? { warning: unavailableReason } : {}),
-  };
-}
-
 function makeEntry(
   input: BuildModelCatalogInput,
   model: ModelInfo,
@@ -434,12 +368,6 @@ function missingEntryUnavailableReason(
   const providerOrAuthReason = providerOrAuthUnavailableReason(input);
   if (providerOrAuthReason) return providerOrAuthReason;
   return modelSource === 'fetched' ? 'not_in_live_list' : 'none';
-}
-
-function blockingChatAvailabilityReason(
-  reason: ModelUnavailableReason,
-): Exclude<ModelUnavailableReason, 'none' | 'stale'> | null {
-  return reason === 'none' || reason === 'stale' ? null : reason;
 }
 
 function isStale(input: Pick<BuildModelCatalogInput, 'modelSource' | 'modelsFetchedAt' | 'now' | 'staleAfterMs'>): boolean {
