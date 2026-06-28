@@ -207,7 +207,7 @@ function makeEntry(
   normalizedDefaultModel: string | undefined,
 ): ModelCatalogEntry {
   const normalizedModel = { ...model, id: model.id.trim() };
-  const unavailableReason = deriveUnavailableReason(input, normalizedModel);
+  const unavailableReason = deriveModelUnavailableReason(input, normalizedModel);
   const pricing = findPricing(input, normalizedModel.id);
   return {
     id: normalizedModel.id,
@@ -333,10 +333,6 @@ function userChoiceSources(
     if (!sources.includes(source)) sources.push(source);
   }
   return sources;
-}
-
-function deriveUnavailableReason(input: BuildModelCatalogInput, model: ModelInfo): ModelUnavailableReason {
-  return deriveModelUnavailableReason(input, model);
 }
 
 function deriveModelUnavailableReason(
