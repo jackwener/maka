@@ -130,6 +130,7 @@ export interface AbContextBudgetSummary {
 export interface AbContinuationSummary {
   attempts: number;
   enabledAttempts: number;
+  wallTimeoutMs: number | null;
   turnsUsed: number;
   continuedTurns: number;
   stepCapHits: number;

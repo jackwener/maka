@@ -99,6 +99,7 @@ function renderContinuationLine(summary: AbComparisonSummary): string | undefine
 function renderContinuationMetrics(summary: AbContinuationSummary): string {
   return [
     `enabled=${summary.enabledAttempts}/${summary.attempts}`,
+    `wall_timeout=${summary.wallTimeoutMs !== null ? `${summary.wallTimeoutMs}ms` : 'null'}`,
     `turns=${summary.turnsUsed}`,
     `continued=${summary.continuedTurns}`,
     `step_cap_hits=${summary.stepCapHits}`,
@@ -114,6 +115,7 @@ function continuationOrZero(summary: AbContinuationSummary | undefined): AbConti
   return summary ?? {
     attempts: 0,
     enabledAttempts: 0,
+    wallTimeoutMs: null,
     turnsUsed: 0,
     continuedTurns: 0,
     stepCapHits: 0,

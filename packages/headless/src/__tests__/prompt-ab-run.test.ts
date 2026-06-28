@@ -840,6 +840,7 @@ describe('summarizePromptAbComparison', () => {
       baselinePromptId: 'prune-off',
       candidatePromptId: 'prune-on',
       evaluationTaskIds: ['t1', 't2'],
+      budgetMs: 600_000,
       baselineRuns: [[
         { ...completed('t1', true), continuationSummary: continuationSummary({ turnsUsed: 2, continuedTurns: 1, stepCapHits: 1, totalRuntimeSteps: 42, turns: [
           { turnIndex: 0, status: 'failed', stepCapHit: true, runtimeSteps: 42 },
@@ -863,6 +864,7 @@ describe('summarizePromptAbComparison', () => {
     assert.deepEqual(result.baseline.continuation, {
       attempts: 2,
       enabledAttempts: 2,
+      wallTimeoutMs: 600_000,
       turnsUsed: 5,
       continuedTurns: 3,
       stepCapHits: 4,
@@ -875,6 +877,7 @@ describe('summarizePromptAbComparison', () => {
     assert.deepEqual(result.candidate.continuation, {
       attempts: 2,
       enabledAttempts: 2,
+      wallTimeoutMs: 600_000,
       turnsUsed: 3,
       continuedTurns: 1,
       stepCapHits: 1,
@@ -886,7 +889,7 @@ describe('summarizePromptAbComparison', () => {
     });
 
     const markdown = renderPromptAbComparisonMarkdown(result);
-    assert.match(markdown, /Continuation: A enabled=2\/2 turns=5 continued=3 step_cap_hits=4 per_turn_step_cap_hits=\[true,false,true,true,true\] cap_exhausted=1 runtime_steps=102 max_turns=3 max_total_steps=150, B enabled=2\/2 turns=3 continued=1 step_cap_hits=1 per_turn_step_cap_hits=\[false,true,false\] cap_exhausted=0 runtime_steps=64 max_turns=3 max_total_steps=150/);
+    assert.match(markdown, /Continuation: A enabled=2\/2 wall_timeout=600000ms turns=5 continued=3 step_cap_hits=4 per_turn_step_cap_hits=\[true,false,true,true,true\] cap_exhausted=1 runtime_steps=102 max_turns=3 max_total_steps=150, B enabled=2\/2 wall_timeout=600000ms turns=3 continued=1 step_cap_hits=1 per_turn_step_cap_hits=\[false,true,false\] cap_exhausted=0 runtime_steps=64 max_turns=3 max_total_steps=150/);
   });
 
   test('records activated attempts and investigation refs for follow-up', () => {

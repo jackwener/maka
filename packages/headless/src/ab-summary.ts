@@ -33,8 +33,8 @@ export function summarizeAbComparison(input: SummarizeAbComparisonInput): AbComp
   const reps = input.baselineRuns.length;
   const taskIds = [...input.evaluationTaskIds];
   const activePrunePairIds = candidateActivePrunePairIds(observedArmAttempts(input.candidateRuns, taskIds, 'B'));
-  const baseline = summarizeArm(input.baselineRuns, taskIds, reps, 'A', activePrunePairIds);
-  const candidate = summarizeArm(input.candidateRuns, taskIds, reps, 'B', activePrunePairIds);
+  const baseline = summarizeArm(input.baselineRuns, taskIds, reps, 'A', activePrunePairIds, input.budgetMs);
+  const candidate = summarizeArm(input.candidateRuns, taskIds, reps, 'B', activePrunePairIds, input.budgetMs);
   const taskLevel = summarizeTasks(input.baselineRuns, input.candidateRuns, taskIds, reps);
   const pairedAttempts = summarizeAttemptPairs(input.baselineRuns, input.candidateRuns, taskIds);
   const investigationRefs = summarizeInvestigationRefs(input.baselineRuns, input.candidateRuns, taskIds);
@@ -78,6 +78,7 @@ function summarizeArm(
   reps: number,
   arm: AbArmLabel,
   activePrunePairIds: ReadonlySet<string>,
+  wallTimeoutMs: number | undefined,
 ): AbArmSummary {
   const attempts = taskIds.length * reps;
   const observedAttempts = observedArmAttempts(runs, taskIds, arm);
@@ -87,7 +88,7 @@ function summarizeArm(
   const passed = valid.filter((event) => event.passed).length;
   const durations = budgetedRuns.map((event) => event.durationMs);
   const contextBudget = summarizeContextBudget(observedAttempts);
-  const continuation = summarizeContinuation(observed);
+  const continuation = summarizeContinuation(observed, wallTimeoutMs);
   const activePruneSubset = summarizeActivePruneSubset(observedAttempts, activePrunePairIds);
   const contextBudgetPolicy = summarizeContextBudgetPolicy(observed);
   const tokenCostSummary = summarizeTokenCost(budgetedRuns);
@@ -240,7 +241,10 @@ function summarizeContextBudget(attempts: readonly ObservedAttempt[]): AbContext
   };
 }
 
-function summarizeContinuation(events: readonly FixedPromptTaskWalEvent[]): AbContinuationSummary | undefined {
+function summarizeContinuation(
+  events: readonly FixedPromptTaskWalEvent[],
+  wallTimeoutMs: number | undefined,
+): AbContinuationSummary | undefined {
   const summaries = events
     .map((event) => ('continuationSummary' in event ? event.continuationSummary : undefined))
     .filter((summary): summary is NonNullable<typeof summary> => summary !== undefined);
@@ -248,6 +252,7 @@ function summarizeContinuation(events: readonly FixedPromptTaskWalEvent[]): AbCo
   return {
     attempts: summaries.length,
     enabledAttempts: summaries.filter((summary) => summary.enabled).length,
+    wallTimeoutMs: wallTimeoutMs ?? null,
     turnsUsed: sum(summaries.map((summary) => summary.turnsUsed)),
     continuedTurns: sum(summaries.map((summary) => summary.continuedTurns)),
     stepCapHits: sum(summaries.map((summary) => summary.stepCapHits)),
