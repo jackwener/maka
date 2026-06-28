@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -102,6 +102,19 @@ describe('migrateLegacyCredentialFile', () => {
 
       await migrateLegacyCredentialFile(path, fakeDecryptor(true));
       assert.equal(await readFile(path, 'utf8'), v1); // unchanged
+    });
+  });
+
+  it('does not wait on a leftover lock when the file is already v1', async () => {
+    await withWorkspace(async (path) => {
+      const v1 = JSON.stringify({ version: 1, values: { 'openai:apiKey': 'sk-1' } });
+      await writeFile(path, v1, 'utf8');
+      await mkdir(`${path}.lock`);
+
+      await migrateLegacyCredentialFile(path, fakeDecryptor(true));
+
+      assert.equal(await readFile(path, 'utf8'), v1); // unchanged
+      await stat(`${path}.lock`); // still owned by whoever left it behind
     });
   });
 

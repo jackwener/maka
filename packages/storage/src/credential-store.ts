@@ -97,6 +97,21 @@ export async function migrateLegacyCredentialFile(
   path: string,
   decryptor: LegacyCredentialDecryptor,
 ): Promise<void> {
+  let snapshot: string;
+  try {
+    snapshot = await readFile(path, 'utf8');
+  } catch (error) {
+    if ((error as { code?: string }).code === 'ENOENT') return; // nothing to migrate
+    throw error;
+  }
+
+  try {
+    const parsed = JSON.parse(snapshot) as { version?: number };
+    if (parsed.version === CREDENTIAL_SCHEMA_VERSION) return; // already migrated; do not wait on stale legacy locks
+  } catch {
+    // Preserve the fail-closed lock path below for malformed files.
+  }
+
   await withCredentialFileLock(path, async () => {
     let raw: string;
     try {
