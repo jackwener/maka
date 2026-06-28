@@ -10,6 +10,7 @@ import type { LlmConnection } from '@maka/core';
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../..');
 
 type ModelCatalogChoicesModule = {
+  buildCatalogRecommendedDefaultModel(providerType: LlmConnection['providerType']): string;
   buildCatalogChatModelChoices(connections: readonly LlmConnection[]): Array<{
     connectionSlug: string;
     providerType: string;
@@ -23,6 +24,9 @@ type ModelCatalogChoicesModule = {
   buildCatalogModelChoices(connection: LlmConnection): Array<{
     id: string;
     displayName?: string;
+    recommendedRank?: number;
+    lifecycle: string;
+    docsUrl?: string;
     availability: string;
     unavailableReason: string;
     isDefault: boolean;
@@ -138,8 +142,15 @@ describe('model catalog picker helpers', () => {
 
     assert.deepEqual(options, [
       ['openai-api::gpt-4o-mini', 'GPT-4o mini'],
-      ['openai-api::custom-model', 'custom-model'],
+      ['openai-api::custom-model', 'custom-model · 当前不可用'],
     ]);
+  });
+
+  it('derives new-connection defaults from catalog recommendations', async () => {
+    const { buildCatalogRecommendedDefaultModel } = await importModelCatalogChoices();
+
+    assert.equal(buildCatalogRecommendedDefaultModel('deepseek'), 'deepseek-v4-flash');
+    assert.equal(buildCatalogRecommendedDefaultModel('openai-compatible'), '');
   });
 
   it('keeps Settings model choices as catalog entries with missing-default state', async () => {
@@ -157,6 +168,9 @@ describe('model catalog picker helpers', () => {
       choices.map((choice) => ({
         id: choice.id,
         displayName: choice.displayName,
+        recommendedRank: choice.recommendedRank,
+        lifecycle: choice.lifecycle,
+        docsUrl: choice.docsUrl,
         availability: choice.availability,
         unavailableReason: choice.unavailableReason,
         isDefault: choice.isDefault,
@@ -165,6 +179,9 @@ describe('model catalog picker helpers', () => {
         {
           id: 'gpt-5',
           displayName: 'GPT-5',
+          recommendedRank: 5,
+          lifecycle: 'active',
+          docsUrl: 'https://platform.openai.com/docs/models',
           availability: 'blocked',
           unavailableReason: 'not_in_live_list',
           isDefault: true,
@@ -172,6 +189,9 @@ describe('model catalog picker helpers', () => {
         {
           id: 'gpt-4o-mini',
           displayName: 'GPT-4o mini',
+          recommendedRank: undefined,
+          lifecycle: 'active',
+          docsUrl: 'https://platform.openai.com/docs/models',
           availability: 'available',
           unavailableReason: 'none',
           isDefault: false,

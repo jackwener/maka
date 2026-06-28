@@ -5,10 +5,20 @@ import {
   type LlmConnection,
   type ModelCatalogEntry,
   type ProviderType,
+  type SavedModelChoice,
 } from '@maka/core';
 import type { ChatModelChoice } from '@maka/ui';
 
 const DAILY_REVIEW_MODEL_KEY_SEPARATOR = '::';
+
+export function buildCatalogRecommendedDefaultModel(providerType: ProviderType): string {
+  const entry = selectableCatalogEntries({
+    slug: providerType,
+    providerType,
+    defaultModel: '',
+  })[0];
+  return entry?.id ?? '';
+}
 
 export function buildCatalogChatModelChoices(connections: readonly LlmConnection[]): ChatModelChoice[] {
   const choices: ChatModelChoice[] = [];
@@ -44,13 +54,15 @@ export function buildCatalogDailyReviewModelOptions(
 
   for (const connection of connections) {
     if (!isModelConsumerConnection(connection)) continue;
-    const savedModelIds = current?.connectionSlug === connection.slug ? [current.model] : [];
+    const savedModelIds: SavedModelChoice[] = current?.connectionSlug === connection.slug
+      ? [{ id: current.model, source: 'daily_review_model' }]
+      : [];
     const safeSourceLabel = safeConnectionLabel(connection.providerType, connection.slug, providerCounts);
-    for (const entry of selectableCatalogEntries(connection, savedModelIds)) {
+    for (const entry of dailyReviewCatalogEntries(connection, savedModelIds)) {
       const key = dailyReviewModelKey(connection.slug, entry.id);
       if (seenKeys.has(key)) continue;
       seenKeys.add(key);
-      candidates.push({ key, label: modelDisplayLabel(entry), safeSourceLabel });
+      candidates.push({ key, label: dailyReviewModelDisplayLabel(entry), safeSourceLabel });
     }
   }
 
@@ -66,12 +78,20 @@ export function buildCatalogDailyReviewModelOptions(
     options.push([candidate.key, label]);
   }
 
-  const trimmedCurrent = currentModelKey.trim();
-  if (trimmedCurrent && !options.some(([value]) => value === trimmedCurrent)) {
-    const tail = current?.model || trimmedCurrent.split(DAILY_REVIEW_MODEL_KEY_SEPARATOR).pop() || trimmedCurrent;
-    options.push([trimmedCurrent, tail]);
-  }
   return options;
+}
+
+function dailyReviewCatalogEntries(
+  connection: Pick<
+    LlmConnection,
+    'slug' | 'providerType' | 'defaultModel' | 'models' | 'modelSource' | 'modelsFetchedAt'
+  >,
+  savedModelIds: Iterable<SavedModelChoice | undefined | null>,
+): ModelCatalogEntry[] {
+  return filterUnsupportedCodexModels(
+    connection.providerType,
+    buildConnectionModelCatalogEntries({ connection, savedModelIds }),
+  ).filter((entry) => entry.canUseAsChatDefault || entry.provenance.sources?.userChoice?.includes('daily_review_model'));
 }
 
 function selectableCatalogEntries(
@@ -108,6 +128,13 @@ function filterUnsupportedCodexModels(providerType: ProviderType, entries: Model
 
 function modelDisplayLabel(entry: Pick<ModelCatalogEntry, 'id' | 'displayName'>): string {
   return entry.displayName?.trim() || entry.id;
+}
+
+function dailyReviewModelDisplayLabel(
+  entry: Pick<ModelCatalogEntry, 'id' | 'displayName' | 'canUseAsChatDefault'>,
+): string {
+  const label = modelDisplayLabel(entry);
+  return entry.canUseAsChatDefault ? label : `${label} · 当前不可用`;
 }
 
 function isModelConsumerConnection(connection: Pick<LlmConnection, 'enabled' | 'providerType'>): boolean {

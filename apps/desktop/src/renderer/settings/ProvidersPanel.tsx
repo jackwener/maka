@@ -36,7 +36,7 @@ import { formatRelativeTimestamp } from '@maka/core';
 import { PasswordInput } from './password-input';
 import { ProviderBrandMark } from './provider-brand-marks';
 import { chipStatusText, rollupForGroup } from './provider-connection-status';
-import { buildCatalogModelChoices } from '../model-catalog-choices';
+import { buildCatalogModelChoices, buildCatalogRecommendedDefaultModel } from '../model-catalog-choices';
 
 export interface ConnectionsBridge {
   list(): Promise<LlmConnection[]>;
@@ -1236,10 +1236,11 @@ function AddProviderForm(props: {
 }) {
   const defaults = PROVIDER_DEFAULTS[props.providerType];
   const display = providerDisplay(props.providerType);
+  const recommendedDefaultModel = buildCatalogRecommendedDefaultModel(props.providerType);
   const [slug, setSlug] = useState(() => nextSlug(props.providerType, props.existingSlugs));
   const [name, setName] = useState(display.name);
   const [baseUrl, setBaseUrl] = useState(defaults.baseUrl);
-  const [defaultModel, setDefaultModel] = useState(defaults.fallbackModels[0] ?? '');
+  const [defaultModel, setDefaultModel] = useState(recommendedDefaultModel);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -1331,7 +1332,7 @@ function AddProviderForm(props: {
         <Input
           value={defaultModel}
           onChange={(event) => setDefaultModel(event.currentTarget.value)}
-          placeholder={defaults.fallbackModels[0] || 'model-id'}
+          placeholder={recommendedDefaultModel || 'model-id'}
           disabled={isExperimental || busy}
           aria-label="模型供应商默认模型"
         />
@@ -1394,7 +1395,6 @@ function ConnectionDetail(props: {
   const credentialTroubleshootingCopy = needsOAuth
     ? 'OAuth 登录 / 代理设置'
     : '模型密钥 / 服务地址 / 代理设置';
-  const fallbackModels = defaults.fallbackModels;
   const savedBaseUrl = connection.baseUrl ?? defaults.baseUrl;
   const draftBaseUrl = hasFixedOAuthBaseUrl ? defaults.baseUrl : baseUrl;
   const hasSaveChanges =
@@ -1484,6 +1484,7 @@ function ConnectionDetail(props: {
     modelSource,
     modelsFetchedAt: connection.modelsFetchedAt,
   });
+  const catalogFallbackCount = modelChoices.filter((choice) => choice.source === 'static_catalog').length;
 
   async function save() {
     if (busyRef.current || testingRef.current || fetchingModelsRef.current || settingDefaultRef.current || deletingRef.current) return;
@@ -1743,7 +1744,7 @@ function ConnectionDetail(props: {
         onPickDefault={(id) => setDefaultModel(id)}
         modelSource={modelSource}
         modelsFetchedAt={connection.modelsFetchedAt}
-        fallbackCount={fallbackModels.length}
+        fallbackCount={catalogFallbackCount}
         canRefresh={!detailActionBusy && hasUsableCredential}
         fetchingModels={fetchingModels}
         disabled={detailActionBusy}

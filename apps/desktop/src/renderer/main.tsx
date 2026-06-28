@@ -513,10 +513,16 @@ function AppShell() {
     )
       ? pendingNewChatModel
       : null;
-  const defaultConnModel = defaultConnectionEntry?.defaultModel || defaultConnectionEntry?.models?.[0]?.id;
+  const catalogDefaultNewChatModel = defaultConnectionEntry
+    ? chatModelChoices.find(
+      (choice) =>
+        choice.connectionSlug === defaultConnectionEntry.slug &&
+        choice.model === defaultConnectionEntry.defaultModel,
+    )
+    : undefined;
   const newChatModel = validPendingNewChatModel
-    ?? (defaultConnectionEntry && defaultConnModel
-      ? { llmConnectionSlug: defaultConnectionEntry.slug, model: defaultConnModel }
+    ?? (catalogDefaultNewChatModel
+      ? { llmConnectionSlug: catalogDefaultNewChatModel.connectionSlug, model: catalogDefaultNewChatModel.model }
       : undefined);
   const activeConnectionLabel = activeSession?.backend === 'fake'
     ? '本地模拟连接'
@@ -3170,10 +3176,6 @@ function AppShell() {
                 modelLabel={
                   activeModelLabel
                   ?? newChatModelLabel
-                  ?? chatModelChoiceLabel(chatModelChoices, activeConnection?.slug, activeConnection?.defaultModel)
-                  ?? chatModelChoiceLabel(chatModelChoices, activeConnection?.slug, activeConnection?.models?.[0]?.id)
-                  ?? chatModelChoiceLabel(chatModelChoices, defaultConnectionEntry?.slug, defaultConnectionEntry?.defaultModel)
-                  ?? chatModelChoiceLabel(chatModelChoices, defaultConnectionEntry?.slug, defaultConnectionEntry?.models?.[0]?.id)
                   ?? undefined
                 }
                 activeSession={activeSessionForView}
