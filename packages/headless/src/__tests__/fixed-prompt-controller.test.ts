@@ -964,6 +964,7 @@ describe('fixed prompt controller', () => {
       const continuationSummary = {
         enabled: true,
         maxTurns: 3,
+        maxTotalRuntimeSteps: 150,
         turnsUsed: 2,
         continuedTurns: 1,
         stepCapHits: 1,

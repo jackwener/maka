@@ -125,13 +125,6 @@ describe('Harbor adapter contract', () => {
     }
   });
 
-  test('run-host-cell.mjs wires continuation policy into the Harbor cell', async () => {
-    const source = await readRepoFile('packages/headless/harbor/run-host-cell.mjs');
-    assert.match(source, /buildHarborCellContinuationPolicy/);
-    assert.match(source, /const continuationPolicy = buildHarborCellContinuationPolicy\(env\)/);
-    assert.match(source, /\.\.\.\(continuationPolicy \? \{ continuationPolicy \} : \{\}\)/);
-  });
-
   test('run-host-cell.mjs rejects unknown context env instead of dropping it', async () => {
     const tmp = mkdtempSync(resolve(tmpdir(), 'maka-host-cell-env-'));
     try {
@@ -716,6 +709,7 @@ with tempfile.TemporaryDirectory() as tmp:
         "MAKA_TRIAL_PRICING_SOURCE": "deepseek-v4-flash",
         "MAKA_HARBOR_CONTINUATION": "on",
         "MAKA_HARBOR_CONTINUATION_MAX_TURNS": "3",
+        "MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS": "150",
         "MAKA_HARBOR_CONTINUATION_PROMPT": "Continue neutrally.",
         **runtime_policy_context_env,
         "MAKA_CONTEXT_FOO": "1",
@@ -731,6 +725,7 @@ with tempfile.TemporaryDirectory() as tmp:
     assert gateway_env["MAKA_TRIAL_PRICING_SOURCE"] == "deepseek-v4-flash", gateway_env
     assert gateway_env["MAKA_HARBOR_CONTINUATION"] == "on", gateway_env
     assert gateway_env["MAKA_HARBOR_CONTINUATION_MAX_TURNS"] == "3", gateway_env
+    assert gateway_env["MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS"] == "150", gateway_env
     assert gateway_env["MAKA_HARBOR_CONTINUATION_PROMPT"] == "Continue neutrally.", gateway_env
     for key, value in runtime_policy_context_env.items():
         assert gateway_env[key] == value, gateway_env

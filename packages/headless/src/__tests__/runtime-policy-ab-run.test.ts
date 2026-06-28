@@ -43,6 +43,7 @@ describe('runRuntimePolicyAbComparison', () => {
       sharedAgentEnv: {
         MAKA_HARBOR_CONTINUATION: 'on',
         MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3',
+        MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS: '150',
       },
     });
 
@@ -55,8 +56,8 @@ describe('runRuntimePolicyAbComparison', () => {
       'deepseek/deepseek-v4-flash',
     ]);
     assert.deepEqual(manifest.arms.map((arm) => arm.metadata?.sharedAgentEnv), [
-      { MAKA_HARBOR_CONTINUATION: 'on', MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3' },
-      { MAKA_HARBOR_CONTINUATION: 'on', MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3' },
+      { MAKA_HARBOR_CONTINUATION: 'on', MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3', MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS: '150' },
+      { MAKA_HARBOR_CONTINUATION: 'on', MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3', MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS: '150' },
     ]);
     assert.notEqual(manifest.arms[0].fingerprint, manifest.arms[1].fingerprint);
     assert.deepEqual(manifest.arms.map((arm) => arm.metadata?.contextEnv), [
@@ -146,6 +147,7 @@ describe('runRuntimePolicyAbComparison', () => {
         sharedAgentEnv: {
           MAKA_HARBOR_CONTINUATION: 'on',
           MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3',
+          MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS: '150',
         },
         now: () => 100,
         newId: idFactory(),
@@ -171,19 +173,20 @@ describe('runRuntimePolicyAbComparison', () => {
       assert.deepEqual(calls.map((call) => call.systemPrompt), ['shared prompt\n', 'shared prompt\n']);
       assert.deepEqual(calls.map((call) => call.config.model), [config.model, config.model]);
       assert.deepEqual(calls.map((call) => call.task.id), ['t1', 't1']);
-      assert.deepEqual(calls.map((call) => call.agentEnv), [
-        {
-          MAKA_HARBOR_CONTINUATION: 'on',
-          MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3',
-          MAKA_CONTEXT_BUDGET: 'off',
-        },
-        {
-          MAKA_HARBOR_CONTINUATION: 'on',
-          MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3',
-          MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on',
-          MAKA_CONTEXT_ARCHIVE_RETRIEVAL: 'on',
-        },
-      ]);
+      const agentEnvByRoundId = new Map(calls.map((call) => [call.roundId, call.agentEnv]));
+      assert.deepEqual(agentEnvByRoundId.get('ab-prune-off-r0-t1'), {
+        MAKA_HARBOR_CONTINUATION: 'on',
+        MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3',
+        MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS: '150',
+        MAKA_CONTEXT_BUDGET: 'off',
+      });
+      assert.deepEqual(agentEnvByRoundId.get('ab-prune-on-r0-t1'), {
+        MAKA_HARBOR_CONTINUATION: 'on',
+        MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3',
+        MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS: '150',
+        MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE: 'on',
+        MAKA_CONTEXT_ARCHIVE_RETRIEVAL: 'on',
+      });
     });
   });
 
@@ -251,6 +254,7 @@ describe('runRuntimePolicyAbComparison', () => {
         sharedAgentEnv: {
           MAKA_HARBOR_CONTINUATION: 'on',
           MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3',
+          MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS: '150',
         },
         resumeFingerprint: 'caller-salt',
         harborRunner: async (input) => {
@@ -261,8 +265,8 @@ describe('runRuntimePolicyAbComparison', () => {
         newId: idFactory(),
       });
       assert.deepEqual(calls, [
-        'ab-prune-off-r0-t1:{"MAKA_HARBOR_CONTINUATION":"on","MAKA_HARBOR_CONTINUATION_MAX_TURNS":"3","MAKA_CONTEXT_BUDGET":"off"}',
-        'ab-prune-on-r0-t1:{"MAKA_HARBOR_CONTINUATION":"on","MAKA_HARBOR_CONTINUATION_MAX_TURNS":"3","MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE":"on","MAKA_CONTEXT_STALE_TOOL_RESULT_MAX_TOKENS":"4096"}',
+        'ab-prune-off-r0-t1:{"MAKA_HARBOR_CONTINUATION":"on","MAKA_HARBOR_CONTINUATION_MAX_TURNS":"3","MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS":"150","MAKA_CONTEXT_BUDGET":"off"}',
+        'ab-prune-on-r0-t1:{"MAKA_HARBOR_CONTINUATION":"on","MAKA_HARBOR_CONTINUATION_MAX_TURNS":"3","MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS":"150","MAKA_CONTEXT_STALE_TOOL_RESULT_PRUNE":"on","MAKA_CONTEXT_STALE_TOOL_RESULT_MAX_TOKENS":"4096"}',
       ]);
     });
   });

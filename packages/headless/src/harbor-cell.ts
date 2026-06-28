@@ -73,12 +73,14 @@ export interface RunHarborCellInput {
 export interface HarborCellContinuationPolicy {
   enabled: boolean;
   maxTurns: number;
+  maxTotalRuntimeSteps: number;
   prompt: string;
 }
 
 export interface HarborCellContinuationSummary {
   enabled: boolean;
   maxTurns: number;
+  maxTotalRuntimeSteps: number;
   turnsUsed: number;
   continuedTurns: number;
   stepCapHits: number;
@@ -96,6 +98,7 @@ export interface RunHarborCellResult {
 export type RunHarborCellEnv = Record<string, string | undefined>;
 
 export const HARBOR_CELL_DEFAULT_CONTINUATION_PROMPT = 'Continue the same benchmark task from the current workspace state. Do not restart. If the task is complete, provide the final response.';
+const HARBOR_CELL_DEFAULT_MAX_STEPS_PER_TURN = 50;
 
 export interface RunHarborCellFromEnvOptions {
   registerBackends?: RunHarborCellInput['registerBackends'];
@@ -252,7 +255,12 @@ export async function runHarborCell(input: RunHarborCellInput): Promise<RunHarbo
     name: `harbor-cell:${input.config.id}`,
   });
 
-  const continuationPolicy = input.continuationPolicy ?? { enabled: false, maxTurns: 1, prompt: HARBOR_CELL_DEFAULT_CONTINUATION_PROMPT };
+  const continuationPolicy = input.continuationPolicy ?? {
+    enabled: false,
+    maxTurns: 1,
+    maxTotalRuntimeSteps: HARBOR_CELL_DEFAULT_MAX_STEPS_PER_TURN,
+    prompt: HARBOR_CELL_DEFAULT_CONTINUATION_PROMPT,
+  };
   const invocations: InvocationResult[] = [];
   let sendMessageError: unknown;
   let nextText = input.instruction;
@@ -273,23 +281,22 @@ export async function runHarborCell(input: RunHarborCellInput): Promise<RunHarbo
       invocations.push(invocation);
       if (!isToolCallStepCap(invocation)) break;
       stepCapHits += 1;
+      if (totalRuntimeSteps(invocations) >= continuationPolicy.maxTotalRuntimeSteps) break;
       if (!continuationPolicy.enabled || turnIndex + 1 >= continuationPolicy.maxTurns) break;
       nextText = continuationPolicy.prompt;
     }
   } catch (error) {
     sendMessageError = error;
   }
-  if (invocations.length === 0) {
-    if (sendMessageError) {
-      invocations.push(failedInvocationFromError(sendMessageError, {
-        newId,
-        now,
-        sessionId: session.id,
-        turnId: attemptedTurnId ?? newId(),
-      }));
-    } else {
-      throw new Error('Harbor cell finished without a runtime invocation result');
-    }
+  if (sendMessageError) {
+    invocations.push(failedInvocationFromError(sendMessageError, {
+      newId,
+      now,
+      sessionId: session.id,
+      turnId: attemptedTurnId ?? newId(),
+    }));
+  } else if (invocations.length === 0) {
+    throw new Error('Harbor cell finished without a runtime invocation result');
   }
   const combinedInvocation = combineInvocations(invocations);
   const continuationSummary = continuationPolicy.enabled
@@ -418,9 +425,14 @@ export function buildHarborCellContinuationPolicy(
 ): HarborCellContinuationPolicy | undefined {
   const enabled = booleanEnv(env.MAKA_HARBOR_CONTINUATION, 'MAKA_HARBOR_CONTINUATION') ?? false;
   if (!enabled) return undefined;
+  const maxTurns = positiveIntEnv(env.MAKA_HARBOR_CONTINUATION_MAX_TURNS, 'MAKA_HARBOR_CONTINUATION_MAX_TURNS') ?? 3;
   return {
     enabled: true,
-    maxTurns: positiveIntEnv(env.MAKA_HARBOR_CONTINUATION_MAX_TURNS, 'MAKA_HARBOR_CONTINUATION_MAX_TURNS') ?? 3,
+    maxTurns,
+    maxTotalRuntimeSteps: positiveIntEnv(
+      env.MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS,
+      'MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS',
+    ) ?? maxTurns * HARBOR_CELL_DEFAULT_MAX_STEPS_PER_TURN,
     prompt: env.MAKA_HARBOR_CONTINUATION_PROMPT ?? HARBOR_CELL_DEFAULT_CONTINUATION_PROMPT,
   };
 }
@@ -452,15 +464,23 @@ function buildContinuationSummary(
   invocations: readonly InvocationResult[],
   stepCapHits: number,
 ): HarborCellContinuationSummary {
+  const runtimeSteps = totalRuntimeSteps(invocations);
   return {
     enabled: policy.enabled,
     maxTurns: policy.maxTurns,
+    maxTotalRuntimeSteps: policy.maxTotalRuntimeSteps,
     turnsUsed: invocations.length,
     continuedTurns: Math.max(0, invocations.length - 1),
     stepCapHits,
-    capExhausted: stepCapHits > 0 && isToolCallStepCap(invocations[invocations.length - 1]!) && invocations.length >= policy.maxTurns,
-    totalRuntimeSteps: invocations.reduce((sum, candidate) => sum + candidate.events.length, 0),
+    capExhausted: stepCapHits > 0
+      && isToolCallStepCap(invocations[invocations.length - 1]!)
+      && (invocations.length >= policy.maxTurns || runtimeSteps >= policy.maxTotalRuntimeSteps),
+    totalRuntimeSteps: runtimeSteps,
   };
+}
+
+function totalRuntimeSteps(invocations: readonly InvocationResult[]): number {
+  return invocations.reduce((sum, candidate) => sum + candidate.events.length, 0);
 }
 
 function failedInvocationFromError(error: unknown, input: {

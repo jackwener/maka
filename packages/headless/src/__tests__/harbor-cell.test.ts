@@ -121,7 +121,7 @@ class StepCapThenCompleteBackend implements AgentBackend {
   readonly prompts: string[] = [];
   readonly cwds: string[] = [];
 
-  constructor(private readonly ctx: { sessionId: string; header: SessionHeader }) {
+  constructor(protected readonly ctx: { sessionId: string; header: SessionHeader }) {
     this.sessionId = ctx.sessionId;
   }
 
@@ -168,6 +168,27 @@ function registerStepCapThenCompleteBackend(seen: { backend?: StepCapThenComplet
   return (registry: BackendRegistry): void => {
     registry.register('fake', (ctx) => {
       const backend = new StepCapThenCompleteBackend({ sessionId: ctx.sessionId, header: ctx.header });
+      seen.backend = backend;
+      return backend;
+    });
+  };
+}
+
+class StepCapThenThrowBackend extends StepCapThenCompleteBackend {
+  async *send(input: BackendSendInput): AsyncIterable<SessionEvent> {
+    if (this.prompts.length > 0) {
+      this.prompts.push(input.text);
+      this.cwds.push(this.ctx.header.cwd);
+      throw new Error('continuation turn crashed');
+    }
+    yield* super.send(input);
+  }
+}
+
+function registerStepCapThenThrowBackend(seen: { backend?: StepCapThenThrowBackend }) {
+  return (registry: BackendRegistry): void => {
+    registry.register('fake', (ctx) => {
+      const backend = new StepCapThenThrowBackend({ sessionId: ctx.sessionId, header: ctx.header });
       seen.backend = backend;
       return backend;
     });
@@ -238,6 +259,7 @@ describe('runHarborCell', () => {
         continuationPolicy: {
           enabled: true,
           maxTurns: 3,
+          maxTotalRuntimeSteps: 150,
           prompt: 'Continue neutrally from current workspace.',
         },
       });
@@ -252,6 +274,7 @@ describe('runHarborCell', () => {
       assert.deepEqual(result.output.continuationSummary, {
         enabled: true,
         maxTurns: 3,
+        maxTotalRuntimeSteps: 150,
         turnsUsed: 2,
         continuedTurns: 1,
         stepCapHits: 1,
@@ -264,6 +287,110 @@ describe('runHarborCell', () => {
       assert.match(runtimeEvents, /usage-step-cap/);
       assert.match(runtimeEvents, /usage-done/);
       assert.doesNotMatch(seen.backend?.prompts[1] ?? '', /verifier|verification|failed|taxonomy|retry/i);
+    });
+  });
+
+  test('fails the cell when a continuation turn throws after a step cap', async () => {
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const seen: { backend?: StepCapThenThrowBackend } = {};
+      const result = await runHarborCell({
+        config,
+        instruction: 'solve the benchmark task',
+        cwd: workspaceDir,
+        outputDir,
+        storageRoot,
+        registerBackends: registerStepCapThenThrowBackend(seen),
+        continuationPolicy: {
+          enabled: true,
+          maxTurns: 3,
+          maxTotalRuntimeSteps: 150,
+          prompt: 'Continue neutrally from current workspace.',
+        },
+      });
+
+      assert.equal(result.output.status, 'failed');
+      assert.equal(result.output.errorClass, 'Error');
+      assert.match(result.invocation.failure?.message ?? '', /continuation turn crashed/);
+      assert.deepEqual(seen.backend?.prompts, [
+        'solve the benchmark task',
+        'Continue neutrally from current workspace.',
+      ]);
+      assert.deepEqual(result.output.continuationSummary, {
+        enabled: true,
+        maxTurns: 3,
+        maxTotalRuntimeSteps: 150,
+        turnsUsed: 2,
+        continuedTurns: 1,
+        stepCapHits: 1,
+        capExhausted: false,
+        totalRuntimeSteps: 3,
+      });
+    });
+  });
+
+  test('stops continuation when the total runtime step budget is exhausted', async () => {
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const seen: { backend?: StepCapThenCompleteBackend } = {};
+      const result = await runHarborCell({
+        config,
+        instruction: 'solve the benchmark task',
+        cwd: workspaceDir,
+        outputDir,
+        storageRoot,
+        registerBackends: registerStepCapThenCompleteBackend(seen),
+        continuationPolicy: {
+          enabled: true,
+          maxTurns: 3,
+          maxTotalRuntimeSteps: 3,
+          prompt: 'Continue neutrally from current workspace.',
+        },
+      });
+
+      assert.equal(result.output.status, 'failed');
+      assert.equal(result.output.errorClass, 'tool_step_cap_reached');
+      assert.deepEqual(seen.backend?.prompts, ['solve the benchmark task']);
+      assert.deepEqual(result.output.continuationSummary, {
+        enabled: true,
+        maxTurns: 3,
+        maxTotalRuntimeSteps: 3,
+        turnsUsed: 1,
+        continuedTurns: 0,
+        stepCapHits: 1,
+        capExhausted: true,
+        totalRuntimeSteps: 3,
+      });
+    });
+  });
+
+  test('env entrypoint wires continuation policy from env', async () => {
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const seen: { backend?: StepCapThenCompleteBackend } = {};
+      const result = await runHarborCellFromEnv({
+        MAKA_BACKEND: 'fake',
+        MAKA_INSTRUCTION: 'solve the benchmark task',
+        MAKA_WORKDIR: workspaceDir,
+        MAKA_OUTPUT_DIR: outputDir,
+        MAKA_STORAGE_ROOT: storageRoot,
+        MAKA_HARBOR_CONTINUATION: 'on',
+        MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3',
+        MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS: '3',
+        MAKA_HARBOR_CONTINUATION_PROMPT: 'Continue neutrally from current workspace.',
+      }, {
+        registerBackends: registerStepCapThenCompleteBackend(seen),
+      });
+
+      assert.equal(result.output.status, 'failed');
+      assert.deepEqual(seen.backend?.prompts, ['solve the benchmark task']);
+      assert.deepEqual(result.output.continuationSummary, {
+        enabled: true,
+        maxTurns: 3,
+        maxTotalRuntimeSteps: 3,
+        turnsUsed: 1,
+        continuedTurns: 0,
+        stepCapHits: 1,
+        capExhausted: true,
+        totalRuntimeSteps: 3,
+      });
     });
   });
 

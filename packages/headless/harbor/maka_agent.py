@@ -283,6 +283,7 @@ class MakaAgent(BaseInstalledAgent):
             # run-host-cell.mjs/run-cell.mjs, not by the provider backend.
             "MAKA_HARBOR_CONTINUATION",
             "MAKA_HARBOR_CONTINUATION_MAX_TURNS",
+            "MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS",
             "MAKA_HARBOR_CONTINUATION_PROMPT",
         ):
             value = self._get_env(key)

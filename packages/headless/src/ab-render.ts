@@ -105,6 +105,7 @@ function renderContinuationMetrics(summary: AbContinuationSummary): string {
     `cap_exhausted=${summary.capExhaustedAttempts}`,
     `runtime_steps=${summary.totalRuntimeSteps}`,
     `max_turns=${summary.maxTurns ?? 'null'}`,
+    `max_total_steps=${summary.maxTotalRuntimeSteps ?? 'null'}`,
   ].join(' ');
 }
 
@@ -118,6 +119,7 @@ function continuationOrZero(summary: AbContinuationSummary | undefined): AbConti
     capExhaustedAttempts: 0,
     totalRuntimeSteps: 0,
     maxTurns: null,
+    maxTotalRuntimeSteps: null,
   };
 }
 

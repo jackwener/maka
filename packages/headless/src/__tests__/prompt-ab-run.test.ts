@@ -859,6 +859,7 @@ describe('summarizePromptAbComparison', () => {
       capExhaustedAttempts: 1,
       totalRuntimeSteps: 102,
       maxTurns: 3,
+      maxTotalRuntimeSteps: 150,
     });
     assert.deepEqual(result.candidate.continuation, {
       attempts: 2,
@@ -869,10 +870,11 @@ describe('summarizePromptAbComparison', () => {
       capExhaustedAttempts: 0,
       totalRuntimeSteps: 64,
       maxTurns: 3,
+      maxTotalRuntimeSteps: 150,
     });
 
     const markdown = renderPromptAbComparisonMarkdown(result);
-    assert.match(markdown, /Continuation: A enabled=2\/2 turns=5 continued=3 step_cap_hits=4 cap_exhausted=1 runtime_steps=102 max_turns=3, B enabled=2\/2 turns=3 continued=1 step_cap_hits=1 cap_exhausted=0 runtime_steps=64 max_turns=3/);
+    assert.match(markdown, /Continuation: A enabled=2\/2 turns=5 continued=3 step_cap_hits=4 cap_exhausted=1 runtime_steps=102 max_turns=3 max_total_steps=150, B enabled=2\/2 turns=3 continued=1 step_cap_hits=1 cap_exhausted=0 runtime_steps=64 max_turns=3 max_total_steps=150/);
   });
 
   test('records activated attempts and investigation refs for follow-up', () => {
@@ -1199,13 +1201,20 @@ describe('runPromptAbComparison', () => {
       assert.equal(result.candidatePromptId, 'maka-improved-v1');
       assert.equal(result.decision, 'non_inferior');
       assert.equal(result.taskLevel.wins, 2);
-      assert.deepEqual(calls, [
+      assert.equal(calls.length, 8);
+      assert.deepEqual(calls.slice(0, 2).sort(), [
         'ab-baseline-r0-t1:t1',
         'ab-candidate-r0-t1:t1',
-        'ab-candidate-r0-t2:t2',
+      ]);
+      assert.deepEqual(calls.slice(2, 4).sort(), [
         'ab-baseline-r0-t2:t2',
-        'ab-candidate-r1-t1:t1',
+        'ab-candidate-r0-t2:t2',
+      ]);
+      assert.deepEqual(calls.slice(4, 6).sort(), [
         'ab-baseline-r1-t1:t1',
+        'ab-candidate-r1-t1:t1',
+      ]);
+      assert.deepEqual(calls.slice(6, 8).sort(), [
         'ab-baseline-r1-t2:t2',
         'ab-candidate-r1-t2:t2',
       ]);
@@ -1435,6 +1444,7 @@ function continuationSummary(
   return {
     enabled: true,
     maxTurns: 3,
+    maxTotalRuntimeSteps: 150,
     turnsUsed: 1,
     continuedTurns: 0,
     stepCapHits: 0,

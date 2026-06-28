@@ -53,6 +53,7 @@ export interface HarborCellRuntimeRefs {
 export interface HarborCellContinuationSummary {
   enabled: boolean;
   maxTurns: number;
+  maxTotalRuntimeSteps: number;
   turnsUsed: number;
   continuedTurns: number;
   stepCapHits: number;
@@ -169,6 +170,7 @@ function validateContinuationSummary(value: unknown): HarborCellContinuationSumm
   return {
     enabled: requireBoolean(value.enabled, 'continuationSummary.enabled'),
     maxTurns: requireNumber(value.maxTurns, 'continuationSummary.maxTurns'),
+    maxTotalRuntimeSteps: requireNumber(value.maxTotalRuntimeSteps, 'continuationSummary.maxTotalRuntimeSteps'),
     turnsUsed: requireNumber(value.turnsUsed, 'continuationSummary.turnsUsed'),
     continuedTurns: requireNumber(value.continuedTurns, 'continuationSummary.continuedTurns'),
     stepCapHits: requireNumber(value.stepCapHits, 'continuationSummary.stepCapHits'),

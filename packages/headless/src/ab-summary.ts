@@ -254,6 +254,7 @@ function summarizeContinuation(events: readonly FixedPromptTaskWalEvent[]): AbCo
     capExhaustedAttempts: summaries.filter((summary) => summary.capExhausted).length,
     totalRuntimeSteps: sum(summaries.map((summary) => summary.totalRuntimeSteps)),
     maxTurns: summaries.length > 0 ? Math.max(...summaries.map((summary) => summary.maxTurns)) : null,
+    maxTotalRuntimeSteps: summaries.length > 0 ? Math.max(...summaries.map((summary) => summary.maxTotalRuntimeSteps)) : null,
   };
 }
 

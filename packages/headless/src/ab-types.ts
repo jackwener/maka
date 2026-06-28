@@ -136,6 +136,7 @@ export interface AbContinuationSummary {
   capExhaustedAttempts: number;
   totalRuntimeSteps: number;
   maxTurns: number | null;
+  maxTotalRuntimeSteps: number | null;
 }
 
 export interface AbTaskArmSummary {
