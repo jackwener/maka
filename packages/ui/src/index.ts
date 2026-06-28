@@ -27,14 +27,15 @@ export * from './utils.js';
 // consumers can `import { Alert, Empty, Sidebar, ... } from '@maka/ui'`.
 export * from './bot-brand.js';
 export * from './primitives/alert.js';
-// `markerVariants` / `streamVariants` are deliberately NOT re-exported here: they
-// are internal styling tables the chat call sites apply via relative import, so
-// keeping them off the package barrel preserves the governance goal — the variant
-// sets stay renamable/removable without a public-API break. Only `Marker` /
-// `LiveIndicator` + their types are public. (Contrast `buttonVariants`, which IS
-// public because it has external consumers.) `LiveIndicator` IS public: the
-// reasoning / composer / onboarding live dots are meant to adopt it.
-export { Bubble, LiveIndicator, Marker, Message } from './primitives/chat.js';
+// `markerVariants` / `streamVariants` / `LiveIndicator` are deliberately NOT
+// re-exported here: they are internal styling tables / a single-consumer dot that
+// the chat call sites apply via relative import, so keeping them off the package
+// barrel preserves the governance goal — they stay renamable/removable without a
+// public-API break. (Contrast `buttonVariants`, which IS public because it has
+// external consumers.) `LiveIndicator` is exported to public only when the
+// reasoning / composer / onboarding live dots actually migrate onto it — not
+// speculatively before a second consumer exists.
+export { Bubble, Marker, Message } from './primitives/chat.js';
 export type {
   BubbleProps,
   MarkerProps,

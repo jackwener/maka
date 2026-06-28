@@ -128,26 +128,23 @@ test('lineage-badge merge drops the UiButton base shell so the retired badge pix
   }
 });
 
-// PR3 — the tool live-output stream shell. `streamVariants` is the literalize
-// vehicle the single consumer (`ToolOutputStream`) applies by className; each
-// part must resolve a non-empty leaf utility string that mirrors the retired
-// `.maka-tool-output-stream-*` declarations 1:1 (source string == computed
-// style, no browser).
-test('streamVariants resolves leaf shell strings for each stream part', () => {
+// PR3 — the tool live-output stream shell. The full per-part shell is proven by
+// the computed-style diff harness (38 rows, 0 delta), so this does NOT enumerate
+// every part literal — that would only mirror the implementation. It keeps the
+// two guards the diff doesn't make obvious: the shell must stay LITERAL (not the
+// semantic `rounded-lg`/scale, which a refactor could silently swap in), and the
+// body must use the `word-break` literal, never Tailwind's `break-words` (the
+// different `overflow-wrap` property — an easy, invisible-until-rendered mistake).
+test('streamVariants stays literal and avoids the overflow-wrap break-words trap', () => {
   const container = streamVariants({ part: 'container' });
-  assert.match(container, /rounded-\[8px\]/);
-  // the `[data-live="true"]` accent ring rides a data-variant so it only paints
-  // while the tool is running, exactly as the retired selector did.
-  assert.match(container, /data-\[live=true\]:\[box-shadow:inset_0_0_0_1px_oklch\(from_var\(--accent\)_l_c_h_\/_0\.06\)\]/);
+  assert.ok(container.length > 0, 'container must resolve a non-empty leaf shell');
+  assert.ok(
+    !container.split(/\s+/).some((u) => ['rounded-lg', 'rounded-md', 'bg-primary'].includes(u)),
+    'shell must stay literal, not the semantic scale / a recolor',
+  );
   const body = streamVariants({ part: 'body' });
-  assert.match(body, /max-h-\[220px\]/);
-  // `word-break:break-word` stays an arbitrary literal, NOT Tailwind's
-  // `break-words` (which is the different `overflow-wrap` property).
   assert.match(body, /\[word-break:break-word\]/);
   assert.ok(!body.split(/\s+/).includes('break-words'), 'body must not use overflow-wrap break-words');
-  assert.match(streamVariants({ part: 'count' }), /data-\[stream=stderr\]:text-\[color:var\(--destructive-text\)\]/);
-  assert.match(streamVariants({ part: 'chunk' }), /^contents /);
-  assert.match(streamVariants({ part: 'redacted-tag' }), /bg-\[oklch\(from_var\(--warning,var\(--info\)\)_l_c_h_\/_0\.10\)\]/);
 });
 
 // The live dot is the one declaration that escapes the computed-style proof (a

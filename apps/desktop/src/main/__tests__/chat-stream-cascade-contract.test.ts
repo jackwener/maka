@@ -64,50 +64,19 @@ describe('chat tool-output stream migration contract (#332 PR3)', () => {
     }
   });
 
-  it('pins the stream parts + live indicator to the retired stream pixels/tokens', async () => {
+  it('pins the live indicator dot — the one part the computed-style diff cannot cover', async () => {
+    // The stream SHELL (container/header/counts/body/chunk) is proven by the
+    // computed-style diff harness (38 rows, 0 delta), so this test does NOT
+    // re-assert those literals — that would just mirror the implementation. The
+    // dot is the exception: an animation can't be a leaf-literal and
+    // `getComputedStyle` reads a phase-dependent value, so the diff can't see it.
+    // Its breath is pinned by the `@keyframes maka-pulse` frame contract (above)
+    // plus the `LiveIndicator` literals here — the only machine proof it has.
     const rawSrc = await readFile(
       resolve(REPO_ROOT, 'packages', 'ui', 'src', 'primitives', 'chat.tsx'),
       'utf8',
     );
-    // Strip comments so the assertions reflect real classNames, not prose.
     const chatSrc = rawSrc.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-    const streamBlock = chatSrc.slice(chatSrc.indexOf('streamVariants'));
-    // Each fragment is a LITERAL arbitrary utility that compiles 1:1 to the
-    // declaration it replaces on a leaf element — asserting the source string is
-    // equivalent to asserting the computed style. Values mirror the retired
-    // `.maka-tool-output-stream-*` rules exactly (pixels, rem, oklch relative-
-    // color tints, var() tokens) and never the semantic scale.
-    for (const literal of [
-      // container shell + the live accent ring (data-variant so it only paints
-      // while running, like the retired `[data-live="true"]` selector).
-      'rounded-[8px] border border-[var(--border)] bg-[var(--background)]',
-      'data-[live=true]:border-[oklch(from_var(--accent)_l_c_h_/_0.40)]',
-      'data-[live=true]:[box-shadow:inset_0_0_0_1px_oklch(from_var(--accent)_l_c_h_/_0.06)]',
-      // header
-      'border-b border-[var(--border)] bg-[var(--foreground-3)]',
-      'text-[0.72rem] uppercase tracking-[0.06em]',
-      // counts + every count `data-[…]` conditional is pinned.
-      '[font-variant-numeric:tabular-nums]',
-      'data-[stream=stderr]:text-[color:var(--destructive-text)]',
-      'data-[redacted=true]:text-[color:var(--warning-text,var(--info-text))]',
-      'data-[truncated=true]:bg-[oklch(from_var(--warning)_l_c_h_/_0.06)]',
-      'data-[truncated=true]:cursor-help',
-      // body — `word-break:break-word` stays literal (Tailwind `break-words` is
-      // the different `overflow-wrap` property).
-      'max-h-[220px] overflow-y-auto whitespace-pre-wrap [word-break:break-word]',
-      '[font-family:var(--font-mono)] text-[0.78rem] leading-[1.5]',
-      '[scroll-behavior:auto]',
-      // chunk + redacted tag
-      'contents data-[stream=stderr]:text-[color:var(--destructive-text)] data-[redacted=true]:opacity-[0.65]',
-      'bg-[oklch(from_var(--warning,var(--info))_l_c_h_/_0.10)]',
-    ]) {
-      assert.ok(
-        streamBlock.includes(literal),
-        `streamVariants must carry the literal "${literal}" mirroring the retired stream CSS`,
-      );
-    }
-    // The live indicator's animation reference + reduced-motion fallback — the
-    // one part that escapes the diff harness, pinned here.
     const liveBlock = chatSrc.slice(chatSrc.indexOf('function LiveIndicator'));
     for (const literal of [
       'w-[6px] h-[6px] rounded-[50%] bg-[var(--accent)]',
@@ -119,12 +88,12 @@ describe('chat tool-output stream migration contract (#332 PR3)', () => {
         `LiveIndicator must carry the literal "${literal}" mirroring the retired dot`,
       );
     }
-    // Never the semantic scale, a primary/accent recolor, or Tailwind's built-in
-    // `animate-pulse` (a different opacity-only keyframe).
-    for (const banned of ['rounded-lg', 'rounded-md', 'bg-primary', 'animate-pulse']) {
+    // The dot must never fall back to Tailwind's built-in `animate-pulse` (a
+    // different opacity-only keyframe) or recolor off the accent token.
+    for (const banned of ['animate-pulse', 'bg-primary']) {
       assert.ok(
-        !streamBlock.includes(banned),
-        `stream/live variants must stay literal, not "${banned}"`,
+        !liveBlock.includes(banned),
+        `LiveIndicator must use the governed maka-pulse/accent, not "${banned}"`,
       );
     }
   });

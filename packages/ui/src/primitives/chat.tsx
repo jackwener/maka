@@ -326,10 +326,6 @@ const streamVariants = cva("", {
   },
 });
 
-export type StreamPart = NonNullable<
-  VariantProps<typeof streamVariants>["part"]
->;
-
 export { streamVariants };
 
 /**
@@ -344,12 +340,14 @@ export { streamVariants };
  * shared motion home) plus the literal values here, verified by a keyframe
  * contract + before/after screenshots rather than the diff harness.
  *
- * This is the public, barrel-exported reuse surface: the duplicate reasoning /
- * composer / onboarding live dots are meant to adopt it in a follow-up motion
- * pass, retiring their own `*-pulse` keyframes onto `maka-pulse`. Reduced-motion
- * suppression rides on the `motion-reduce:` utilities (real-OS
- * `prefers-reduced-motion: reduce`), mirroring the retired dot's `@media` rule;
- * the visual-smoke fixture freeze is handled globally by `base.css`.
+ * It is kept INTERNAL (off the package barrel, applied by relative import like
+ * `streamVariants`): the tool stream is its only consumer today. The duplicate
+ * reasoning / composer / onboarding live dots can adopt it in a follow-up motion
+ * pass — retiring their own `*-pulse` keyframes onto `maka-pulse` — and that is
+ * when it would be promoted to a public export, not speculatively before a second
+ * consumer exists. Reduced-motion suppression rides on the `motion-reduce:`
+ * utilities (real-OS `prefers-reduced-motion: reduce`), mirroring the retired
+ * dot's `@media` rule; the visual-smoke fixture freeze is handled by `base.css`.
  */
 export function LiveIndicator({
   className,
