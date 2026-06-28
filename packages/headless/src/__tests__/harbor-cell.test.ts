@@ -23,6 +23,7 @@ import type { HeadlessBackendContext, IsolatedToolExecutor } from '../isolation.
 import {
   buildAiSdkCellBackendRegistration,
   buildHarborCellContextBudgetBackendOptions,
+  buildHarborCellContextBudgetPolicySnapshot,
   buildHarborCellAiSdkTools,
   createHarborCellLocalToolExecutor,
   HARBOR_CELL_OUTPUT_FILENAME,
@@ -114,6 +115,181 @@ const registerThrowingBackend = (registry: BackendRegistry): void => {
   registry.register('fake', (ctx) => new ThrowingBackend({ sessionId: ctx.sessionId }));
 };
 
+class StepCapThenCompleteBackend implements AgentBackend {
+  readonly kind: BackendKind = 'fake';
+  readonly sessionId: string;
+  readonly prompts: string[] = [];
+  readonly cwds: string[] = [];
+
+  constructor(protected readonly ctx: { sessionId: string; header: SessionHeader }) {
+    this.sessionId = ctx.sessionId;
+  }
+
+  async *send(input: BackendSendInput): AsyncIterable<SessionEvent> {
+    const ts = Date.now();
+    this.prompts.push(input.text);
+    this.cwds.push(this.ctx.header.cwd);
+    if (this.prompts.length === 1) {
+      yield {
+        type: 'token_usage',
+        id: 'usage-step-cap',
+        turnId: input.turnId,
+        ts,
+        input: 10,
+        output: 1,
+        total: 11,
+        costUsd: 0.01,
+        rawFinishReason: 'tool-calls',
+        runtimeSteps: 50,
+      };
+      yield { type: 'complete', id: 'complete-step-cap', turnId: input.turnId, ts, stopReason: 'end_turn' };
+      return;
+    }
+    await writeFile(join(this.ctx.header.cwd, 'continued-proof.txt'), input.text, 'utf8');
+    yield {
+      type: 'token_usage',
+      id: 'usage-done',
+      turnId: input.turnId,
+      ts,
+      input: 3,
+      output: 2,
+      total: 5,
+      costUsd: 0.02,
+      rawFinishReason: 'stop',
+    };
+    yield { type: 'complete', id: 'complete-done', turnId: input.turnId, ts, stopReason: 'end_turn' };
+  }
+
+  async stop(): Promise<void> {}
+  async respondToPermission(_decision: PermissionDecision): Promise<void> {}
+  async dispose(): Promise<void> {}
+}
+
+function registerStepCapThenCompleteBackend(seen: { backend?: StepCapThenCompleteBackend }) {
+  return (registry: BackendRegistry): void => {
+    registry.register('fake', (ctx) => {
+      const backend = new StepCapThenCompleteBackend({ sessionId: ctx.sessionId, header: ctx.header });
+      seen.backend = backend;
+      return backend;
+    });
+  };
+}
+
+class StepCapThenThrowBackend extends StepCapThenCompleteBackend {
+  async *send(input: BackendSendInput): AsyncIterable<SessionEvent> {
+    if (this.prompts.length > 0) {
+      this.prompts.push(input.text);
+      this.cwds.push(this.ctx.header.cwd);
+      throw new Error('continuation turn crashed');
+    }
+    yield* super.send(input);
+  }
+}
+
+function registerStepCapThenThrowBackend(seen: { backend?: StepCapThenThrowBackend }) {
+  return (registry: BackendRegistry): void => {
+    registry.register('fake', (ctx) => {
+      const backend = new StepCapThenThrowBackend({ sessionId: ctx.sessionId, header: ctx.header });
+      seen.backend = backend;
+      return backend;
+    });
+  };
+}
+
+class NoisyStepCapThenCompleteBackend extends StepCapThenCompleteBackend {
+  async *send(input: BackendSendInput): AsyncIterable<SessionEvent> {
+    const ts = Date.now();
+    if (this.prompts.length > 0) {
+      yield* super.send(input);
+      return;
+    }
+
+    this.prompts.push(input.text);
+    this.cwds.push(this.ctx.header.cwd);
+    for (let index = 0; index < 60; index += 1) {
+      yield {
+        type: 'token_usage',
+        id: `noise-${index}`,
+        turnId: input.turnId,
+        ts,
+        input: 0,
+        output: 0,
+        total: 0,
+      };
+    }
+    yield {
+      type: 'token_usage',
+      id: 'usage-step-cap-noisy',
+      turnId: input.turnId,
+      ts,
+      input: 10,
+      output: 1,
+      total: 11,
+      costUsd: 0.01,
+      rawFinishReason: 'tool-calls',
+      runtimeSteps: 50,
+    };
+    yield { type: 'complete', id: 'complete-step-cap-noisy', turnId: input.turnId, ts, stopReason: 'end_turn' };
+  }
+}
+
+function registerNoisyStepCapThenCompleteBackend(seen: { backend?: NoisyStepCapThenCompleteBackend }) {
+  return (registry: BackendRegistry): void => {
+    registry.register('fake', (ctx) => {
+      const backend = new NoisyStepCapThenCompleteBackend({ sessionId: ctx.sessionId, header: ctx.header });
+      seen.backend = backend;
+      return backend;
+    });
+  };
+}
+
+class StepCapTwiceThenCompleteBackend extends StepCapThenCompleteBackend {
+  async *send(input: BackendSendInput): AsyncIterable<SessionEvent> {
+    const ts = Date.now();
+    this.prompts.push(input.text);
+    this.cwds.push(this.ctx.header.cwd);
+    if (this.prompts.length <= 2) {
+      yield {
+        type: 'token_usage',
+        id: `usage-step-cap-${this.prompts.length}`,
+        turnId: input.turnId,
+        ts,
+        input: 10,
+        output: 1,
+        total: 11,
+        costUsd: 0.01,
+        rawFinishReason: 'tool-calls',
+        runtimeSteps: 50,
+      };
+      yield { type: 'complete', id: `complete-step-cap-${this.prompts.length}`, turnId: input.turnId, ts, stopReason: 'end_turn' };
+      return;
+    }
+    await writeFile(join(this.ctx.header.cwd, 'continued-proof.txt'), input.text, 'utf8');
+    yield {
+      type: 'token_usage',
+      id: 'usage-done',
+      turnId: input.turnId,
+      ts,
+      input: 3,
+      output: 2,
+      total: 5,
+      costUsd: 0.02,
+      rawFinishReason: 'stop',
+    };
+    yield { type: 'complete', id: 'complete-done', turnId: input.turnId, ts, stopReason: 'end_turn' };
+  }
+}
+
+function registerStepCapTwiceThenCompleteBackend(seen: { backend?: StepCapTwiceThenCompleteBackend }) {
+  return (registry: BackendRegistry): void => {
+    registry.register('fake', (ctx) => {
+      const backend = new StepCapTwiceThenCompleteBackend({ sessionId: ctx.sessionId, header: ctx.header });
+      seen.backend = backend;
+      return backend;
+    });
+  };
+}
+
 describe('runHarborCell', () => {
   test('runs in the provided workspace and writes the shared cell artifacts', async () => {
     await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
@@ -162,6 +338,251 @@ describe('runHarborCell', () => {
         JSON.parse(await readFile(join(outputDir, HARBOR_CELL_OUTPUT_FILENAME), 'utf8')),
         result.output,
       );
+    });
+  });
+
+  test('continues after a tool-call step cap without verifier feedback', async () => {
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const seen: { backend?: StepCapThenCompleteBackend } = {};
+      const result = await runHarborCell({
+        config,
+        instruction: 'solve the benchmark task',
+        cwd: workspaceDir,
+        outputDir,
+        storageRoot,
+        registerBackends: registerStepCapThenCompleteBackend(seen),
+        continuationPolicy: {
+          enabled: true,
+          maxTurns: 3,
+          maxTotalRuntimeSteps: 150,
+          prompt: 'Continue neutrally from current workspace.',
+        },
+      });
+
+      assert.equal(result.output.status, 'completed');
+      assert.deepEqual(seen.backend?.prompts, [
+        'solve the benchmark task',
+        'Continue neutrally from current workspace.',
+      ]);
+      assert.deepEqual(seen.backend?.cwds, [workspaceDir, workspaceDir]);
+      assert.equal(await readFile(join(workspaceDir, 'continued-proof.txt'), 'utf8'), 'Continue neutrally from current workspace.');
+      assert.deepEqual(result.output.continuationSummary, {
+        enabled: true,
+        maxTurns: 3,
+        maxTotalRuntimeSteps: 150,
+        turnsUsed: 2,
+        continuedTurns: 1,
+        stepCapHits: 1,
+        capExhausted: false,
+        totalRuntimeSteps: 50,
+        turns: [
+          { turnIndex: 0, status: 'failed', stepCapHit: true, runtimeSteps: 50 },
+          { turnIndex: 1, status: 'completed', stepCapHit: false, runtimeSteps: 0 },
+        ],
+      });
+      assert.equal(result.output.tokenSummary.input, 13);
+      assert.equal(result.output.tokenSummary.costUsd, 0.03);
+      const runtimeEvents = await readFile(join(outputDir, HARBOR_CELL_RUNTIME_EVENTS_FILENAME), 'utf8');
+      assert.match(runtimeEvents, /usage-step-cap/);
+      assert.match(runtimeEvents, /usage-done/);
+      assert.doesNotMatch(seen.backend?.prompts[1] ?? '', /verifier|verification|failed|taxonomy|retry/i);
+    });
+  });
+
+  test('fails the cell when a continuation turn throws after a step cap', async () => {
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const seen: { backend?: StepCapThenThrowBackend } = {};
+      const result = await runHarborCell({
+        config,
+        instruction: 'solve the benchmark task',
+        cwd: workspaceDir,
+        outputDir,
+        storageRoot,
+        registerBackends: registerStepCapThenThrowBackend(seen),
+        continuationPolicy: {
+          enabled: true,
+          maxTurns: 3,
+          maxTotalRuntimeSteps: 150,
+          prompt: 'Continue neutrally from current workspace.',
+        },
+      });
+
+      assert.equal(result.output.status, 'failed');
+      assert.equal(result.output.errorClass, 'Error');
+      assert.match(result.invocation.failure?.message ?? '', /continuation turn crashed/);
+      assert.deepEqual(seen.backend?.prompts, [
+        'solve the benchmark task',
+        'Continue neutrally from current workspace.',
+      ]);
+      assert.deepEqual(result.output.continuationSummary, {
+        enabled: true,
+        maxTurns: 3,
+        maxTotalRuntimeSteps: 150,
+        turnsUsed: 2,
+        continuedTurns: 1,
+        stepCapHits: 1,
+        capExhausted: false,
+        totalRuntimeSteps: 50,
+        turns: [
+          { turnIndex: 0, status: 'failed', stepCapHit: true, runtimeSteps: 50 },
+          { turnIndex: 1, status: 'failed', stepCapHit: false, runtimeSteps: 0 },
+        ],
+      });
+    });
+  });
+
+  test('stops continuation when the total runtime step budget is exhausted', async () => {
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const seen: { backend?: StepCapThenCompleteBackend } = {};
+      const result = await runHarborCell({
+        config,
+        instruction: 'solve the benchmark task',
+        cwd: workspaceDir,
+        outputDir,
+        storageRoot,
+        registerBackends: registerStepCapThenCompleteBackend(seen),
+        continuationPolicy: {
+          enabled: true,
+          maxTurns: 3,
+          maxTotalRuntimeSteps: 3,
+          prompt: 'Continue neutrally from current workspace.',
+        },
+      });
+
+      assert.equal(result.output.status, 'failed');
+      assert.equal(result.output.errorClass, 'tool_step_cap_reached');
+      assert.deepEqual(seen.backend?.prompts, ['solve the benchmark task']);
+      assert.deepEqual(result.output.continuationSummary, {
+        enabled: true,
+        maxTurns: 3,
+        maxTotalRuntimeSteps: 3,
+        turnsUsed: 1,
+        continuedTurns: 0,
+        stepCapHits: 1,
+        capExhausted: true,
+        totalRuntimeSteps: 50,
+        turns: [
+          { turnIndex: 0, status: 'failed', stepCapHit: true, runtimeSteps: 50 },
+        ],
+      });
+    });
+  });
+
+  test('does not spend continuation step budget from diagnostic event count', async () => {
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const seen: { backend?: NoisyStepCapThenCompleteBackend } = {};
+      const result = await runHarborCell({
+        config,
+        instruction: 'solve the benchmark task',
+        cwd: workspaceDir,
+        outputDir,
+        storageRoot,
+        registerBackends: registerNoisyStepCapThenCompleteBackend(seen),
+        continuationPolicy: {
+          enabled: true,
+          maxTurns: 3,
+          maxTotalRuntimeSteps: 51,
+          prompt: 'Continue neutrally from current workspace.',
+        },
+      });
+
+      assert.equal(result.output.status, 'completed');
+      assert.deepEqual(seen.backend?.prompts, [
+        'solve the benchmark task',
+        'Continue neutrally from current workspace.',
+      ]);
+      assert.deepEqual(result.output.continuationSummary, {
+        enabled: true,
+        maxTurns: 3,
+        maxTotalRuntimeSteps: 51,
+        turnsUsed: 2,
+        continuedTurns: 1,
+        stepCapHits: 1,
+        capExhausted: false,
+        totalRuntimeSteps: 50,
+        turns: [
+          { turnIndex: 0, status: 'failed', stepCapHit: true, runtimeSteps: 50 },
+          { turnIndex: 1, status: 'completed', stepCapHit: false, runtimeSteps: 0 },
+        ],
+      });
+    });
+  });
+
+  test('records per-turn step-cap hits across continuation turns', async () => {
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const seen: { backend?: StepCapTwiceThenCompleteBackend } = {};
+      const result = await runHarborCell({
+        config,
+        instruction: 'solve the benchmark task',
+        cwd: workspaceDir,
+        outputDir,
+        storageRoot,
+        registerBackends: registerStepCapTwiceThenCompleteBackend(seen),
+        continuationPolicy: {
+          enabled: true,
+          maxTurns: 3,
+          maxTotalRuntimeSteps: 150,
+          prompt: 'Continue neutrally from current workspace.',
+        },
+      });
+
+      assert.equal(result.output.status, 'completed');
+      assert.deepEqual(seen.backend?.prompts, [
+        'solve the benchmark task',
+        'Continue neutrally from current workspace.',
+        'Continue neutrally from current workspace.',
+      ]);
+      assert.deepEqual(result.output.continuationSummary?.turns.map((turn) => turn.stepCapHit), [true, true, false]);
+      assert.deepEqual(result.output.continuationSummary, {
+        enabled: true,
+        maxTurns: 3,
+        maxTotalRuntimeSteps: 150,
+        turnsUsed: 3,
+        continuedTurns: 2,
+        stepCapHits: 2,
+        capExhausted: false,
+        totalRuntimeSteps: 100,
+        turns: [
+          { turnIndex: 0, status: 'failed', stepCapHit: true, runtimeSteps: 50 },
+          { turnIndex: 1, status: 'failed', stepCapHit: true, runtimeSteps: 50 },
+          { turnIndex: 2, status: 'completed', stepCapHit: false, runtimeSteps: 0 },
+        ],
+      });
+    });
+  });
+
+  test('env entrypoint wires continuation policy from env', async () => {
+    await withDirs(async ({ workspaceDir, outputDir, storageRoot }) => {
+      const seen: { backend?: StepCapThenCompleteBackend } = {};
+      const result = await runHarborCellFromEnv({
+        MAKA_BACKEND: 'fake',
+        MAKA_INSTRUCTION: 'solve the benchmark task',
+        MAKA_WORKDIR: workspaceDir,
+        MAKA_OUTPUT_DIR: outputDir,
+        MAKA_STORAGE_ROOT: storageRoot,
+        MAKA_HARBOR_CONTINUATION: 'on',
+        MAKA_HARBOR_CONTINUATION_MAX_TURNS: '3',
+        MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS: '3',
+        MAKA_HARBOR_CONTINUATION_PROMPT: 'Continue neutrally from current workspace.',
+      }, {
+        registerBackends: registerStepCapThenCompleteBackend(seen),
+      });
+
+      assert.equal(result.output.status, 'failed');
+      assert.deepEqual(seen.backend?.prompts, ['solve the benchmark task']);
+      assert.deepEqual(result.output.continuationSummary, {
+        enabled: true,
+        maxTurns: 3,
+        maxTotalRuntimeSteps: 3,
+        turnsUsed: 1,
+        continuedTurns: 0,
+        stepCapHits: 1,
+        capExhausted: true,
+        totalRuntimeSteps: 50,
+        turns: [
+          { turnIndex: 0, status: 'failed', stepCapHit: true, runtimeSteps: 50 },
+        ],
+      });
     });
   });
 
@@ -788,6 +1209,16 @@ describe('runHarborCell', () => {
       }).contextBudget?.activeToolResultPrune,
       { enabled: true },
     );
+  });
+
+  test('Harbor active tool result prune defaults to the measured 2048-token threshold in policy snapshots', () => {
+    const snapshot = buildHarborCellContextBudgetPolicySnapshot({
+      MAKA_CONTEXT_ACTIVE_TOOL_RESULT_PRUNE: 'on',
+    });
+
+    assert.equal(snapshot?.enabled, true);
+    if (!snapshot?.enabled) throw new Error('expected context budget snapshot to be enabled');
+    assert.equal(snapshot.activeToolResultPrune?.maxCurrentResultEstimatedTokens, 2048);
   });
 
   test('Harbor tool builder keeps the six container-native tools non-interactive', () => {

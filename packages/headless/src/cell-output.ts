@@ -31,11 +31,14 @@ export interface HarborCellContextBudgetSummary {
   activeEstimatedTokensSaved: number;
   activeArchiveFailures: number;
   archivePlaceholders: number;
+  archivePlaceholderReasonCounts: Record<string, number>;
   archiveWriteFailures: number;
   retrievedArchiveToolResults: number;
   retrievedArchiveEstimatedTokens: number;
   archiveRetrievalSkipped: number;
+  archiveRetrievalSkippedReasonCounts: Record<string, number>;
   archiveRetrievalFailures: number;
+  archiveRetrievalFailureReasonCounts: Record<string, number>;
 }
 
 export type HarborCellContextBudgetPolicySnapshot = ({ enabled: false } | ({ enabled: true } & ContextBudgetPolicy));
@@ -45,6 +48,25 @@ export interface HarborCellRuntimeRefs {
   sessionId: string;
   runId: string;
   turnId: string;
+}
+
+export interface HarborCellContinuationSummary {
+  enabled: boolean;
+  maxTurns: number;
+  maxTotalRuntimeSteps: number;
+  turnsUsed: number;
+  continuedTurns: number;
+  stepCapHits: number;
+  capExhausted: boolean;
+  totalRuntimeSteps: number;
+  turns: HarborCellContinuationTurnSummary[];
+}
+
+export interface HarborCellContinuationTurnSummary {
+  turnIndex: number;
+  status: 'completed' | 'failed';
+  stepCapHit: boolean;
+  runtimeSteps: number;
 }
 
 export interface HarborCellToolSummary {
@@ -63,6 +85,7 @@ export interface HarborCellOutput {
   tokenSummary: HarborCellTokenSummary;
   contextBudgetPolicy?: HarborCellContextBudgetPolicySnapshot;
   contextBudgetSummary?: HarborCellContextBudgetSummary;
+  continuationSummary?: HarborCellContinuationSummary;
   toolSummary: HarborCellToolSummary;
   steps: number;
   durationMs: number;
@@ -75,6 +98,7 @@ export function buildHarborCellOutput(input: {
   invocation: InvocationResult;
   runtimeEventsPath: string;
   contextBudgetPolicy?: HarborCellContextBudgetPolicySnapshot;
+  continuationSummary?: HarborCellContinuationSummary;
 }): HarborCellOutput {
   const { invocation } = input;
   return {
@@ -86,6 +110,7 @@ export function buildHarborCellOutput(input: {
     tokenSummary: summarizeCellTokens(invocation.events),
     ...(input.contextBudgetPolicy ? { contextBudgetPolicy: input.contextBudgetPolicy } : {}),
     ...contextBudgetSummaryField(invocation.events),
+    ...(input.continuationSummary ? { continuationSummary: input.continuationSummary } : {}),
     toolSummary: summarizeCellTools(invocation.events),
     steps: invocation.events.length,
     durationMs: invocation.finishedAt - invocation.startedAt,
@@ -119,6 +144,9 @@ export function validateHarborCellOutput(value: unknown): HarborCellOutput {
   const contextBudgetSummary = 'contextBudgetSummary' in value
     ? validateContextBudgetSummary(value.contextBudgetSummary)
     : undefined;
+  const continuationSummary = 'continuationSummary' in value
+    ? validateContinuationSummary(value.continuationSummary)
+    : undefined;
   const toolSummary = validateToolSummary(value.toolSummary);
   const steps = requireNumber(value.steps, 'steps');
   const durationMs = requireNumber(value.durationMs, 'durationMs');
@@ -134,6 +162,7 @@ export function validateHarborCellOutput(value: unknown): HarborCellOutput {
     tokenSummary,
     ...(contextBudgetPolicy !== undefined ? { contextBudgetPolicy } : {}),
     ...(contextBudgetSummary !== undefined ? { contextBudgetSummary } : {}),
+    ...(continuationSummary !== undefined ? { continuationSummary } : {}),
     toolSummary,
     steps,
     durationMs,
@@ -142,6 +171,34 @@ export function validateHarborCellOutput(value: unknown): HarborCellOutput {
     runtimeRefs,
   };
   return output;
+}
+
+function validateContinuationSummary(value: unknown): HarborCellContinuationSummary {
+  if (!isRecord(value)) throw new Error('continuationSummary must be a JSON object');
+  return {
+    enabled: requireBoolean(value.enabled, 'continuationSummary.enabled'),
+    maxTurns: requireNumber(value.maxTurns, 'continuationSummary.maxTurns'),
+    maxTotalRuntimeSteps: requireNumber(value.maxTotalRuntimeSteps, 'continuationSummary.maxTotalRuntimeSteps'),
+    turnsUsed: requireNumber(value.turnsUsed, 'continuationSummary.turnsUsed'),
+    continuedTurns: requireNumber(value.continuedTurns, 'continuationSummary.continuedTurns'),
+    stepCapHits: requireNumber(value.stepCapHits, 'continuationSummary.stepCapHits'),
+    capExhausted: requireBoolean(value.capExhausted, 'continuationSummary.capExhausted'),
+    totalRuntimeSteps: requireNumber(value.totalRuntimeSteps, 'continuationSummary.totalRuntimeSteps'),
+    turns: requireContinuationTurns(value.turns),
+  };
+}
+
+function requireContinuationTurns(value: unknown): HarborCellContinuationTurnSummary[] {
+  if (!Array.isArray(value)) throw new Error('continuationSummary.turns must be a JSON array');
+  return value.map((turn, index) => {
+    if (!isRecord(turn)) throw new Error(`continuationSummary.turns[${index}] must be a JSON object`);
+    return {
+      turnIndex: requireNumber(turn.turnIndex, `continuationSummary.turns[${index}].turnIndex`),
+      status: requireStringUnion(turn.status, `continuationSummary.turns[${index}].status`, ['completed', 'failed'] as const),
+      stepCapHit: requireBoolean(turn.stepCapHit, `continuationSummary.turns[${index}].stepCapHit`),
+      runtimeSteps: requireNumber(turn.runtimeSteps, `continuationSummary.turns[${index}].runtimeSteps`),
+    };
+  });
 }
 
 export function summarizeCellTokens(events: readonly RuntimeEvent[]): HarborCellTokenSummary {
@@ -236,11 +293,14 @@ export function summarizeCellContextBudget(
     activeEstimatedTokensSaved: 0,
     activeArchiveFailures: 0,
     archivePlaceholders: 0,
+    archivePlaceholderReasonCounts: {},
     archiveWriteFailures: 0,
     retrievedArchiveToolResults: 0,
     retrievedArchiveEstimatedTokens: 0,
     archiveRetrievalSkipped: 0,
+    archiveRetrievalSkippedReasonCounts: {},
     archiveRetrievalFailures: 0,
+    archiveRetrievalFailureReasonCounts: {},
   };
 
   for (const event of events) {
@@ -259,11 +319,14 @@ export function summarizeCellContextBudget(
     summary.activeEstimatedTokensSaved += diagnostic.activeEstimatedTokensSaved ?? 0;
     summary.activeArchiveFailures += diagnostic.activeArchiveFailures ?? 0;
     summary.archivePlaceholders += diagnostic.archivePlaceholders ?? 0;
+    mergeCountRecord(summary.archivePlaceholderReasonCounts, diagnostic.archivePlaceholderReasonCounts);
     summary.archiveWriteFailures += diagnostic.archiveWriteFailures ?? 0;
     summary.retrievedArchiveToolResults += diagnostic.retrievedArchiveToolResults ?? 0;
     summary.retrievedArchiveEstimatedTokens += diagnostic.retrievedArchiveEstimatedTokens ?? 0;
     summary.archiveRetrievalSkipped += diagnostic.archiveRetrievalSkipped ?? 0;
+    mergeCountRecord(summary.archiveRetrievalSkippedReasonCounts, diagnostic.archiveRetrievalSkippedReasonCounts);
     summary.archiveRetrievalFailures += diagnostic.archiveRetrievalFailures ?? 0;
+    mergeCountRecord(summary.archiveRetrievalFailureReasonCounts, diagnostic.archiveRetrievalFailureReasonCounts);
   }
 
   return summary.diagnosticEvents > 0 ? summary : undefined;
@@ -342,6 +405,10 @@ function validateContextBudgetSummary(value: unknown): HarborCellContextBudgetSu
       'contextBudgetSummary.activeArchiveFailures',
     ) ?? 0,
     archivePlaceholders: requireNumber(value.archivePlaceholders, 'contextBudgetSummary.archivePlaceholders'),
+    archivePlaceholderReasonCounts: optionalCountRecord(
+      value.archivePlaceholderReasonCounts,
+      'contextBudgetSummary.archivePlaceholderReasonCounts',
+    ) ?? {},
     archiveWriteFailures: requireNumber(value.archiveWriteFailures, 'contextBudgetSummary.archiveWriteFailures'),
     retrievedArchiveToolResults: requireNumber(
       value.retrievedArchiveToolResults,
@@ -355,11 +422,36 @@ function validateContextBudgetSummary(value: unknown): HarborCellContextBudgetSu
       value.archiveRetrievalSkipped,
       'contextBudgetSummary.archiveRetrievalSkipped',
     ),
+    archiveRetrievalSkippedReasonCounts: optionalCountRecord(
+      value.archiveRetrievalSkippedReasonCounts,
+      'contextBudgetSummary.archiveRetrievalSkippedReasonCounts',
+    ) ?? {},
     archiveRetrievalFailures: requireNumber(
       value.archiveRetrievalFailures,
       'contextBudgetSummary.archiveRetrievalFailures',
     ),
+    archiveRetrievalFailureReasonCounts: optionalCountRecord(
+      value.archiveRetrievalFailureReasonCounts,
+      'contextBudgetSummary.archiveRetrievalFailureReasonCounts',
+    ) ?? {},
   };
+}
+
+function mergeCountRecord(target: Record<string, number>, source: Record<string, number> | undefined): void {
+  if (!source) return;
+  for (const [key, value] of Object.entries(source)) {
+    target[key] = (target[key] ?? 0) + value;
+  }
+}
+
+function optionalCountRecord(value: unknown, path: string): Record<string, number> | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error(`${path} must be a JSON object`);
+  const result: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    result[key] = requireNumber(raw, `${path}.${key}`);
+  }
+  return result;
 }
 
 function validateContextBudgetPolicySnapshot(value: unknown): HarborCellContextBudgetPolicySnapshot {

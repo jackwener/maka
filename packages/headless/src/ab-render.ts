@@ -1,6 +1,7 @@
 import type {
   AbAttemptRef,
   AbComparisonSummary,
+  AbContinuationSummary,
   AbContextBudgetSummary,
   AbDecision,
   AbPairInvestigationRef,
@@ -11,6 +12,7 @@ export function renderAbComparisonMarkdown(summary: AbComparisonSummary): string
   const contextBudgetLine = renderContextBudgetLine(summary);
   const activePruneSubsetLine = renderActivePruneSubsetLine(summary);
   const contextBudgetPolicyLine = renderContextBudgetPolicyLine(summary);
+  const continuationLine = renderContinuationLine(summary);
   const investigationRefLines = renderInvestigationRefLines(summary);
   const lines = [
     '# A/B Comparison',
@@ -31,6 +33,7 @@ export function renderAbComparisonMarkdown(summary: AbComparisonSummary): string
     `- Budget outcomes: A timed_out=${summary.baseline.budgetExhausted}, B timed_out=${summary.candidate.budgetExhausted}`,
     `- Infra outcomes: A infra_failed=${summary.baseline.infraFailed}, B infra_failed=${summary.candidate.infraFailed}; A plumbing_failed=${summary.baseline.plumbingFailed}, B plumbing_failed=${summary.candidate.plumbingFailed}`,
     ...(contextBudgetPolicyLine ? [contextBudgetPolicyLine] : []),
+    ...(continuationLine ? [continuationLine] : []),
     ...(contextBudgetLine ? [contextBudgetLine] : []),
     ...(activePruneSubsetLine ? [activePruneSubsetLine] : []),
     '',
@@ -88,6 +91,42 @@ function renderContextBudgetPolicyLine(summary: AbComparisonSummary): string | u
   return `- Context budget policy: A enabled=${baseline?.enabledAttempts ?? 0}/${baseline?.attempts ?? 0} snapshots=${JSON.stringify(baseline?.snapshots ?? [])}, B enabled=${candidate?.enabledAttempts ?? 0}/${candidate?.attempts ?? 0} snapshots=${JSON.stringify(candidate?.snapshots ?? [])}`;
 }
 
+function renderContinuationLine(summary: AbComparisonSummary): string | undefined {
+  if (!summary.baseline.continuation && !summary.candidate.continuation) return undefined;
+  return `- Continuation: A ${renderContinuationMetrics(continuationOrZero(summary.baseline.continuation))}, B ${renderContinuationMetrics(continuationOrZero(summary.candidate.continuation))}`;
+}
+
+function renderContinuationMetrics(summary: AbContinuationSummary): string {
+  return [
+    `enabled=${summary.enabledAttempts}/${summary.attempts}`,
+    `wall_timeout=${summary.wallTimeoutMs !== null ? `${summary.wallTimeoutMs}ms` : 'null'}`,
+    `turns=${summary.turnsUsed}`,
+    `continued=${summary.continuedTurns}`,
+    `step_cap_hits=${summary.stepCapHits}`,
+    `per_turn_step_cap_hits=${JSON.stringify(summary.perTurnStepCapHits)}`,
+    `cap_exhausted=${summary.capExhaustedAttempts}`,
+    `runtime_steps=${summary.totalRuntimeSteps}`,
+    `max_turns=${summary.maxTurns ?? 'null'}`,
+    `max_total_steps=${summary.maxTotalRuntimeSteps ?? 'null'}`,
+  ].join(' ');
+}
+
+function continuationOrZero(summary: AbContinuationSummary | undefined): AbContinuationSummary {
+  return summary ?? {
+    attempts: 0,
+    enabledAttempts: 0,
+    wallTimeoutMs: null,
+    turnsUsed: 0,
+    continuedTurns: 0,
+    stepCapHits: 0,
+    perTurnStepCapHits: [],
+    capExhaustedAttempts: 0,
+    totalRuntimeSteps: 0,
+    maxTurns: null,
+    maxTotalRuntimeSteps: null,
+  };
+}
+
 function decisionLabel(decision: AbDecision): string {
   switch (decision) {
     case 'non_inferior':
@@ -126,12 +165,19 @@ function renderContextBudgetMetrics(summary: AbContextBudgetSummary): string {
     `active_tokens_saved=${summary.activeEstimatedTokensSaved}`,
     `active_archive_failures=${summary.activeArchiveFailures}`,
     `archive_placeholders=${summary.archivePlaceholders}`,
+    `archive_placeholder_reasons=${renderCountRecord(summary.archivePlaceholderReasonCounts)}`,
     `archive_write_failures=${summary.archiveWriteFailures}`,
     `retrieved=${summary.retrievedArchiveToolResults}`,
     `retrieved_tokens=${summary.retrievedArchiveEstimatedTokens}`,
     `retrieval_skipped=${summary.archiveRetrievalSkipped}`,
+    `retrieval_skipped_reasons=${renderCountRecord(summary.archiveRetrievalSkippedReasonCounts)}`,
     `retrieval_failures=${summary.archiveRetrievalFailures}`,
+    `retrieval_failure_reasons=${renderCountRecord(summary.archiveRetrievalFailureReasonCounts)}`,
   ].join(' ');
+}
+
+function renderCountRecord(record: Record<string, number>): string {
+  return JSON.stringify(Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right))));
 }
 
 function renderActivePruneSubsetMetrics(summary: NonNullable<AbComparisonSummary['candidate']['activePruneSubset']>): string {
@@ -164,11 +210,14 @@ function contextBudgetOrZero(summary: AbContextBudgetSummary | undefined): AbCon
     activeEstimatedTokensSaved: 0,
     activeArchiveFailures: 0,
     archivePlaceholders: 0,
+    archivePlaceholderReasonCounts: {},
     archiveWriteFailures: 0,
     retrievedArchiveToolResults: 0,
     retrievedArchiveEstimatedTokens: 0,
     archiveRetrievalSkipped: 0,
+    archiveRetrievalSkippedReasonCounts: {},
     archiveRetrievalFailures: 0,
+    archiveRetrievalFailureReasonCounts: {},
   };
 }
 
