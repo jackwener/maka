@@ -1336,6 +1336,7 @@ function splitCandidateLines(text: string): string[] {
       line.length > 0
       && line.length <= 1000
       && !isPlaceholderMetadataLine(line)
+      && !isTaskRunMetadataLine(line)
       && !isLowSignalRawLogLine(line)
     );
 }
@@ -1351,6 +1352,7 @@ function sanitizeFactLine(line: string): string {
 function sanitizePath(value: string): string | undefined {
   const path = value.replace(/[.,;:)>\]}]+$/, '').trim();
   if (path.length < 3 || path.length > 180) return undefined;
+  if (isLowSignalInternalPath(path)) return undefined;
   return path;
 }
 
@@ -1361,10 +1363,40 @@ function isPlaceholderMetadataLine(line: string): boolean {
     || line.includes('originalEstimatedTokens');
 }
 
+function isTaskRunMetadataLine(line: string): boolean {
+  const normalized = line.toLowerCase();
+  if (/\btask_run_(created|queued|started|updated|completed|failed|cancelled)\b/.test(normalized)) return true;
+  if (/\b(taskrunid|task_run_id|runtimeeventid|runtime_event_id|invocationid|invocation_id)\b/.test(normalized)) {
+    return !containsOperationalSignal(normalized);
+  }
+  if (
+    /["'](?:sessionid|session_id|turnid|turn_id|runid|run_id)["']?\s*[:=]/i.test(line)
+    && /["'](?:status|taxonomy|event|type|createdat|created_at)["']?\s*[:=]/i.test(line)
+  ) {
+    return !containsOperationalSignal(normalized);
+  }
+  return false;
+}
+
 function isLowSignalRawLogLine(line: string): boolean {
   return /\b(noise|spam|debug spam)\b/i.test(line)
     || /\braw\b.*\b(log|output|noise|spam)\b/i.test(line)
     || /do[_-]?not[_-]?leak/i.test(line);
+}
+
+function containsOperationalSignal(normalizedLine: string): boolean {
+  return /\b(command|cmd|qemu|xorriso|mount|boot|kernel|initramfs|ssh|sshd|port|pid|exit code|failure|failed|timeout)\b/.test(normalizedLine)
+    || /(?:^|[\s"'])\/(?:app|boot|tmp|workspace|etc|var)\//.test(normalizedLine);
+}
+
+function isLowSignalInternalPath(path: string): boolean {
+  return /\/maka-task-run\//.test(path)
+    || /\/runs\/sessions\//.test(path)
+    || /\/exports\/harbor-/.test(path)
+    || /\/runtime-events\.jsonl$/.test(path)
+    || /\/events\.jsonl$/.test(path)
+    || /\/task-run\.json$/.test(path)
+    || /\/result\.json$/.test(path);
 }
 
 function uniqueInOrder(values: readonly string[]): string[] {

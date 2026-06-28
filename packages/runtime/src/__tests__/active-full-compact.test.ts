@@ -649,6 +649,41 @@ describe('active full compact PR1 foundation', () => {
     ));
   });
 
+  test('QEMU summary drops task-run metadata while keeping operational facts', () => {
+    const rewritten = rewriteActiveFullCompactInMessages({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      runId: 'run-1',
+      invocationId: 'inv-1',
+      messages: qemuStyleMessages(),
+      runtimeEvents: qemuStyleRuntimeEventsWithTaskRunMetadata(),
+      policy: {
+        enabled: true,
+        minStepNumber: 1,
+        minRecentMessages: 1,
+        maxActiveEstimatedTokens: 1,
+        highWaterRatio: 0.1,
+        maxSummaryEstimatedTokens: 1200,
+      },
+      stepNumber: 4,
+      now: 100,
+      charsPerToken: 4,
+    });
+
+    assert.equal(rewritten.decision, 'replaced');
+    assert.ok(rewritten.block);
+    const replacementJson = JSON.stringify(rewritten.messages);
+    assert.match(replacementJson, /qemu-system-x86_64/);
+    assert.match(replacementJson, /guest reached login prompt/);
+    assert.match(replacementJson, /\/app\/alpine\.iso/);
+    assert.match(replacementJson, /\/boot\/vmlinuz-lts/);
+    assert.doesNotMatch(replacementJson, /task_run_created/);
+    assert.doesNotMatch(replacementJson, /taskRunId/);
+    assert.doesNotMatch(replacementJson, /sessionId/);
+    assert.doesNotMatch(replacementJson, /runtime-events\.jsonl/);
+    assert.doesNotMatch(replacementJson, /maka-task-run/);
+  });
+
   test('QEMU/source-ref cliff validates visible replacement while retaining audit metadata', () => {
     const messages = [
       ...Array.from({ length: 96 }, (_, index) => ({
@@ -969,6 +1004,25 @@ function qemuStyleRuntimeEvents(): RuntimeEvent[] {
       ].join('\n'),
     }),
   ];
+}
+
+function qemuStyleRuntimeEventsWithTaskRunMetadata(): RuntimeEvent[] {
+  return qemuStyleRuntimeEvents().map((event) => {
+    if (event.id !== 'event-qemu-boot-result' || event.content?.kind !== 'function_response') return event;
+    return {
+      ...event,
+      content: {
+        ...event.content,
+        result: [
+          '{"event":"task_run_created","taskRunId":"task-run-1","sessionId":"session-1","runId":"run-1","status":"queued"}',
+          '{"event":"task_run_queued","taskRunId":"task-run-1","invocationId":"inv-1","status":"queued"}',
+          '/Users/likun/work/agent/maka-task-run/runs/sessions/session-1/runs/run-1/runtime-events.jsonl',
+          'qemu-system-x86_64 direct kernel boot used /app/alpine.iso and /boot/vmlinuz-lts',
+          String(event.content.result),
+        ].join('\n'),
+      },
+    };
+  });
 }
 
 function fixtureSummary(sourceIds: string[]): ActiveFullCompactSummary {
