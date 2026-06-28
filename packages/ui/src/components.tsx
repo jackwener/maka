@@ -5028,8 +5028,12 @@ function TurnFooterActions(props: {
         // PR-UI-17 (@yuejing 2026-05-22): action priority is presentation
         // only — has NO bearing on the lifecycle/status semantics encoded
         // by `deriveTurnFooterActions`. Pending state always forces
-        // priority back to "primary" so the user sees full label + icon
-        // while the action processes.
+        // priority back to "primary" (surfaced via `data-priority`) so the
+        // full label + icon stay visible while the action processes — that
+        // visibility is driven by the label/icon render below, NOT by the
+        // Button `variant`, which the `footer-action` marker shell fully
+        // overrides regardless. So the shell renders as a bare `quiet`
+        // button in every state; the variant no longer keys off priority.
         const isCopyAction = action.id === 'copy';
         const copyIsPending = isCopyAction && copyPhase === 'pending';
         const copyFeedbackLabel = copyPhase === 'pending'
@@ -5046,7 +5050,7 @@ function TurnFooterActions(props: {
             key={action.id}
             type="button"
             className={markerVariants({ variant: 'footer-action' })}
-            variant={priority === 'primary' ? 'secondary' : 'quiet'}
+            variant="quiet"
             size="nav"
             data-action={action.id}
             data-priority={priority}

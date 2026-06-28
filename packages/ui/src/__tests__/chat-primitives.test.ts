@@ -59,8 +59,12 @@ test('markerVariants resolves a leaf shell string the UiButton call sites can ap
 });
 
 // The footer action + lineage badge are the only NON-leaf marker call sites:
-// they render as `UiButton variant="quiet" size="nav"`, so the real on-element
-// class string is `cn(buttonVariants({ quiet, nav }), markerVariants(...))`.
+// they render as `UiButton variant="quiet" size="nav"` in EVERY state — the
+// pending footer action no longer switches the Button to `secondary` (the
+// marker shell overrides the variant either way, so the switch was visually
+// inert and is dropped), which means `quiet` is now the only merge path to
+// pin. The real on-element class string is
+// `cn(buttonVariants({ quiet, nav }), markerVariants(...))`.
 // `nav` is the bare size (emits nothing), so the marker shell — including its
 // own `h-8` height — fully owns the geometry; the only conflicts left to drop
 // are `buttonVariants`' BASE/quiet utilities (`gap-2`, `rounded-md`,
