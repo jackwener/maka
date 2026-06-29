@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { realpath } from 'node:fs/promises';
+import { isAbsolute, relative, resolve } from 'node:path';
+import { isDeepStrictEqual, promisify } from 'node:util';
 import { hashSystemPrompt } from './fixed-prompt-controller.js';
 import type {
   FixedPromptControllerResult,
@@ -11,6 +13,8 @@ import type {
   PromptCandidateDecisionEvent,
   RsiControllerAttributionEvent,
 } from './fixed-prompt-controller.js';
+import { hashHeldInTaskSet } from './prompt-candidate-loop.js';
+import type { PromptAcceptanceResult } from './prompt-acceptance-policy.js';
 import { validateRsiControllerAttribution } from './rsi-controller-attribution.js';
 
 const execFileAsync = promisify(execFile);
@@ -34,6 +38,85 @@ export interface ReplayedPromptDecisionRound {
   heldIn: FixedPromptControllerResult;
   heldOut: FixedPromptControllerResult | undefined;
   attribution: RsiControllerAttributionEvent;
+}
+
+export async function assertPromptRepoMatchesReplayState(input: {
+  gitRootPath: string;
+  expectedHead: string;
+  programPath: string;
+  systemPromptGitPath: string;
+}): Promise<void> {
+  const head = await gitOutput(input.gitRootPath, 'rev-parse', 'HEAD');
+  if (head !== input.expectedHead) {
+    throw new Error(`prompt repo HEAD does not match resumed RSI WAL state: expected ${input.expectedHead}, got ${head}`);
+  }
+  const programGitPath = await toGitRelativePath(input.gitRootPath, input.programPath);
+  const promptGitPaths = [
+    programGitPath,
+    input.systemPromptGitPath,
+  ];
+  for (const path of [...new Set(promptGitPaths)]) {
+    if (!(await gitExitZero(input.gitRootPath, 'ls-files', '--error-unmatch', '--', path))) {
+      throw new Error(`prompt repo prompt file must be tracked before RSI run: ${path}`);
+    }
+  }
+  const [worktreeClean, indexClean] = await Promise.all([
+    gitExitZero(input.gitRootPath, 'diff', '--quiet', '--', ...promptGitPaths),
+    gitExitZero(input.gitRootPath, 'diff', '--cached', '--quiet', '--', ...promptGitPaths),
+  ]);
+  if (!worktreeClean || !indexClean) {
+    throw new Error(`prompt repo has uncommitted prompt file changes: ${promptGitPaths.join(', ')}`);
+  }
+}
+
+export function assertReplayedDecisionMatchesResult(
+  decision: PromptCandidateDecisionEvent,
+  result: PromptAcceptanceResult,
+): void {
+  const replayedDecision = {
+    decision: result.decision,
+    reason: result.reason,
+    candidateCommitSha: result.candidateCommitSha,
+    previousLastKeptCommitSha: result.previousLastKeptCommitSha,
+    lastKeptCommitSha: result.lastKeptCommitSha,
+    previousHeldInReferencePassEligibleRate: result.previousHeldInReferencePassEligibleRate,
+    heldInReferencePassEligibleRate: result.heldInReferencePassEligibleRate,
+    originalCommitSha: result.originalCommitSha,
+    originalHeldOutPassEligibleRate: result.originalHeldOutPassEligibleRate,
+    heldInPassRateNoiseBand: result.heldInPassRateNoiseBand,
+    heldOutPassRateNoiseBand: result.heldOutPassRateNoiseBand,
+    rewardHackScan: result.rewardHackScan,
+    metrics: result.metrics,
+  };
+  const persistedDecision = {
+    decision: decision.decision,
+    reason: decision.reason,
+    candidateCommitSha: decision.candidateCommitSha,
+    previousLastKeptCommitSha: decision.previousLastKeptCommitSha,
+    lastKeptCommitSha: decision.lastKeptCommitSha,
+    previousHeldInReferencePassEligibleRate: decision.previousHeldInReferencePassEligibleRate,
+    heldInReferencePassEligibleRate: decision.heldInReferencePassEligibleRate,
+    originalCommitSha: decision.originalCommitSha,
+    originalHeldOutPassEligibleRate: decision.originalHeldOutPassEligibleRate,
+    heldInPassRateNoiseBand: decision.heldInPassRateNoiseBand,
+    heldOutPassRateNoiseBand: decision.heldOutPassRateNoiseBand,
+    rewardHackScan: decision.rewardHackScan,
+    metrics: decision.metrics,
+  };
+  if (!isDeepStrictEqual(persistedDecision, replayedDecision)) {
+    throw new Error(`RSI WAL replay decision mismatch for ${decision.roundId}`);
+  }
+}
+
+export function assertCandidateMatchesStableTaskSet(
+  candidate: PromptCandidateCommittedEvent,
+  stableHeldInTaskIds: readonly string[],
+): void {
+  const actualHash = hashHeldInTaskSet(candidate.heldInTaskIds);
+  const expectedHash = hashHeldInTaskSet(stableHeldInTaskIds);
+  if (candidate.heldInTaskSetHash !== actualHash || candidate.heldInTaskSetHash !== expectedHash) {
+    throw new Error(`RSI WAL replay candidate task-set mismatch for ${candidate.roundId}`);
+  }
 }
 
 export async function buildPromptOptimizationReplayPlan(input: {
@@ -388,4 +471,25 @@ async function gitOutput(cwd: string, ...args: string[]): Promise<string> {
 async function gitBlob(cwd: string, refPath: string): Promise<string> {
   const { stdout } = await execFileAsync('git', ['show', refPath], { cwd, encoding: 'utf8' });
   return stdout;
+}
+
+async function gitExitZero(cwd: string, ...args: string[]): Promise<boolean> {
+  try {
+    await execFileAsync('git', args, { cwd });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function toGitRelativePath(gitRootPath: string, filePath: string): Promise<string> {
+  const [rootPath, absolutePath] = await Promise.all([
+    realpath(gitRootPath),
+    realpath(isAbsolute(filePath) ? filePath : resolve(gitRootPath, filePath)),
+  ]);
+  const gitPath = relative(rootPath, absolutePath).split('\\').join('/');
+  if (gitPath === '' || gitPath === '..' || gitPath.startsWith('../')) {
+    throw new Error(`prompt repo prompt file must stay inside git root: ${filePath}`);
+  }
+  return gitPath;
 }
