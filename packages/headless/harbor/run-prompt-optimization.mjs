@@ -13,13 +13,10 @@
 //
 // Full run: drop the count/round overrides (defaults 60/20, 3 baseline, 10 rounds).
 
-import { execFile } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { mkdir, writeFile, readFile, stat } from 'node:fs/promises';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import {
   BENCHMARK_BASE_SYSTEM_PROMPT,
 } from '@maka/headless';
@@ -41,9 +38,14 @@ import {
   resolveMinStable,
   smokeExitCode,
 } from '#headless-run-env';
-import { ensureAbRunManifest } from '#ab-manifest';
-
-const execFileAsync = promisify(execFile);
+import { ensurePromptOptimizationPromptRepo } from '#prompt-optimization-bootstrap';
+import {
+  buildPromptOptimizationRunManifest,
+  buildPromptOptimizationSubjectFingerprint,
+  buildPromptOptimizationTaskSourceFingerprint,
+  buildPromptOptimizationToolchainFingerprint,
+  ensurePromptOptimizationRunManifest,
+} from '#prompt-optimization-manifest';
 
 // DeepSeek per-1M USD pricing (0.145 USD/CNY). "input" is the cache-miss rate;
 // cache writes carry no separate charge, so cacheWriteUsdPer1M is 0. Vendor
@@ -129,152 +131,6 @@ function selectTasksByIds(allTasks, ids) {
   const missing = ids.filter((id) => !byId.has(id));
   if (missing.length > 0) throw new Error(`unknown task id(s): ${missing.join(', ')}`);
   return ids.map((id) => byId.get(id));
-}
-
-async function git(cwd, ...args) {
-  await execFileAsync('git', args, { cwd });
-}
-
-async function gitOutput(cwd, ...args) {
-  const { stdout } = await execFileAsync('git', args, {
-    cwd,
-    encoding: 'utf8',
-    maxBuffer: 1024 * 1024,
-  });
-  return stdout.trimEnd();
-}
-
-function hashPayload(payload) {
-  return `sha256:${createHash('sha256').update(canonicalJson(payload)).digest('hex')}`;
-}
-
-function canonicalJson(value) {
-  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value)
-      .filter(([, entryValue]) => entryValue !== undefined)
-      .sort(([a], [b]) => a.localeCompare(b));
-    return `{${entries.map(([key, entryValue]) => `${JSON.stringify(key)}:${canonicalJson(entryValue)}`).join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
-
-function buildPromptOptimizationRunManifest(input) {
-  const manifestWithoutFingerprint = {
-    schemaVersion: 'maka.prompt_optimization.run_manifest.v1',
-    runId: input.runId,
-    provider: input.provider,
-    baseUrl: input.baseUrl,
-    model: input.model,
-    rounds: input.rounds,
-    baselineRuns: input.baselineRuns,
-    costCeilingUsd: input.costCeilingUsd,
-    maxConcurrency: input.maxConcurrency ?? null,
-    maxInfraFailureRate: input.maxInfraFailureRate ?? null,
-    maxStableTaskDurationMs: input.maxStableTaskDurationMs ?? null,
-    minStableRatio: input.minStableRatio,
-    minStableHeldInTasks: input.minStableHeldInTasks,
-    minStableHeldOutTasks: input.minStableHeldOutTasks,
-    runtimeProfile: input.runtimeProfile,
-    subjectFingerprint: input.subjectFingerprint,
-    taskSourceFingerprint: input.taskSourceFingerprint,
-    toolchainFingerprint: input.toolchainFingerprint,
-    heldInTaskIds: input.heldInTasks.map((task) => task.id),
-    heldOutTaskIds: input.heldOutTasks.map((task) => task.id),
-    droppedHeldInNoPatternTaskIds: input.heldInNoPattern.map((task) => task.id),
-    heldOutNoPatternTaskIds: input.heldOutNoPattern.map((task) => task.id),
-  };
-  return {
-    ...manifestWithoutFingerprint,
-    fingerprint: hashPayload(manifestWithoutFingerprint),
-  };
-}
-
-async function buildSubjectFingerprint(repoPath) {
-  const [gitRoot, head, status] = await Promise.all([
-    gitOutput(repoPath, 'rev-parse', '--show-toplevel'),
-    gitOutput(repoPath, 'rev-parse', 'HEAD'),
-    gitOutput(repoPath, 'status', '--porcelain=v1', '--untracked-files=normal'),
-  ]);
-  return hashPayload({
-    kind: 'prompt-optimization-subject',
-    repoPath: resolve(repoPath),
-    gitRoot: resolve(gitRoot),
-    head,
-    dirty: status.length > 0,
-    statusHash: hashPayload({ status }),
-  });
-}
-
-async function buildToolchainFingerprint(repoRoot) {
-  return hashPayload({
-    kind: 'prompt-optimization-toolchain',
-    node: process.version,
-    packageLockHash: await hashOptionalFile(join(repoRoot, 'package-lock.json')),
-    headlessPackageHash: await hashOptionalFile(join(repoRoot, 'packages/headless/package.json')),
-  });
-}
-
-function buildTaskSourceFingerprint(tasksRoot, heldInTasks, heldOutTasks) {
-  const taskPayload = (task) => ({
-    id: task.id,
-    path: resolve(task.path),
-    metadata: task.metadata ?? null,
-  });
-  return hashPayload({
-    kind: 'prompt-optimization-task-source',
-    tasksRoot: resolve(tasksRoot),
-    heldInTasks: heldInTasks.map(taskPayload),
-    heldOutTasks: heldOutTasks.map(taskPayload),
-  });
-}
-
-async function hashOptionalFile(path) {
-  try {
-    return hashPayload({ bytes: await readFile(path, 'utf8') });
-  } catch (error) {
-    if (error && typeof error === 'object' && error.code === 'ENOENT') return null;
-    throw error;
-  }
-}
-
-async function pathExists(path) {
-  try {
-    await stat(path);
-    return true;
-  } catch (error) {
-    if (error && typeof error === 'object' && error.code === 'ENOENT') return false;
-    throw error;
-  }
-}
-
-async function ensurePromptOptimizationRunManifest(path, manifest, runRoot) {
-  if (!(await pathExists(path))) {
-    const legacyArtifacts = [
-      join(runRoot, 'controller', 'results.jsonl'),
-      join(runRoot, 'prompt-repo'),
-    ];
-    const existing = [];
-    for (const artifactPath of legacyArtifacts) {
-      if (await pathExists(artifactPath)) existing.push(artifactPath);
-    }
-    if (existing.length > 0) {
-      throw new Error(
-        `prompt optimization run root already has artifacts but no prompt-optimization-manifest.json: ${existing.join(', ')}. Use a new MAKA_PROMPT_RUN_ID or move the legacy artifacts aside.`,
-      );
-    }
-  }
-  try {
-    return await ensureAbRunManifest(path, manifest);
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith('A/B run manifest does not match existing run id:')) {
-      throw new Error(error.message.replace(
-        'A/B run manifest does not match existing run id:',
-        'prompt optimization run manifest does not match existing run id:',
-      ));
-    }
-    throw error;
-  }
 }
 
 async function main() {
@@ -434,9 +290,9 @@ async function main() {
       minStableHeldInTasks,
       minStableHeldOutTasks,
       runtimeProfile,
-      subjectFingerprint: await buildSubjectFingerprint(makaRepoPath),
-      taskSourceFingerprint: buildTaskSourceFingerprint(tasksRoot, heldInTasks, heldOutTasks),
-      toolchainFingerprint: await buildToolchainFingerprint(repoRoot),
+      subjectFingerprint: await buildPromptOptimizationSubjectFingerprint(makaRepoPath),
+      taskSourceFingerprint: await buildPromptOptimizationTaskSourceFingerprint(tasksRoot, heldInTasks, heldOutTasks),
+      toolchainFingerprint: await buildPromptOptimizationToolchainFingerprint(makaRepoPath),
       heldInTasks,
       heldOutTasks,
       heldInNoPattern,
@@ -450,21 +306,19 @@ async function main() {
   // Prompt repo: program.md + system_prompt.md committed; agent-cwd/ is the empty
   // isolation root; controller artifacts live OUTSIDE it.
   const promptRepoDir = join(runRoot, 'prompt-repo');
-  const agentCwdPath = join(promptRepoDir, 'agent-cwd');
   const controllerDir = join(runRoot, 'controller');
   const jobsDir = join(runRoot, 'jobs');
-  await mkdir(agentCwdPath, { recursive: true });
   await mkdir(controllerDir, { recursive: true });
   await mkdir(jobsDir, { recursive: true });
-  const programPath = join(promptRepoDir, 'program.md');
-  const systemPromptPath = join(promptRepoDir, 'system_prompt.md');
-  await writeFile(programPath, PROGRAM, 'utf8');
-  await writeFile(systemPromptPath, `${BENCHMARK_BASE_SYSTEM_PROMPT}\n`, 'utf8');
-  await git(promptRepoDir, 'init', '-q');
-  await git(promptRepoDir, 'config', 'user.email', 'rsi@maka.local');
-  await git(promptRepoDir, 'config', 'user.name', 'RSI Loop');
-  await git(promptRepoDir, 'add', 'program.md', 'system_prompt.md');
-  await git(promptRepoDir, 'commit', '-q', '-m', 'seed prompt');
+  const {
+    agentCwdPath,
+    programPath,
+    systemPromptPath,
+  } = await ensurePromptOptimizationPromptRepo({
+    promptRepoDir,
+    program: PROGRAM,
+    systemPrompt: `${BENCHMARK_BASE_SYSTEM_PROMPT}\n`,
+  });
 
   const connection = {
     slug: provider,
