@@ -1,4 +1,5 @@
-import { generalizedErrorMessage } from '@maka/core/redaction';
+import { createHash } from 'node:crypto';
+import { generalizedErrorMessage, redactSecrets } from '@maka/core/redaction';
 import type {
   CacheMissInputSource,
   ContextBudgetDiagnostic,
@@ -38,6 +39,8 @@ export interface RunTraceEvent {
 }
 
 export type RunTraceRecorder = (event: RunTraceEvent) => void;
+
+const REDACTED_ERROR_MESSAGE_MAX_CHARS = 2_048;
 
 export interface RunTraceInput {
   sessionId: string;
@@ -128,6 +131,7 @@ export class RunTrace {
     this.emit('model', 'model_stream_failed', 'Model stream failed', {
       ...(errorClass ? { errorClass } : {}),
       error: explainError(error),
+      ...diagnoseError(error),
     });
   }
 
@@ -191,6 +195,51 @@ export interface RunTraceLike {
 
 export function explainError(error: unknown): string {
   return generalizedErrorMessage(error);
+}
+
+function diagnoseError(error: unknown): Record<string, unknown> {
+  const rawMessage = rawErrorMessage(error);
+  const redactedMessage = redactSecrets(rawMessage);
+  const stack = error instanceof Error && typeof error.stack === 'string'
+    ? redactSecrets(error.stack)
+    : undefined;
+  const message = truncate(redactedMessage, REDACTED_ERROR_MESSAGE_MAX_CHARS);
+
+  return {
+    rawErrorName: rawErrorName(error),
+    rawErrorType: typeof error,
+    redactedErrorMessage: message.text,
+    redactedErrorMessageSha256: sha256(redactedMessage),
+    ...(message.truncated ? { redactedErrorMessageTruncated: true } : {}),
+    ...(stack ? { redactedErrorStackSha256: sha256(stack) } : {}),
+  };
+}
+
+function rawErrorName(error: unknown): string {
+  if (error instanceof Error && typeof error.name === 'string' && error.name.length > 0) {
+    return error.name;
+  }
+  if (error === null) return 'null';
+  return typeof error;
+}
+
+function rawErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  try {
+    return String(error);
+  } catch {
+    return '[unprintable error]';
+  }
+}
+
+function truncate(value: string, maxChars: number): { text: string; truncated: boolean } {
+  if (value.length <= maxChars) return { text: value, truncated: false };
+  return { text: value.slice(0, maxChars), truncated: true };
+}
+
+function sha256(value: string): string {
+  return `sha256:${createHash('sha256').update(value).digest('hex')}`;
 }
 
 function sanitizeTraceData(data: Record<string, unknown>): Record<string, unknown> {
