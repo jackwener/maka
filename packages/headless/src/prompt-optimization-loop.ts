@@ -378,7 +378,8 @@ export async function runPromptOptimizationLoop(
     const roundId = `round-${round}`;
     const existingDecision = promptDecisionForRound(resumeEvents, input.runId, roundId);
     if (existingDecision) {
-      const existingHeldInEvents = stableHeldIn(taskEventsForRound(resumeEvents, input.runId, roundId));
+      const existingRoundTaskEvents = taskEventsForRound(resumeEvents, input.runId, roundId);
+      const existingHeldInEvents = stableHeldIn(existingRoundTaskEvents);
       const existingResult = promptAcceptanceResultFromDecision(existingDecision);
       const existingAttribution = rsiAttributionForRound(
         resumeEvents,
@@ -386,6 +387,7 @@ export async function runPromptOptimizationLoop(
         roundId,
         existingDecision.candidateCommitSha,
       );
+      accumulate(fixedPromptControllerResultFromWal(existingRoundTaskEvents, input.heldInResultsTsvPath));
       decisions.push(existingResult);
       if (existingResult.decision === 'keep') {
         lastKeptCommitSha = existingResult.lastKeptCommitSha;

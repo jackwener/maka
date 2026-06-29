@@ -57,6 +57,7 @@ describe('runPromptOptimizationLoop', () => {
       assert.equal(resumed.keptCount, 1);
       assert.equal(resumed.stopReason, 'rounds_complete');
       assert.equal(resumed.smoke.status, 'pass');
+      assert.ok(Math.abs(resumed.totalCostUsd - resumed.smoke.totalCostUsd) < 1e-9);
       assert.ok(
         resumedTaskRuns.every((call) => call.startsWith('round-1:')),
         `unexpected resumed task runs: ${JSON.stringify(resumedTaskRuns)}`,
