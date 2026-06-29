@@ -58,12 +58,12 @@ describe('chat tool-card migration contract (#332 PR3b)', () => {
       );
     }
 
-    // Adjacent concerns that PR3b must leave alone: the error banner (PR3c), the
-    // result-preview renderers (out of scope), and the shared inline-code base.
+    // Adjacent concerns that PR3b must leave alone: the error banner (PR3c) and
+    // the shared inline-code base. (The result-preview renderers `.maka-tool-diff*`
+    // / `.maka-tool-terminal*` were PR3b-era out-of-scope but have since migrated
+    // onto `previewVariants` in PR4, so they are no longer asserted as kept here.)
     for (const kept of [
       '.maka-tool-error',
-      '.maka-tool-diff',
-      '.maka-tool-terminal',
       '.maka-code',
     ]) {
       assert.ok(
