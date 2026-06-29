@@ -44,7 +44,11 @@ import {
   projectRsiPromptAttribution,
   type RsiPromptAttribution,
 } from './rsi-controller-attribution.js';
-import { derivePromptOptimizationReplayState } from './prompt-optimization-replay.js';
+import {
+  derivePromptOptimizationReplayState,
+  readSeedSystemPromptHash,
+  replayControllerSweep,
+} from './prompt-optimization-replay.js';
 
 /**
  * Top-level driver for the RSI prompt-optimization loop (Issue #64).
@@ -189,6 +193,11 @@ export async function runPromptOptimizationLoop(
     ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
     strictRoundState: true,
   });
+  const seedPromptHash = await readSeedSystemPromptHash({
+    promptRepoDir: input.git.gitRootPath,
+    seedCommitSha: replayState.seedCommitSha,
+    systemPromptGitPath: input.git.systemPromptGitPath,
+  });
 
   const heldInTaskIds = input.heldInTasks.map((task) => task.id);
   const heldOutTaskIds = input.heldOutTasks.map((task) => task.id);
@@ -286,12 +295,17 @@ export async function runPromptOptimizationLoop(
       );
     }
     const roundId = `baseline-${index}`;
-    const existingBaselineEvents = taskEventsForRound(resumeEvents, input.runId, roundId);
-    const existingHeldIn = eventsForTaskIds(existingBaselineEvents, heldInTaskIds);
-    const existingHeldOut = eventsForTaskIds(existingBaselineEvents, heldOutTaskIds);
-    const heldIn = existingHeldIn.length === input.heldInTasks.length
-      ? await fixedPromptControllerResultFromWal(existingHeldIn, input.heldInResultsTsvPath)
-      : await sweep(roundId, input.heldInTasks, input.heldInResultsTsvPath);
+    const replayedHeldIn = replayControllerSweep({
+      events: resumeEvents,
+      runId: input.runId,
+      roundId,
+      taskIds: heldInTaskIds,
+      expectedPromptHash: seedPromptHash,
+      ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
+      resultsTsvPath: input.heldInResultsTsvPath,
+    });
+    if (replayedHeldIn) await writeFixedPromptResultsTsv(input.heldInResultsTsvPath, replayedHeldIn.events);
+    const heldIn = replayedHeldIn ?? await sweep(roundId, input.heldInTasks, input.heldInResultsTsvPath);
     accumulate(heldIn);
     const postHeldInGuard = stopGuard();
     if (postHeldInGuard) {
@@ -300,9 +314,17 @@ export async function runPromptOptimizationLoop(
         + 'raise the budget or lower baselineRuns',
       );
     }
-    const heldOut = existingHeldOut.length === input.heldOutTasks.length
-      ? await fixedPromptControllerResultFromWal(existingHeldOut, input.heldOutResultsTsvPath)
-      : await sweep(roundId, input.heldOutTasks, input.heldOutResultsTsvPath);
+    const replayedHeldOut = replayControllerSweep({
+      events: resumeEvents,
+      runId: input.runId,
+      roundId,
+      taskIds: heldOutTaskIds,
+      expectedPromptHash: seedPromptHash,
+      ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
+      resultsTsvPath: input.heldOutResultsTsvPath,
+    });
+    if (replayedHeldOut) await writeFixedPromptResultsTsv(input.heldOutResultsTsvPath, replayedHeldOut.events);
+    const heldOut = replayedHeldOut ?? await sweep(roundId, input.heldOutTasks, input.heldOutResultsTsvPath);
     accumulate(heldOut);
     baselineRunsData.push({ heldInEvents: heldIn.events, heldOutEvents: heldOut.events });
   }
@@ -386,11 +408,38 @@ export async function runPromptOptimizationLoop(
     const roundId = `round-${round}`;
     const existingDecision = replayState.decisionByRoundId.get(roundId);
     if (existingDecision) {
-      const existingRoundTaskEvents = taskEventsForRound(resumeEvents, input.runId, roundId);
-      const existingHeldInEvents = stableHeldIn(existingRoundTaskEvents);
+      const existingCandidate = replayState.candidateByRoundId.get(roundId);
+      if (!existingCandidate) {
+        throw new Error(`RSI WAL replay missing candidate commit for decided ${roundId}`);
+      }
+      const existingHeldIn = replayControllerSweep({
+        events: resumeEvents,
+        runId: input.runId,
+        roundId,
+        taskIds: stableHeldInTaskIds,
+        expectedPromptHash: existingCandidate.promptHash,
+        ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
+        resultsTsvPath: input.heldInResultsTsvPath,
+      });
+      if (!existingHeldIn) {
+        throw new Error(`RSI WAL replay missing held-in task evidence for ${roundId}`);
+      }
+      const existingHeldOut = replayControllerSweep({
+        events: resumeEvents,
+        runId: input.runId,
+        roundId,
+        taskIds: stableHeldOutTaskIds,
+        expectedPromptHash: existingCandidate.promptHash,
+        ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
+        resultsTsvPath: input.heldOutResultsTsvPath,
+      });
+      await writeFixedPromptResultsTsv(input.heldInResultsTsvPath, existingHeldIn.events);
+      if (existingHeldOut) await writeFixedPromptResultsTsv(input.heldOutResultsTsvPath, existingHeldOut.events);
+      const existingHeldInEvents = existingHeldIn.events;
       const existingResult = promptAcceptanceResultFromDecision(existingDecision);
       const existingAttribution = replayState.attributionByRoundId.get(roundId);
-      accumulate(await fixedPromptControllerResultFromWal(existingRoundTaskEvents, input.heldInResultsTsvPath));
+      accumulate(existingHeldIn);
+      if (existingHeldOut) accumulate(existingHeldOut);
       decisions.push(existingResult);
       if (existingResult.decision === 'keep') {
         lastKeptCommitSha = existingResult.lastKeptCommitSha;
@@ -564,41 +613,6 @@ export async function runPromptOptimizationLoop(
   };
 }
 
-function taskEventsForRound(
-  events: readonly FixedPromptWalEvent[],
-  runId: string,
-  roundId: string,
-): FixedPromptTaskWalEvent[] {
-  return events.filter((event): event is FixedPromptTaskWalEvent =>
-    isTaskEvent(event)
-    && event.runId === runId
-    && event.roundId === roundId);
-}
-
-function eventsForTaskIds(
-  events: readonly FixedPromptTaskWalEvent[],
-  taskIds: readonly string[],
-): FixedPromptTaskWalEvent[] {
-  const byTask = new Map(events.map((event) => [event.taskId, event]));
-  return taskIds
-    .map((taskId) => byTask.get(taskId))
-    .filter((event): event is FixedPromptTaskWalEvent => event !== undefined);
-}
-
-async function fixedPromptControllerResultFromWal(
-  events: readonly FixedPromptTaskWalEvent[],
-  resultsTsvPath: string,
-): Promise<FixedPromptControllerResult> {
-  await writeFixedPromptResultsTsv(resultsTsvPath, events);
-  return {
-    taskIds: events.map((event) => event.taskId),
-    events: [...events],
-    totalTokens: sum(events.map((event) => eventHasRunArtifacts(event) ? event.tokenSummary.total : 0)),
-    totalCostUsd: sum(events.map((event) => eventHasRunArtifacts(event) ? event.tokenSummary.costUsd : 0)),
-    resultsTsvPath,
-  };
-}
-
 function promptAcceptanceResultFromDecision(
   event: Extract<FixedPromptWalEvent, { type: 'prompt_candidate_decided' }>,
 ): PromptAcceptanceResult {
@@ -619,23 +633,6 @@ function promptAcceptanceResultFromDecision(
     rewardHackScan: event.rewardHackScan ?? { decision: 'clean' },
     metrics: event.metrics as PromptAcceptanceResult['metrics'],
   };
-}
-
-function isTaskEvent(event: FixedPromptWalEvent): event is FixedPromptTaskWalEvent {
-  return event.type === 'task_completed'
-    || event.type === 'task_infra_failed'
-    || event.type === 'task_budget_exhausted'
-    || event.type === 'task_plumbing_failed';
-}
-
-function eventHasRunArtifacts(
-  event: FixedPromptTaskWalEvent,
-): event is FixedPromptTaskCompletedEvent | Extract<FixedPromptTaskWalEvent, { type: 'task_plumbing_failed' }> {
-  return event.type === 'task_completed' || event.type === 'task_plumbing_failed';
-}
-
-function sum(values: readonly number[]): number {
-  return values.reduce((total, value) => total + value, 0);
 }
 
 function assertUniqueTaskIds(label: string, taskIds: readonly string[]): void {

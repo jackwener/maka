@@ -61,6 +61,29 @@ describe('ensurePromptOptimizationPromptRepo', () => {
     });
   });
 
+  test('rejects post-candidate resume when the root seed prompt differs from input', async () => {
+    await withDir(async (dir) => {
+      const promptRepoDir = join(dir, 'prompt-repo');
+      await ensurePromptOptimizationPromptRepo({
+        promptRepoDir,
+        program: 'program v1\n',
+        systemPrompt: 'prompt v1\n',
+      });
+      await writeFile(join(promptRepoDir, 'system_prompt.md'), 'candidate prompt\n', 'utf8');
+      await git(promptRepoDir, 'add', 'system_prompt.md');
+      await git(promptRepoDir, 'commit', '-q', '-m', 'candidate prompt round-0');
+
+      await assert.rejects(
+        ensurePromptOptimizationPromptRepo({
+          promptRepoDir,
+          program: 'program v1\n',
+          systemPrompt: 'prompt v2\n',
+        }),
+        /existing prompt repo seed files do not match this run: system_prompt\.md/,
+      );
+    });
+  });
+
   test('allows post-candidate resume when the prompt repo matches the WAL state', async () => {
     await withDir(async (dir) => {
       const promptRepoDir = join(dir, 'prompt-repo');

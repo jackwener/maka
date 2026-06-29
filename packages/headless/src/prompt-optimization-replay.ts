@@ -1,6 +1,10 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { hashSystemPrompt } from './fixed-prompt-controller.js';
 import type {
+  FixedPromptControllerResult,
+  FixedPromptTaskCompletedEvent,
+  FixedPromptTaskPlumbingFailedEvent,
   FixedPromptTaskWalEvent,
   FixedPromptWalEvent,
   PromptCandidateCommittedEvent,
@@ -17,6 +21,58 @@ export interface PromptOptimizationReplayState {
   candidateByRoundId: ReadonlyMap<string, PromptCandidateCommittedEvent>;
   decisionByRoundId: ReadonlyMap<string, PromptCandidateDecisionEvent>;
   attributionByRoundId: ReadonlyMap<string, RsiControllerAttributionEvent>;
+}
+
+export function replayControllerSweep(input: {
+  events: readonly FixedPromptWalEvent[];
+  runId: string;
+  roundId: string;
+  taskIds: readonly string[];
+  expectedPromptHash: string;
+  resumeFingerprint?: string;
+  resultsTsvPath: string;
+}): FixedPromptControllerResult | undefined {
+  const requested = new Set(input.taskIds);
+  const matched = input.events.filter((event): event is FixedPromptTaskWalEvent =>
+    isTaskEvent(event)
+    && event.runId === input.runId
+    && event.roundId === input.roundId
+    && requested.has(event.taskId));
+  if (matched.length === 0) return undefined;
+
+  const byTaskId = new Map<string, FixedPromptTaskWalEvent>();
+  for (const event of matched) {
+    if (input.resumeFingerprint !== undefined && event.resumeFingerprint !== input.resumeFingerprint) {
+      throw new Error(`RSI WAL replay identity mismatch for ${event.roundId}/${event.taskId}`);
+    }
+    const eventPromptHash = promptHashForReplayIdentity(event);
+    if (eventPromptHash !== undefined && eventPromptHash !== input.expectedPromptHash) {
+      throw new Error(`RSI WAL replay prompt hash mismatch for ${event.roundId}/${event.taskId}`);
+    }
+    if (byTaskId.has(event.taskId)) {
+      throw new Error(`RSI WAL replay duplicate task event for ${event.roundId}/${event.taskId}`);
+    }
+    byTaskId.set(event.taskId, event);
+  }
+
+  if (byTaskId.size !== input.taskIds.length) return undefined;
+  const orderedEvents = input.taskIds.map((taskId) => byTaskId.get(taskId)!);
+  return {
+    taskIds: [...input.taskIds],
+    events: orderedEvents,
+    totalTokens: sum(orderedEvents.map((event) => eventHasRunArtifacts(event) ? event.tokenSummary.total : 0)),
+    totalCostUsd: sum(orderedEvents.map((event) => eventHasRunArtifacts(event) ? event.tokenSummary.costUsd : 0)),
+    resultsTsvPath: input.resultsTsvPath,
+  };
+}
+
+export async function readSeedSystemPromptHash(input: {
+  promptRepoDir: string;
+  seedCommitSha: string;
+  systemPromptGitPath: string;
+}): Promise<string> {
+  const systemPrompt = await gitBlob(input.promptRepoDir, `${input.seedCommitSha}:${input.systemPromptGitPath}`);
+  return hashSystemPrompt(systemPrompt);
 }
 
 export async function derivePromptOptimizationReplayState(input: {
@@ -129,7 +185,22 @@ function promptHashForReplayIdentity(event: FixedPromptTaskWalEvent): string | u
   return undefined;
 }
 
+function eventHasRunArtifacts(
+  event: FixedPromptTaskWalEvent,
+): event is FixedPromptTaskCompletedEvent | FixedPromptTaskPlumbingFailedEvent {
+  return event.type === 'task_completed' || event.type === 'task_plumbing_failed';
+}
+
+function sum(values: readonly number[]): number {
+  return values.reduce((total, value) => total + value, 0);
+}
+
 async function gitOutput(cwd: string, ...args: string[]): Promise<string> {
   const { stdout } = await execFileAsync('git', args, { cwd, encoding: 'utf8' });
   return stdout.trim();
+}
+
+async function gitBlob(cwd: string, refPath: string): Promise<string> {
+  const { stdout } = await execFileAsync('git', ['show', refPath], { cwd, encoding: 'utf8' });
+  return stdout;
 }

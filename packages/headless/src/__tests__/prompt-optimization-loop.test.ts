@@ -246,6 +246,90 @@ describe('runPromptOptimizationLoop', () => {
     });
   });
 
+  test('fails closed when replayed baseline task evidence has a stale prompt hash', async () => {
+    await withHarness(async (harness) => {
+      const heldInTasks = makeTasks('hin', 20);
+      const heldOutTasks = makeTasks('hout', 8);
+      const rewardFor = (roundId: string, taskId: string): number => {
+        const index = taskIndex(taskId);
+        if (taskId.startsWith('hout-')) return index < 4 ? 1 : 0;
+        if (roundId.startsWith('baseline-')) return index < 10 ? 1 : 0;
+        return 1;
+      };
+
+      await runLoop(harness, {
+        heldInTasks,
+        heldOutTasks,
+        rewardFor,
+        rounds: 1,
+        baselineRuns: 1,
+      });
+      const events = await readFixedPromptWal(harness.resultsJsonlPath);
+      const staleEvents = events.map((event) => (
+        event.type === 'task_completed' && event.roundId === 'baseline-0' && event.taskId === 'hin-0'
+          ? { ...event, promptHash: 'sha256:stale' }
+          : event
+      ));
+      await writeFile(
+        harness.resultsJsonlPath,
+        `${staleEvents.map((event) => JSON.stringify(event)).join('\n')}\n`,
+        'utf8',
+      );
+
+      await assert.rejects(
+        runLoop(harness, {
+          heldInTasks,
+          heldOutTasks,
+          rewardFor,
+          rounds: 2,
+          baselineRuns: 1,
+        }),
+        /RSI WAL replay prompt hash mismatch/,
+      );
+    });
+  });
+
+  test('fails closed when replayed baseline task evidence has duplicate task ids', async () => {
+    await withHarness(async (harness) => {
+      const heldInTasks = makeTasks('hin', 20);
+      const heldOutTasks = makeTasks('hout', 8);
+      const rewardFor = (roundId: string, taskId: string): number => {
+        const index = taskIndex(taskId);
+        if (taskId.startsWith('hout-')) return index < 4 ? 1 : 0;
+        if (roundId.startsWith('baseline-')) return index < 10 ? 1 : 0;
+        return 1;
+      };
+
+      await runLoop(harness, {
+        heldInTasks,
+        heldOutTasks,
+        rewardFor,
+        rounds: 1,
+        baselineRuns: 1,
+      });
+      const events = await readFixedPromptWal(harness.resultsJsonlPath);
+      const duplicate = events.find((event) =>
+        event.type === 'task_completed' && event.roundId === 'baseline-0' && event.taskId === 'hin-0');
+      assert.ok(duplicate);
+      await writeFile(
+        harness.resultsJsonlPath,
+        `${[...events, duplicate].map((event) => JSON.stringify(event)).join('\n')}\n`,
+        'utf8',
+      );
+
+      await assert.rejects(
+        runLoop(harness, {
+          heldInTasks,
+          heldOutTasks,
+          rewardFor,
+          rounds: 2,
+          baselineRuns: 1,
+        }),
+        /RSI WAL replay duplicate task event/,
+      );
+    });
+  });
+
   test('rebuilds held-in TSV from WAL before prompting the next resumed round', async () => {
     await withHarness(async (harness) => {
       const heldInTasks = makeTasks('hin', 20);
@@ -267,6 +351,7 @@ describe('runPromptOptimizationLoop', () => {
       await rm(harness.heldInResultsTsvPath, { force: true });
 
       let roundOneResultsTsv = '';
+      let diskHeldInTsvDuringPrompt = '';
       const resumed = await runLoop(harness, {
         heldInTasks,
         heldOutTasks,
@@ -276,6 +361,7 @@ describe('runPromptOptimizationLoop', () => {
         metaAgent: async (promptInput) => {
           if (promptInput.roundId === 'round-1') {
             roundOneResultsTsv = promptInput.resultsTsv;
+            diskHeldInTsvDuringPrompt = await readFile(harness.heldInResultsTsvPath, 'utf8');
           }
           return fakeMetaAgent()(promptInput);
         },
@@ -285,6 +371,8 @@ describe('runPromptOptimizationLoop', () => {
       assert.match(roundOneResultsTsv, /^task_id\tstatus\tpassed\t/);
       assert.match(roundOneResultsTsv, /hin-0\t/);
       assert.doesNotMatch(roundOneResultsTsv, /hout-0\t/);
+      assert.match(diskHeldInTsvDuringPrompt, /hin-0\t/);
+      assert.doesNotMatch(diskHeldInTsvDuringPrompt, /hout-0\t/);
     });
   });
 

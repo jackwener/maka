@@ -33,10 +33,8 @@ export async function ensurePromptOptimizationPromptRepo(
       await commitSeed(input.promptRepoDir);
       return { agentCwdPath, programPath, systemPromptPath };
     }
-    await assertExistingSeedFile(programPath, input.program);
-    if (await promptRepoHeadIsSeed(input.promptRepoDir)) {
-      await assertExistingSeedFile(systemPromptPath, input.systemPrompt);
-    }
+    const seedCommitSha = await gitOutput(input.promptRepoDir, 'rev-list', '--max-parents=0', 'HEAD');
+    await assertSeedCommitFilesMatchInput(input, seedCommitSha);
     return { agentCwdPath, programPath, systemPromptPath };
   }
 
@@ -62,16 +60,26 @@ export async function assertPromptOptimizationResumeSupported(input: {
   }
 }
 
-async function promptRepoHeadIsSeed(promptRepoDir: string): Promise<boolean> {
-  const head = await gitOutput(promptRepoDir, 'rev-parse', 'HEAD');
-  const seedCommitSha = await gitOutput(promptRepoDir, 'rev-list', '--max-parents=0', 'HEAD');
-  return head === seedCommitSha;
-}
-
 async function assertExistingSeedFile(path: string, expected: string): Promise<void> {
   const actual = await readFile(path, 'utf8');
   if (actual !== expected) {
     throw new Error(`existing prompt repo seed files do not match this run: ${path}`);
+  }
+}
+
+async function assertSeedCommitFilesMatchInput(
+  input: EnsurePromptOptimizationPromptRepoInput,
+  seedCommitSha: string,
+): Promise<void> {
+  const [program, systemPrompt] = await Promise.all([
+    gitBlob(input.promptRepoDir, `${seedCommitSha}:program.md`),
+    gitBlob(input.promptRepoDir, `${seedCommitSha}:system_prompt.md`),
+  ]);
+  if (program !== input.program) {
+    throw new Error('existing prompt repo seed files do not match this run: program.md');
+  }
+  if (systemPrompt !== input.systemPrompt) {
+    throw new Error('existing prompt repo seed files do not match this run: system_prompt.md');
   }
 }
 
@@ -118,6 +126,11 @@ async function git(cwd: string, ...args: string[]): Promise<void> {
 async function gitOutput(cwd: string, ...args: string[]): Promise<string> {
   const { stdout } = await execFileAsync('git', args, { cwd, encoding: 'utf8' });
   return stdout.trim();
+}
+
+async function gitBlob(cwd: string, refPath: string): Promise<string> {
+  const { stdout } = await execFileAsync('git', ['show', refPath], { cwd, encoding: 'utf8' });
+  return stdout;
 }
 
 async function pathExists(path: string): Promise<boolean> {
