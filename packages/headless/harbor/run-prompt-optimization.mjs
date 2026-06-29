@@ -12,7 +12,7 @@
 // Full run: drop the count/round overrides (defaults 60/20, 3 baseline, 10 rounds).
 
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { availableParallelism, homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -91,6 +91,12 @@ function defaultLocalEvalRoot(repoRoot) {
   const marker = '/.worktree/';
   const index = repoRoot.indexOf(marker);
   return index >= 0 ? repoRoot.slice(0, index) : repoRoot;
+}
+
+function defaultMaxConcurrency() {
+  const parallelism = availableParallelism();
+  const reserve = Math.max(2, Math.ceil(parallelism * 0.1));
+  return Math.min(32, Math.max(1, parallelism - reserve));
 }
 
 // Thin env-bound wrappers over the validated parsers in @maka/headless. Each
@@ -173,7 +179,7 @@ async function main() {
   // so a single in-flight sweep can still complete past the ceiling before the
   // loop stops. It bounds overshoot to one sweep, it does not abort tasks.
   const costCeilingUsd = envNum('MAKA_PROMPT_COST_CEILING', 30);
-  const maxConcurrency = envPosInt('MAKA_PROMPT_MAX_CONCURRENCY', undefined);
+  const maxConcurrency = envPosInt('MAKA_PROMPT_MAX_CONCURRENCY', defaultMaxConcurrency());
   const maxInfraFailureRate = envRatioOf('MAKA_PROMPT_MAX_INFRA_FAILURE_RATE', undefined);
   const maxStableTaskDurationMs = envNum('MAKA_PROMPT_MAX_STABLE_TASK_MS', undefined);
   const taskBudgetSec = envPosInt('MAKA_PROMPT_TASK_BUDGET_SEC', 30 * 60);
