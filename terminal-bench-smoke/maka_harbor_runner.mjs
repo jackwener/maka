@@ -17,6 +17,7 @@ const {
 const {
   buildIsolatedHeadlessToolAvailability,
   createTaskRunStore,
+  classifyExternalHarborBenchmarkFailure,
   runExperiment,
   runAutonomousTask,
   runTaskOnce,
@@ -101,16 +102,6 @@ const runTrace = [];
 const bridgeExecLog = [];
 const configuredToolNames = [];
 
-const agentIncompleteClasses = new Set([
-  'incomplete_tool_calls',
-  'max_tokens',
-  'permission_denied',
-  'runtime_error',
-  'tool_failed',
-  'failed',
-  'self_check_failed',
-]);
-
 function defaultBaseUrl(type) {
   switch (type) {
     case 'deepseek':
@@ -150,17 +141,6 @@ function truncateForArtifact(value, maxChars = 8000) {
   const text = String(value ?? '');
   if (text.length <= maxChars) return text;
   return `${text.slice(0, maxChars)}\n...[truncated ${text.length - maxChars} chars]`;
-}
-
-function classifyBenchmarkFailure(result) {
-  if (!result || result.status === 'completed') {
-    return { kind: 'none', shouldThrow: false };
-  }
-  const errorClass = String(result.errorClass ?? '');
-  if (agentIncompleteClasses.has(errorClass)) {
-    return { kind: 'agent_incomplete', shouldThrow: false, errorClass };
-  }
-  return { kind: 'infra_failure', shouldThrow: true, ...(errorClass ? { errorClass } : {}) };
 }
 
 async function bridgeExec(payload) {
@@ -840,7 +820,12 @@ Continue from the existing files in /app, repair /app/vm.js, and do not stop unt
     status = 'failed';
     error = headlessResult.error ?? 'headless run failed';
   }
-  benchmarkFailure = classifyBenchmarkFailure(headlessResult);
+  benchmarkFailure = classifyExternalHarborBenchmarkFailure({
+    status: headlessResult?.status,
+    errorClass: headlessResult?.errorClass,
+    error: headlessResult?.error,
+    taxonomy: taskRun?.taxonomy,
+  });
   // Harbor owns the real Terminal-Bench verifier after the agent exits. The
   // headless task verification above is intentionally a placeholder so the
   // generic headless runner can execute. Never surface that placeholder as a
@@ -915,6 +900,7 @@ const result = {
   makeMipsSmokeHint,
   useTaskRun,
   benchmarkFailureKind: benchmarkFailure.kind,
+  benchmarkFailureShouldThrow: benchmarkFailure.shouldThrow,
   taskRun,
   sessionId: headlessResult?.sessionId ?? null,
   runId: headlessResult?.runId ?? null,

@@ -24,7 +24,7 @@ describe('destructive-command guard', () => {
     ]) {
       const result = checkDestructiveShellCommand(command);
       assert.equal(result.allowed, false, command);
-      assert.match(formatDestructiveCommandGuardMessage(result), /refused this Bash command/);
+      assert.match(formatDestructiveCommandGuardMessage(result), /did not run this Bash request/);
     }
   });
 
@@ -66,5 +66,18 @@ describe('destructive-command guard', () => {
     assert.equal(checkDestructiveShellCommand('mv -f new.txt report.txt').allowed, false);
     assert.equal(checkDestructiveShellCommand('mv draft.txt final.txt').allowed, true);
     assert.equal(checkDestructiveShellCommand('chown user:group report.txt').allowed, true);
+  });
+
+  test('model-facing guard message avoids repeating blocked operation names', () => {
+    const result = checkDestructiveShellCommand('rm -f *.gcda *.gcno *.gcov');
+    const message = formatDestructiveCommandGuardMessage(result);
+
+    assert.match(message, /Read\/Grep/);
+    assert.match(message, /fresh port/);
+    assert.match(message, /pidfile/);
+    assert.doesNotMatch(
+      message,
+      /\b(rm|rmdir|delete|kill|pkill|killall|service|service-control|systemctl|truncate|shred|unlink|refused|blocked)\b/i,
+    );
   });
 });

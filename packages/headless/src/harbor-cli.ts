@@ -15,6 +15,7 @@ import {
   type RunHarborCellEnv,
   type RunHarborCellInput,
 } from './harbor-cell.js';
+import { classifyExternalHarborBenchmarkFailure } from './harbor-failure-policy.js';
 import type { RealBackendIsolation } from './isolation.js';
 import { writeTaskRunExport } from './result-export.js';
 import { backendNeedsIsolation } from './runner.js';
@@ -193,13 +194,22 @@ async function runHarborTaskRunMode(options: HarborRunOptions): Promise<number> 
   const exportDir = join(options.outDir, 'exports', run.taskRunId);
   const exported = await writeTaskRunExport(exportDir, run.projection, { includeEvents: options.includeEvents });
   const latestScore = run.projection.latestScoreResult;
+  const taxonomy = latestScore?.taxonomy ?? run.projection.result?.taxonomy ?? taxonomyFromResultRecord(run.resultRecord);
+  const benchmarkFailure = classifyExternalHarborBenchmarkFailure({
+    status: run.resultRecord.status,
+    errorClass: run.resultRecord.errorClass,
+    error: run.resultRecord.error,
+    taxonomy,
+  });
   process.stdout.write(`${JSON.stringify({
     mode: 'task-run',
     taskRunId: run.taskRunId,
     status: run.projection.status,
-    taxonomy: latestScore?.taxonomy ?? run.projection.result?.taxonomy ?? taxonomyFromResultRecord(run.resultRecord),
+    taxonomy,
     scored: latestScore?.scored ?? run.resultRecord.scored ?? false,
     authoritative: latestScore?.authority?.authoritative ?? false,
+    benchmarkFailureKind: benchmarkFailure.kind,
+    benchmarkFailureShouldThrow: benchmarkFailure.shouldThrow,
     exportDir,
     files: exported.files,
     result: {
@@ -209,7 +219,7 @@ async function runHarborTaskRunMode(options: HarborRunOptions): Promise<number> 
     },
     runtimeRefs: latestScore?.details?.runtimeRefs,
   })}\n`);
-  return run.resultRecord.status === 'failed' ? 1 : 0;
+  return benchmarkFailure.shouldThrow ? 1 : 0;
 }
 
 async function resolveHarborRunOptions(args: string[], baseEnv: NodeJS.ProcessEnv): Promise<HarborRunOptions> {

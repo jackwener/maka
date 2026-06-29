@@ -46,13 +46,13 @@ export function checkDestructiveShellCommand(command: string): DestructiveComman
 
 export function formatDestructiveCommandGuardMessage(result: DestructiveCommandGuardResult): string {
   const first = result.violations[0];
-  if (!first) return 'Maka destructive-command guard allowed the command.';
-  const detail = result.violations.length === 1
-    ? first.reason
-    : `${first.reason} (${result.violations.length} policy violations found)`;
+  if (!first) return 'Maka command policy allowed this Bash request.';
+  const suffix = result.violations.length === 1 ? '' : ` (${result.violations.length} policy matches)`;
   return [
-    `Maka destructive-command guard refused this Bash command: ${detail}.`,
-    'Use Read/Grep for inspection and Write/Edit for targeted file changes; avoid broad delete, service-control, or process-kill operations in benchmark containers.',
+    `Maka command policy did not run this Bash request${suffix}.`,
+    'Stay focused on the required deliverable and keep task resources intact.',
+    'For inspection, use Read/Grep or a narrow ps query; for stale pid/port state, choose a fresh port or pidfile under /tmp and continue.',
+    'For exact file edits, use Write/Edit on the specific target path.',
   ].join('\n');
 }
 

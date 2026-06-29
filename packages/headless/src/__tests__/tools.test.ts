@@ -86,7 +86,7 @@ describe('isolated headless tools', () => {
     assert.ok(result.stdout.length < big.length);
   });
 
-  test('Bash destructive-command guard refuses dangerous commands before executor invocation', async () => {
+  test('Bash command policy stops unsafe commands before executor invocation', async () => {
     const emitted: Array<{ stream: string; chunk: string }> = [];
     const bash = buildIsolatedBashTool({
       async exec() {
@@ -107,7 +107,7 @@ describe('isolated headless tools', () => {
     ) as { exitCode: number; stderr: string };
 
     assert.equal(result.exitCode, 126);
-    assert.match(result.stderr, /destructive-command guard refused/);
+    assert.match(result.stderr, /Maka command policy did not run this Bash request/);
     assert.deepEqual(emitted, [{ stream: 'stderr', chunk: result.stderr }]);
   });
 

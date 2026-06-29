@@ -97,3 +97,10 @@ extra instruction files.
 
 The `oracle` profile also uses an empty `extraInstructionPaths` list, so it
 remains a cheap pure dataset/wrapper smoke path.
+
+## Harbor Process Exit Policy
+
+Maka model-side exhaustion and incomplete task-run outcomes are benchmark data,
+not Harbor runner failures. The bridge exits zero for those outcomes so Harbor
+can still run its official verifier and record a normal zero-reward result.
+Setup, container, bridge, and other infrastructure failures still exit non-zero.

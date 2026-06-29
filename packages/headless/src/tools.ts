@@ -77,7 +77,7 @@ export function buildIsolatedBashTool(
     name: 'Bash',
     description:
       'Run a shell command in the isolated headless task workspace. '
-      + 'Broad delete, process-kill, and service-control commands are refused; use Write/Edit for targeted file changes.',
+      + 'Use it for inspection, builds, and task-local generation; prefer Read/Grep/Write/Edit for exact file operations and preserve required deliverables.',
     parameters: z.object({
       command: z.string().describe('The shell command to execute'),
       timeout_ms: z.number().int().positive().max(600_000).optional(),

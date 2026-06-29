@@ -164,6 +164,12 @@ export {
 } from './matrix-resume.js';
 export { defaultFinalScorer } from './scorer.js';
 export { readResults, summarizeMatrix, writeResults, toComparisonTable, type MatrixSummary } from './results.js';
+export {
+  classifyExternalHarborBenchmarkFailure,
+  type ExternalHarborBenchmarkFailureClassification,
+  type ExternalHarborBenchmarkFailureInput,
+  type ExternalHarborBenchmarkFailureKind,
+} from './harbor-failure-policy.js';
 export type { TaskRunExport, WriteTaskRunExportOptions, WriteTaskRunExportResult } from './result-export.js';
 export {
   exportContentHash,
