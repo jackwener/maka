@@ -388,7 +388,7 @@ export function LiveIndicator({
  * stay a small named residue keyed on `[data-slot="tool"]` in maka-tokens.css,
  * pinned by the PR3b cascade contract (source strings + keyframe frames) rather
  * than the diff harness:
- *   1. the running status dot's `[animation:maka-tool-pulse…]` breath (the
+ *   1. the running status dot's `[animation:maka-tool-pulse …]` breath (the
  *      shorthand rides in the `dot` part here like `LiveIndicator`; only the
  *      `@keyframes maka-tool-pulse` stays in CSS — a keyframe is a global rule,
  *      not an element property, and `getComputedStyle` reads a phase-dependent
@@ -438,7 +438,7 @@ const toolVariants = cva("", {
         "inline-flex items-center justify-center min-w-[22px] h-[18px] px-[6px] py-0 rounded-[999px] bg-[var(--foreground-5)] text-[color:var(--foreground-60)] text-[11px] [font-variant-numeric:tabular-nums]",
       // `.maka-tool` (effective: the later `padding: 0` rule wins over `8px 12px`)
       // + `.toolItem` + the `[open]>summary` divider + the `[data-status]` border /
-      // background / opacity swaps. `[border:…]` / `[border-color:…]` are arbitrary
+      // background / opacity swaps. `[border: …]` / `[border-color: …]` are arbitrary
       // so the status overrides touch only the color, never width/style. The mount
       // entrance (transition + `@starting-style`) and `<summary>` marker reset stay
       // a residue keyed on `[data-slot="tool"]` (see docstring).
@@ -533,7 +533,7 @@ export { toolVariants };
  * here. That second consumer is exactly the condition the off-barrel convention
  * named for promotion, so the export is the rule, not an exception.
  *
- * The card mount entrance rides the literal `[animation:maka-tool-card-enter_…]`
+ * The card mount entrance rides the literal `[animation:maka-tool-card-enter …]`
  * shorthand; its `@keyframes maka-tool-card-enter` moves to `maka-tokens.css` (the
  * canonical motion home next to `maka-pulse` / `maka-tool-pulse`). Reduced-motion
  * and visual-smoke suppression both ride the GLOBAL `*` rules (maka-tokens.css /
@@ -697,8 +697,8 @@ const previewVariants = cva("", {
         + " [&_li_small]:text-[11px] [&_li_small]:text-[color:var(--foreground-50)] [&_li_small]:uppercase [&_li_small]:tracking-[0.04em]"
         + " [&_li_p]:m-0 [&_li_p]:text-[12px] [&_li_p]:text-[color:var(--foreground-70)] [&_li_p]:leading-[1.45] [&_li_p]:[white-space:pre-wrap] [&_li_p]:[word-break:break-word]",
       // `.maka-web-search-error` — the destructive container tint, layered over
-      // the `web-search` part via `cn`. It MUST restate the FULL `[border:…]`
-      // shorthand + `bg-[…]` util — NOT a bare `[border-color:…]`/`[background:…]`
+      // the `web-search` part via `cn`. It MUST restate the FULL `[border: …]`
+      // shorthand + `bg-[ …]` util — NOT a bare `[border-color: …]`/`[background: …]`
       // longhand. tailwind-merge only collapses utilities of the SAME property
       // form, so matching the base part's forms lets the error (last in `cn`)
       // collapse the base and win deterministically. A bare longhand survives

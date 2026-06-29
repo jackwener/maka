@@ -180,8 +180,8 @@ test('LiveIndicator pins the canonical pulse + reduced-motion fallback over conf
 // for free), this one only holds if both the base border/bg AND the error
 // override use the SAME utility property form so tailwind-merge COLLAPSES them —
 // then the error, last in `cn`, wins deterministically. A bare
-// `[border-color:…]`/`[background:…]` longhand would survive un-collapsed and
-// then lose to the base `[border:…]` shorthand by Tailwind's emission order,
+// `[border-color: …]`/`[background: …]` longhand would survive un-collapsed and
+// then lose to the base `[border: …]` shorthand by Tailwind's emission order,
 // silently dropping the destructive tint (invisible until rendered — the exact
 // regression this pins). No browser, no emission-order dependency: the merged
 // string itself is the proof.
@@ -200,7 +200,7 @@ test('web-search-error tint collapses the neutral base border/bg so the destruct
     'neutral base background must be collapsed by the error tint',
   );
   // …and only the destructive tints survive (kept as the collapse-safe
-  // `[border:…]` shorthand + `bg-[…]` util, never a bare longhand).
+  // `[border: …]` shorthand + `bg-[ …]` util, never a bare longhand).
   assert.match(merged, /\[border:1px_solid_color-mix\(in_oklab,var\(--destructive-text\)_32%/);
   assert.match(merged, /bg-\[color-mix\(in_oklab,var\(--destructive-text\)_8%/);
   assert.ok(
