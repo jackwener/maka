@@ -87,6 +87,12 @@ function envPath(name, fallback) {
   return value.startsWith('~') ? join(homedir(), value.slice(1)) : resolve(value);
 }
 
+function defaultLocalEvalRoot(repoRoot) {
+  const marker = '/.worktree/';
+  const index = repoRoot.indexOf(marker);
+  return index >= 0 ? repoRoot.slice(0, index) : repoRoot;
+}
+
 // Thin env-bound wrappers over the validated parsers in @maka/headless. Each
 // FAILS LOUD on an illegal value rather than letting NaN slip through a later
 // `!== undefined` check and silently disable a guard.
@@ -140,8 +146,9 @@ async function main() {
     ? resolve(process.env.MAKA_PROMPT_MAKA_REPO)
     : repoRoot;
 
-  const outDir = envPath('MAKA_PROMPT_OUT_DIR', join(repoRoot, 'maka-eval', 'rsi-runs'));
-  const keyFile = envPath('MAKA_PROMPT_KEY_FILE', join(repoRoot, '.local-secrets', 'deepseek-key'));
+  const localEvalRoot = defaultLocalEvalRoot(repoRoot);
+  const outDir = envPath('MAKA_PROMPT_OUT_DIR', join(localEvalRoot, 'maka-eval', 'rsi-runs'));
+  const keyFile = envPath('MAKA_PROMPT_KEY_FILE', join(localEvalRoot, '.local-secrets', 'deepseek-key'));
   const tasksRoot = envPath('MAKA_PROMPT_TASKS_ROOT', join(homedir(), '.cache/harbor/tasks'));
   // Model is pinned, not env-overridable: the RSI loop is contractually a
   // deepseek-v4-flash run, and DEEPSEEK_V4_FLASH_PRICING below is tied to it.
