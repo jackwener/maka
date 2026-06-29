@@ -45,10 +45,9 @@ import {
   type RsiPromptAttribution,
 } from './rsi-controller-attribution.js';
 import {
-  derivePromptOptimizationReplayState,
-  readSeedSystemPromptHash,
-  replayControllerSweep,
-  type PromptOptimizationReplayState,
+  buildPromptOptimizationReplayPlan,
+  replayPromptBaselinePartition,
+  replayPromptDecisionRound,
 } from './prompt-optimization-replay.js';
 
 /**
@@ -187,19 +186,15 @@ export async function runPromptOptimizationLoop(
   if (input.maxConcurrency !== undefined) assertPositiveInt('maxConcurrency', input.maxConcurrency);
 
   const resumeEvents = await readFixedPromptWal(input.resultsJsonlPath);
-  const replayState = await derivePromptOptimizationReplayState({
+  const replayPlan = await buildPromptOptimizationReplayPlan({
     events: resumeEvents,
     promptRepoDir: input.git.gitRootPath,
+    systemPromptGitPath: input.git.systemPromptGitPath,
     runId: input.runId,
     ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
     strictRoundState: true,
   });
-  const seedPromptHash = await readSeedSystemPromptHash({
-    promptRepoDir: input.git.gitRootPath,
-    seedCommitSha: replayState.seedCommitSha,
-    systemPromptGitPath: input.git.systemPromptGitPath,
-  });
-  const historicalBaselineEvidenceRequired = hasHistoricalPromptOptimizationState(replayState);
+  const replayState = replayPlan.state;
 
   const heldInTaskIds = input.heldInTasks.map((task) => task.id);
   const heldOutTaskIds = input.heldOutTasks.map((task) => task.id);
@@ -297,19 +292,21 @@ export async function runPromptOptimizationLoop(
       );
     }
     const roundId = `baseline-${index}`;
-    const replayedHeldIn = replayControllerSweep({
+    const heldInReplayInput = {
       events: resumeEvents,
       runId: input.runId,
       roundId,
       taskIds: heldInTaskIds,
-      expectedPromptHash: seedPromptHash,
+      expectedPromptHash: replayPlan.seedPromptHash,
       ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
       resultsTsvPath: input.heldInResultsTsvPath,
+    };
+    const replayedHeldIn = replayPromptBaselinePartition({
+      ...heldInReplayInput,
+      partition: 'held-in',
+      required: replayPlan.historicalBaselineEvidenceRequired,
     });
     if (replayedHeldIn) await writeFixedPromptResultsTsv(input.heldInResultsTsvPath, replayedHeldIn.events);
-    if (!replayedHeldIn && historicalBaselineEvidenceRequired) {
-      throw new Error(`RSI WAL replay missing required baseline held-in evidence for ${roundId}`);
-    }
     const heldIn = replayedHeldIn ?? await sweep(roundId, input.heldInTasks, input.heldInResultsTsvPath);
     accumulate(heldIn);
     const postHeldInGuard = stopGuard();
@@ -319,19 +316,21 @@ export async function runPromptOptimizationLoop(
         + 'raise the budget or lower baselineRuns',
       );
     }
-    const replayedHeldOut = replayControllerSweep({
+    const heldOutReplayInput = {
       events: resumeEvents,
       runId: input.runId,
       roundId,
       taskIds: heldOutTaskIds,
-      expectedPromptHash: seedPromptHash,
+      expectedPromptHash: replayPlan.seedPromptHash,
       ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
       resultsTsvPath: input.heldOutResultsTsvPath,
+    };
+    const replayedHeldOut = replayPromptBaselinePartition({
+      ...heldOutReplayInput,
+      partition: 'held-out',
+      required: replayPlan.historicalBaselineEvidenceRequired,
     });
     if (replayedHeldOut) await writeFixedPromptResultsTsv(input.heldOutResultsTsvPath, replayedHeldOut.events);
-    if (!replayedHeldOut && historicalBaselineEvidenceRequired) {
-      throw new Error(`RSI WAL replay missing required baseline held-out evidence for ${roundId}`);
-    }
     const heldOut = replayedHeldOut ?? await sweep(roundId, input.heldOutTasks, input.heldOutResultsTsvPath);
     accumulate(heldOut);
     baselineRunsData.push({ heldInEvents: heldIn.events, heldOutEvents: heldOut.events });
@@ -414,54 +413,36 @@ export async function runPromptOptimizationLoop(
       break;
     }
     const roundId = `round-${round}`;
-    const existingDecision = replayState.decisionByRoundId.get(roundId);
-    if (existingDecision) {
-      const existingCandidate = replayState.candidateByRoundId.get(roundId);
-      if (!existingCandidate) {
-        throw new Error(`RSI WAL replay missing candidate commit for decided ${roundId}`);
+    const existingDecisionRound = replayPromptDecisionRound({
+      events: resumeEvents,
+      state: replayState,
+      runId: input.runId,
+      roundId,
+      heldInTaskIds: stableHeldInTaskIds,
+      heldOutTaskIds: stableHeldOutTaskIds,
+      ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
+      heldInResultsTsvPath: input.heldInResultsTsvPath,
+      heldOutResultsTsvPath: input.heldOutResultsTsvPath,
+    });
+    if (existingDecisionRound) {
+      await writeFixedPromptResultsTsv(input.heldInResultsTsvPath, existingDecisionRound.heldIn.events);
+      if (existingDecisionRound.heldOut) {
+        await writeFixedPromptResultsTsv(input.heldOutResultsTsvPath, existingDecisionRound.heldOut.events);
       }
-      const existingHeldIn = replayControllerSweep({
-        events: resumeEvents,
-        runId: input.runId,
-        roundId,
-        taskIds: stableHeldInTaskIds,
-        expectedPromptHash: existingCandidate.promptHash,
-        ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
-        resultsTsvPath: input.heldInResultsTsvPath,
-      });
-      if (!existingHeldIn) {
-        throw new Error(`RSI WAL replay missing held-in task evidence for ${roundId}`);
-      }
-      const existingHeldOut = replayControllerSweep({
-        events: resumeEvents,
-        runId: input.runId,
-        roundId,
-        taskIds: stableHeldOutTaskIds,
-        expectedPromptHash: existingCandidate.promptHash,
-        ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
-        resultsTsvPath: input.heldOutResultsTsvPath,
-      });
-      await writeFixedPromptResultsTsv(input.heldInResultsTsvPath, existingHeldIn.events);
-      if (existingHeldOut) await writeFixedPromptResultsTsv(input.heldOutResultsTsvPath, existingHeldOut.events);
-      const existingHeldInEvents = existingHeldIn.events;
-      const existingResult = promptAcceptanceResultFromDecision(existingDecision);
-      if (!existingHeldOut && decisionRequiresHeldOutEvidence(existingResult)) {
-        throw new Error(`RSI WAL replay missing required held-out task evidence for ${roundId}`);
-      }
-      const existingAttribution = replayState.attributionByRoundId.get(roundId);
-      accumulate(existingHeldIn);
-      if (existingHeldOut) accumulate(existingHeldOut);
-      decisions.push(existingResult);
-      if (existingResult.decision === 'keep') {
-        lastKeptCommitSha = existingResult.lastKeptCommitSha;
-        heldInReference = existingResult.heldInReferencePassEligibleRate;
+      const existingHeldInEvents = existingDecisionRound.heldIn.events;
+      accumulate(existingDecisionRound.heldIn);
+      if (existingDecisionRound.heldOut) accumulate(existingDecisionRound.heldOut);
+      decisions.push(existingDecisionRound.result);
+      if (existingDecisionRound.result.decision === 'keep') {
+        lastKeptCommitSha = existingDecisionRound.result.lastKeptCommitSha;
+        heldInReference = existingDecisionRound.result.heldInReferencePassEligibleRate;
         lastKeptHeldInEvents = existingHeldInEvents;
       }
       previousCandidateHeldInEvents = existingHeldInEvents;
       latestHeldInFeedbackEvents = existingHeldInEvents;
       nextHeldInDigests = await digestsFor(existingHeldInEvents);
-      nextPromptAttribution = existingAttribution
-        ? projectRsiPromptAttribution(existingAttribution)
+      nextPromptAttribution = existingDecisionRound.attribution
+        ? projectRsiPromptAttribution(existingDecisionRound.attribution)
         : undefined;
       continue;
     }
@@ -510,7 +491,6 @@ export async function runPromptOptimizationLoop(
       heldInPassRateNoiseBand: baseline.heldIn.noiseBand,
       rewardHackScan,
     });
-
     let heldOutEvents: readonly FixedPromptTaskWalEvent[] = [];
     if (heldInGate === null) {
       // Held-in cleared, but the held-in sweep itself can have exhausted the
@@ -622,41 +602,6 @@ export async function runPromptOptimizationLoop(
     droppedHeldInTaskIds,
     droppedHeldOutTaskIds,
   };
-}
-
-function promptAcceptanceResultFromDecision(
-  event: Extract<FixedPromptWalEvent, { type: 'prompt_candidate_decided' }>,
-): PromptAcceptanceResult {
-  return {
-    runId: event.runId,
-    roundId: event.roundId,
-    decision: event.decision,
-    reason: event.reason as PromptAcceptanceResult['reason'],
-    candidateCommitSha: event.candidateCommitSha,
-    previousLastKeptCommitSha: event.previousLastKeptCommitSha,
-    lastKeptCommitSha: event.lastKeptCommitSha,
-    previousHeldInReferencePassEligibleRate: event.previousHeldInReferencePassEligibleRate,
-    heldInReferencePassEligibleRate: event.heldInReferencePassEligibleRate,
-    originalCommitSha: event.originalCommitSha,
-    originalHeldOutPassEligibleRate: event.originalHeldOutPassEligibleRate,
-    heldInPassRateNoiseBand: event.heldInPassRateNoiseBand,
-    heldOutPassRateNoiseBand: event.heldOutPassRateNoiseBand,
-    rewardHackScan: event.rewardHackScan ?? { decision: 'clean' },
-    metrics: event.metrics as PromptAcceptanceResult['metrics'],
-  };
-}
-
-function hasHistoricalPromptOptimizationState(state: PromptOptimizationReplayState): boolean {
-  return state.candidateByRoundId.size > 0
-    || state.decisionByRoundId.size > 0
-    || state.attributionByRoundId.size > 0
-    || state.expectedPromptRepoHead !== state.seedCommitSha;
-}
-
-function decisionRequiresHeldOutEvidence(result: PromptAcceptanceResult): boolean {
-  return result.decision === 'keep'
-    || result.reason === 'held_out_regressed'
-    || result.metrics.candidate.heldOut.observed > 0;
 }
 
 function assertUniqueTaskIds(label: string, taskIds: readonly string[]): void {

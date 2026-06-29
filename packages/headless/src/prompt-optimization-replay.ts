@@ -11,6 +11,7 @@ import type {
   PromptCandidateDecisionEvent,
   RsiControllerAttributionEvent,
 } from './fixed-prompt-controller.js';
+import type { PromptAcceptanceResult } from './prompt-acceptance-policy.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -21,6 +22,45 @@ export interface PromptOptimizationReplayState {
   candidateByRoundId: ReadonlyMap<string, PromptCandidateCommittedEvent>;
   decisionByRoundId: ReadonlyMap<string, PromptCandidateDecisionEvent>;
   attributionByRoundId: ReadonlyMap<string, RsiControllerAttributionEvent>;
+}
+
+export interface PromptOptimizationReplayPlan {
+  state: PromptOptimizationReplayState;
+  seedPromptHash: string;
+  historicalBaselineEvidenceRequired: boolean;
+}
+
+export interface ReplayedPromptDecisionRound {
+  result: PromptAcceptanceResult;
+  heldIn: FixedPromptControllerResult;
+  heldOut: FixedPromptControllerResult | undefined;
+  attribution: RsiControllerAttributionEvent | undefined;
+}
+
+export async function buildPromptOptimizationReplayPlan(input: {
+  events: readonly FixedPromptWalEvent[];
+  promptRepoDir: string;
+  systemPromptGitPath: string;
+  runId?: string;
+  resumeFingerprint?: string;
+  strictRoundState?: boolean;
+}): Promise<PromptOptimizationReplayPlan> {
+  const state = await derivePromptOptimizationReplayState({
+    events: input.events,
+    promptRepoDir: input.promptRepoDir,
+    ...(input.runId ? { runId: input.runId } : {}),
+    ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
+    ...(input.strictRoundState !== undefined ? { strictRoundState: input.strictRoundState } : {}),
+  });
+  return {
+    state,
+    seedPromptHash: await readSeedSystemPromptHash({
+      promptRepoDir: input.promptRepoDir,
+      seedCommitSha: state.seedCommitSha,
+      systemPromptGitPath: input.systemPromptGitPath,
+    }),
+    historicalBaselineEvidenceRequired: hasHistoricalPromptOptimizationState(state),
+  };
 }
 
 export function replayControllerSweep(input: {
@@ -66,6 +106,79 @@ export function replayControllerSweep(input: {
     totalTokens: sum(orderedEvents.map((event) => eventHasRunArtifacts(event) ? event.tokenSummary.total : 0)),
     totalCostUsd: sum(orderedEvents.map((event) => eventHasRunArtifacts(event) ? event.tokenSummary.costUsd : 0)),
     resultsTsvPath: input.resultsTsvPath,
+  };
+}
+
+export function replayRequiredControllerSweep(
+  input: Parameters<typeof replayControllerSweep>[0] & { missingEvidenceMessage: string },
+): FixedPromptControllerResult {
+  const result = replayControllerSweep(input);
+  if (!result) throw new Error(input.missingEvidenceMessage);
+  return result;
+}
+
+export function replayPromptBaselinePartition(input: Parameters<typeof replayControllerSweep>[0] & {
+  partition: 'held-in' | 'held-out';
+  required: boolean;
+}): FixedPromptControllerResult | undefined {
+  if (!input.required) return replayControllerSweep(input);
+  return replayRequiredControllerSweep({
+    ...input,
+    missingEvidenceMessage: `RSI WAL replay missing required baseline ${input.partition} evidence for ${input.roundId}`,
+  });
+}
+
+export function decisionRequiresHeldOutEvidence(result: PromptAcceptanceResult): boolean {
+  return result.decision === 'keep'
+    || result.reason === 'held_out_regressed'
+    || result.metrics.candidate.heldOut.observed > 0;
+}
+
+export function replayPromptDecisionRound(input: {
+  events: readonly FixedPromptWalEvent[];
+  state: PromptOptimizationReplayState;
+  runId: string;
+  roundId: string;
+  heldInTaskIds: readonly string[];
+  heldOutTaskIds: readonly string[];
+  resumeFingerprint?: string;
+  heldInResultsTsvPath: string;
+  heldOutResultsTsvPath: string;
+}): ReplayedPromptDecisionRound | undefined {
+  const decision = input.state.decisionByRoundId.get(input.roundId);
+  if (!decision) return undefined;
+  const candidate = input.state.candidateByRoundId.get(input.roundId);
+  if (!candidate) {
+    throw new Error(`RSI WAL replay missing candidate commit for decided ${input.roundId}`);
+  }
+  const heldIn = replayRequiredControllerSweep({
+    events: input.events,
+    runId: input.runId,
+    roundId: input.roundId,
+    taskIds: input.heldInTaskIds,
+    expectedPromptHash: candidate.promptHash,
+    ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
+    resultsTsvPath: input.heldInResultsTsvPath,
+    missingEvidenceMessage: `RSI WAL replay missing held-in task evidence for ${input.roundId}`,
+  });
+  const heldOut = replayControllerSweep({
+    events: input.events,
+    runId: input.runId,
+    roundId: input.roundId,
+    taskIds: input.heldOutTaskIds,
+    expectedPromptHash: candidate.promptHash,
+    ...(input.resumeFingerprint ? { resumeFingerprint: input.resumeFingerprint } : {}),
+    resultsTsvPath: input.heldOutResultsTsvPath,
+  });
+  const result = promptAcceptanceResultFromDecision(decision);
+  if (!heldOut && decisionRequiresHeldOutEvidence(result)) {
+    throw new Error(`RSI WAL replay missing required held-out task evidence for ${input.roundId}`);
+  }
+  return {
+    result,
+    heldIn,
+    heldOut,
+    attribution: input.state.attributionByRoundId.get(input.roundId),
   };
 }
 
@@ -167,6 +280,35 @@ export async function derivePromptOptimizationReplayState(input: {
     candidateByRoundId,
     decisionByRoundId,
     attributionByRoundId,
+  };
+}
+
+function hasHistoricalPromptOptimizationState(state: PromptOptimizationReplayState): boolean {
+  return state.candidateByRoundId.size > 0
+    || state.decisionByRoundId.size > 0
+    || state.attributionByRoundId.size > 0
+    || state.expectedPromptRepoHead !== state.seedCommitSha;
+}
+
+function promptAcceptanceResultFromDecision(
+  event: PromptCandidateDecisionEvent,
+): PromptAcceptanceResult {
+  return {
+    runId: event.runId,
+    roundId: event.roundId,
+    decision: event.decision,
+    reason: event.reason as PromptAcceptanceResult['reason'],
+    candidateCommitSha: event.candidateCommitSha,
+    previousLastKeptCommitSha: event.previousLastKeptCommitSha,
+    lastKeptCommitSha: event.lastKeptCommitSha,
+    previousHeldInReferencePassEligibleRate: event.previousHeldInReferencePassEligibleRate,
+    heldInReferencePassEligibleRate: event.heldInReferencePassEligibleRate,
+    originalCommitSha: event.originalCommitSha,
+    originalHeldOutPassEligibleRate: event.originalHeldOutPassEligibleRate,
+    heldInPassRateNoiseBand: event.heldInPassRateNoiseBand,
+    heldOutPassRateNoiseBand: event.heldOutPassRateNoiseBand,
+    rewardHackScan: event.rewardHackScan ?? { decision: 'clean' },
+    metrics: event.metrics as PromptAcceptanceResult['metrics'],
   };
 }
 
