@@ -1,0 +1,199 @@
+import assert from 'node:assert/strict';
+import { writeFile } from 'node:fs/promises';
+import { describe, test } from 'node:test';
+import { readFixedPromptWal } from '../fixed-prompt-controller.js';
+import { execFileAsync, fakeMetaAgent, makeTasks, runLoop, taskIndex, withHarness } from './helpers/prompt-optimization-loop-harness.js';
+
+describe('runPromptOptimizationLoop replay decision guards', () => {
+  test('fails closed when a kept decision is missing held-out task evidence', async () => {
+    await withHarness(async (harness) => {
+      const heldInTasks = makeTasks('hin', 20);
+      const heldOutTasks = makeTasks('hout', 8);
+      const rewardFor = (roundId: string, taskId: string): number => {
+        const index = taskIndex(taskId);
+        if (taskId.startsWith('hout-')) return index < 4 ? 1 : 0;
+        if (roundId.startsWith('baseline-')) return index < 10 ? 1 : 0;
+        return taskId.startsWith('hin-') ? 1 : (index < 4 ? 1 : 0);
+      };
+
+      await runLoop(harness, {
+        heldInTasks,
+        heldOutTasks,
+        rewardFor,
+        rounds: 1,
+        baselineRuns: 1,
+      });
+      const events = await readFixedPromptWal(harness.resultsJsonlPath);
+      const missingHeldOut = events.filter((event) =>
+        !(event.type === 'task_completed' && event.roundId === 'round-0' && event.taskId.startsWith('hout-')));
+      await writeFile(
+        harness.resultsJsonlPath,
+        `${missingHeldOut.map((event) => JSON.stringify(event)).join('\n')}\n`,
+        'utf8',
+      );
+
+      let nextRoundPrompted = false;
+      await assert.rejects(
+        runLoop(harness, {
+          heldInTasks,
+          heldOutTasks,
+          rewardFor,
+          rounds: 2,
+          baselineRuns: 1,
+          metaAgent: async (promptInput) => {
+            if (promptInput.roundId === 'round-1') nextRoundPrompted = true;
+            return fakeMetaAgent()(promptInput);
+          },
+        }),
+        /RSI WAL replay missing required held-out task evidence for round-0/,
+      );
+      assert.equal(nextRoundPrompted, false);
+    });
+  });
+
+  test('fails closed when a held-out regression decision is missing held-out task evidence', async () => {
+    await withHarness(async (harness) => {
+      const heldInTasks = makeTasks('hin', 20);
+      const heldOutTasks = makeTasks('hout', 8);
+      const rewardFor = (roundId: string, taskId: string): number => {
+        const index = taskIndex(taskId);
+        if (taskId.startsWith('hout-')) return roundId.startsWith('baseline-') && index < 4 ? 1 : 0;
+        if (roundId.startsWith('baseline-')) return index < 10 ? 1 : 0;
+        return 1;
+      };
+
+      const first = await runLoop(harness, {
+        heldInTasks,
+        heldOutTasks,
+        rewardFor,
+        rounds: 1,
+        baselineRuns: 1,
+      });
+      assert.equal(first.decisions[0]?.reason, 'held_out_regressed');
+      const events = await readFixedPromptWal(harness.resultsJsonlPath);
+      const missingHeldOut = events.filter((event) =>
+        !(event.type === 'task_completed' && event.roundId === 'round-0' && event.taskId.startsWith('hout-')));
+      await writeFile(
+        harness.resultsJsonlPath,
+        `${missingHeldOut.map((event) => JSON.stringify(event)).join('\n')}\n`,
+        'utf8',
+      );
+
+      let nextRoundPrompted = false;
+      await assert.rejects(
+        runLoop(harness, {
+          heldInTasks,
+          heldOutTasks,
+          rewardFor,
+          rounds: 2,
+          baselineRuns: 1,
+          metaAgent: async (promptInput) => {
+            if (promptInput.roundId === 'round-1') nextRoundPrompted = true;
+            return fakeMetaAgent()(promptInput);
+          },
+        }),
+        /RSI WAL replay missing required held-out task evidence for round-0/,
+      );
+      assert.equal(nextRoundPrompted, false);
+    });
+  });
+
+  test('fails closed when a replayed decision is missing reward-hack scan evidence', async () => {
+    await withHarness(async (harness) => {
+      const heldInTasks = makeTasks('hin', 20);
+      const heldOutTasks = makeTasks('hout', 8);
+      const rewardFor = (roundId: string, taskId: string): number => {
+        const index = taskIndex(taskId);
+        if (taskId.startsWith('hout-')) return index < 4 ? 1 : 0;
+        if (roundId.startsWith('baseline-')) return index < 10 ? 1 : 0;
+        return 1;
+      };
+
+      await runLoop(harness, {
+        heldInTasks,
+        heldOutTasks,
+        rewardFor,
+        rounds: 1,
+        baselineRuns: 1,
+      });
+      const events = await readFixedPromptWal(harness.resultsJsonlPath);
+      const withoutScan = events.map((event) => {
+        if (event.type !== 'prompt_candidate_decided' || event.roundId !== 'round-0') return event;
+        const { rewardHackScan: _rewardHackScan, ...withoutRewardHackScan } = event;
+        return withoutRewardHackScan;
+      });
+      await writeFile(
+        harness.resultsJsonlPath,
+        `${withoutScan.map((event) => JSON.stringify(event)).join('\n')}\n`,
+        'utf8',
+      );
+
+      let nextRoundPrompted = false;
+      await assert.rejects(
+        runLoop(harness, {
+          heldInTasks,
+          heldOutTasks,
+          rewardFor,
+          rounds: 2,
+          baselineRuns: 1,
+          metaAgent: async (promptInput) => {
+            if (promptInput.roundId === 'round-1') nextRoundPrompted = true;
+            return fakeMetaAgent()(promptInput);
+          },
+        }),
+        /RSI WAL replay missing reward-hack scan evidence for round-0/,
+      );
+      assert.equal(nextRoundPrompted, false);
+    });
+  });
+
+  test('fails closed when a replayed decision disagrees with task evidence', async () => {
+    await withHarness(async (harness) => {
+      const heldInTasks = makeTasks('hin', 20);
+      const heldOutTasks = makeTasks('hout', 8);
+      const rewardFor = (roundId: string, taskId: string): number => {
+        const index = taskIndex(taskId);
+        if (taskId.startsWith('hout-')) return index < 4 ? 1 : 0;
+        if (roundId.startsWith('baseline-')) return index < 10 ? 1 : 0;
+        return 1;
+      };
+
+      await runLoop(harness, {
+        heldInTasks,
+        heldOutTasks,
+        rewardFor,
+        rounds: 1,
+        baselineRuns: 1,
+      });
+      const events = await readFixedPromptWal(harness.resultsJsonlPath);
+      const tamperedDecision = events.map((event) => (
+        event.type === 'prompt_candidate_decided' && event.roundId === 'round-0'
+          ? { ...event, metrics: { tampered: true } }
+          : event
+      ));
+      await writeFile(
+        harness.resultsJsonlPath,
+        `${tamperedDecision.map((event) => JSON.stringify(event)).join('\n')}\n`,
+        'utf8',
+      );
+
+      let nextRoundPrompted = false;
+      await assert.rejects(
+        runLoop(harness, {
+          heldInTasks,
+          heldOutTasks,
+          rewardFor,
+          rounds: 2,
+          baselineRuns: 1,
+          metaAgent: async (promptInput) => {
+            if (promptInput.roundId === 'round-1') nextRoundPrompted = true;
+            return fakeMetaAgent()(promptInput);
+          },
+        }),
+        /RSI WAL replay decision mismatch for round-0/,
+      );
+      assert.equal(nextRoundPrompted, false);
+    });
+  });
+
+});
