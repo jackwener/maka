@@ -13,12 +13,10 @@
 //
 // Full run: drop the count/round overrides (defaults 60/20, 3 baseline, 10 rounds).
 
-import { execFile } from 'node:child_process';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { promisify } from 'node:util';
 import {
   BENCHMARK_BASE_SYSTEM_PROMPT,
 } from '@maka/headless';
@@ -40,8 +38,17 @@ import {
   resolveMinStable,
   smokeExitCode,
 } from '#headless-run-env';
-
-const execFileAsync = promisify(execFile);
+import {
+  assertPromptOptimizationResumeSupported,
+  ensurePromptOptimizationPromptRepo,
+} from '#prompt-optimization-bootstrap';
+import {
+  buildPromptOptimizationRunManifest,
+  buildPromptOptimizationSubjectFingerprint,
+  buildPromptOptimizationTaskSourceFingerprint,
+  buildPromptOptimizationToolchainFingerprint,
+  ensurePromptOptimizationRunManifest,
+} from '#prompt-optimization-manifest';
 
 // DeepSeek per-1M USD pricing (0.145 USD/CNY). "input" is the cache-miss rate;
 // cache writes carry no separate charge, so cacheWriteUsdPer1M is 0. Vendor
@@ -89,6 +96,26 @@ const envInt = (name, fallback) => envNonNegativeInt(name, process.env[name], fa
 const envPosInt = (name, fallback) => envPositiveInt(name, process.env[name], fallback);
 const envNum = (name, fallback) => envFinitePositiveNumber(name, process.env[name], fallback);
 const envRatioOf = (name, fallback) => envRatio(name, process.env[name], fallback);
+const envBool = (name, fallback) => {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  switch (raw.trim().toLowerCase()) {
+    case '1':
+    case 'true':
+    case 'yes':
+    case 'on':
+    case 'enabled':
+      return true;
+    case '0':
+    case 'false':
+    case 'no':
+    case 'off':
+    case 'disabled':
+      return false;
+    default:
+      throw new Error(`${name} must be a boolean, got ${JSON.stringify(raw)}`);
+  }
+};
 
 // Comma-separated explicit task ids (controlled smokes). Empty -> undefined.
 function envIds(name) {
@@ -107,10 +134,6 @@ function selectTasksByIds(allTasks, ids) {
   const missing = ids.filter((id) => !byId.has(id));
   if (missing.length > 0) throw new Error(`unknown task id(s): ${missing.join(', ')}`);
   return ids.map((id) => byId.get(id));
-}
-
-async function git(cwd, ...args) {
-  await execFileAsync('git', args, { cwd });
 }
 
 async function main() {
@@ -148,6 +171,49 @@ async function main() {
   const maxConcurrency = envPosInt('MAKA_PROMPT_MAX_CONCURRENCY', undefined);
   const maxInfraFailureRate = envRatioOf('MAKA_PROMPT_MAX_INFRA_FAILURE_RATE', undefined);
   const maxStableTaskDurationMs = envNum('MAKA_PROMPT_MAX_STABLE_TASK_MS', undefined);
+  const taskBudgetSec = envPosInt('MAKA_PROMPT_TASK_BUDGET_SEC', 30 * 60);
+  const harborTimeoutMs = envPosInt('MAKA_PROMPT_HARBOR_TIMEOUT_MS', (taskBudgetSec + 300) * 1000);
+  const commandTimeoutMs = envPosInt('MAKA_CELL_COMMAND_TIMEOUT_MS', 300_000);
+  const continuationEnabled = envBool('MAKA_HARBOR_CONTINUATION', true);
+  const continuationMaxTurns = envPosInt('MAKA_HARBOR_CONTINUATION_MAX_TURNS', 3);
+  const continuationMaxTotalRuntimeSteps = envPosInt(
+    'MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS',
+    continuationMaxTurns * 50,
+  );
+  const activeToolResultPrune = envBool('MAKA_CONTEXT_ACTIVE_TOOL_RESULT_PRUNE', true);
+  const activeToolResultMaxEstimatedTokens = envPosInt(
+    'MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MAX_ESTIMATED_TOKENS',
+    2048,
+  );
+  const activeToolResultMinStepNumber = envInt(
+    'MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MIN_STEP_NUMBER',
+    1,
+  );
+  const runtimeProfile = {
+    taskBudgetSec,
+    harborTimeoutMs,
+    commandTimeoutMs,
+    runtimeEnvKeys: [
+      'MAKA_CELL_TIMEOUT_SEC',
+      'MAKA_CELL_COMMAND_TIMEOUT_MS',
+      'MAKA_HARBOR_CONTINUATION',
+      'MAKA_HARBOR_CONTINUATION_MAX_TURNS',
+      'MAKA_HARBOR_CONTINUATION_MAX_TOTAL_RUNTIME_STEPS',
+      'MAKA_CONTEXT_ACTIVE_TOOL_RESULT_PRUNE',
+      'MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MAX_ESTIMATED_TOKENS',
+      'MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MIN_STEP_NUMBER',
+    ],
+    continuation: {
+      enabled: continuationEnabled,
+      maxTurns: continuationMaxTurns,
+      maxTotalRuntimeSteps: continuationMaxTotalRuntimeSteps,
+    },
+    contextEnv: {
+      MAKA_CONTEXT_ACTIVE_TOOL_RESULT_PRUNE: activeToolResultPrune ? 'on' : 'off',
+      MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MAX_ESTIMATED_TOKENS: String(activeToolResultMaxEstimatedTokens),
+      MAKA_CONTEXT_ACTIVE_TOOL_RESULT_MIN_STEP_NUMBER: String(activeToolResultMinStepNumber),
+    },
+  };
   // Min-stable floors scale with the actual post-drop partition sizes; resolved
   // below once the no-canary drop has settled heldInTasks/heldOutTasks.
   const minStableRatio = envRatioOf('MAKA_PROMPT_MIN_STABLE_RATIO', 0.5);
@@ -209,24 +275,55 @@ async function main() {
     'MAKA_PROMPT_MIN_STABLE_HELD_OUT', heldOutTasks.length, process.env.MAKA_PROMPT_MIN_STABLE_HELD_OUT, minStableRatio);
   console.log(`Min-stable floors: held-in ${minStableHeldInTasks}/${heldInTasks.length}, held-out ${minStableHeldOutTasks}/${heldOutTasks.length}`);
 
+  const manifestPath = join(runRoot, 'prompt-optimization-manifest.json');
+  const runManifest = await ensurePromptOptimizationRunManifest(
+    manifestPath,
+    buildPromptOptimizationRunManifest({
+      runId,
+      provider,
+      baseUrl,
+      model,
+      rounds,
+      baselineRuns,
+      costCeilingUsd,
+      maxConcurrency,
+      maxInfraFailureRate,
+      maxStableTaskDurationMs,
+      minStableRatio,
+      minStableHeldInTasks,
+      minStableHeldOutTasks,
+      runtimeProfile,
+      subjectFingerprint: await buildPromptOptimizationSubjectFingerprint(makaRepoPath),
+      taskSourceFingerprint: await buildPromptOptimizationTaskSourceFingerprint(tasksRoot, heldInTasks, heldOutTasks),
+      toolchainFingerprint: await buildPromptOptimizationToolchainFingerprint(repoRoot),
+      heldInTasks,
+      heldOutTasks,
+      heldInNoPattern,
+      heldOutNoPattern,
+    }),
+    runRoot,
+  );
+  console.log(`Run manifest: ${runManifest.fingerprint}`);
+  console.log(`Runtime profile: taskBudget=${taskBudgetSec}s, harborTimeout=${harborTimeoutMs}ms, commandTimeout=${commandTimeoutMs}ms, continuation=${continuationEnabled ? 'on' : 'off'} (${continuationMaxTurns} turn(s)), activeToolPrune=${activeToolResultPrune ? 'on' : 'off'}`);
+
   // Prompt repo: program.md + system_prompt.md committed; agent-cwd/ is the empty
   // isolation root; controller artifacts live OUTSIDE it.
   const promptRepoDir = join(runRoot, 'prompt-repo');
-  const agentCwdPath = join(promptRepoDir, 'agent-cwd');
   const controllerDir = join(runRoot, 'controller');
   const jobsDir = join(runRoot, 'jobs');
-  await mkdir(agentCwdPath, { recursive: true });
   await mkdir(controllerDir, { recursive: true });
   await mkdir(jobsDir, { recursive: true });
-  const programPath = join(promptRepoDir, 'program.md');
-  const systemPromptPath = join(promptRepoDir, 'system_prompt.md');
-  await writeFile(programPath, PROGRAM, 'utf8');
-  await writeFile(systemPromptPath, `${BENCHMARK_BASE_SYSTEM_PROMPT}\n`, 'utf8');
-  await git(promptRepoDir, 'init', '-q');
-  await git(promptRepoDir, 'config', 'user.email', 'rsi@maka.local');
-  await git(promptRepoDir, 'config', 'user.name', 'RSI Loop');
-  await git(promptRepoDir, 'add', 'program.md', 'system_prompt.md');
-  await git(promptRepoDir, 'commit', '-q', '-m', 'seed prompt');
+  const resultsJsonlPath = join(controllerDir, 'results.jsonl');
+  const {
+    agentCwdPath,
+    programPath,
+    systemPromptPath,
+  } = await ensurePromptOptimizationPromptRepo({
+    promptRepoDir,
+    program: PROGRAM,
+    systemPrompt: `${BENCHMARK_BASE_SYSTEM_PROMPT}\n`,
+  });
+  await assertPromptOptimizationResumeSupported({ promptRepoDir, resultsJsonlPath });
 
   const connection = {
     slug: provider,
@@ -248,7 +345,7 @@ async function main() {
     agentCwdPath,
     programPath,
     systemPromptPath,
-    resultsJsonlPath: join(controllerDir, 'results.jsonl'),
+    resultsJsonlPath,
     heldInResultsTsvPath: join(controllerDir, 'held-in.tsv'),
     heldOutResultsTsvPath: join(controllerDir, 'held-out.tsv'),
     heldInTasks,
@@ -261,6 +358,9 @@ async function main() {
     makaRepoPath,
     jobsDir,
     agentEnv: { DEEPSEEK_BASE_URL: baseUrl },
+    harborTimeoutMs,
+    resumeFingerprint: runManifest.fingerprint,
+    runtimeProfile,
     rewardHackVerifierPatternsByTaskId,
     minStableHeldInTasks,
     minStableHeldOutTasks,

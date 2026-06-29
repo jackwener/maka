@@ -33,8 +33,12 @@ export function buildAbRunManifest(input: AbRunManifestInput): AbRunManifest {
   });
   return {
     ...manifestWithoutFingerprint,
-    fingerprint: `sha256:${createHash('sha256').update(canonicalJson(manifestWithoutFingerprint)).digest('hex')}`,
+    fingerprint: buildRunManifestFingerprint(manifestWithoutFingerprint),
   };
+}
+
+export function buildRunManifestFingerprint(value: unknown): string {
+  return `sha256:${createHash('sha256').update(canonicalJson(value)).digest('hex')}`;
 }
 
 export async function ensureAbRunManifest(
