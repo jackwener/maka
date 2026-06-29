@@ -301,6 +301,9 @@ export async function derivePromptOptimizationReplayState(input: {
       if (!candidate && input.strictRoundState) {
         throw new Error(`RSI WAL replay found task evidence before candidate commit for ${event.roundId}`);
       }
+      if (decisionByRoundId.has(event.roundId) && input.strictRoundState) {
+        throw new Error(`RSI WAL replay found task evidence after decision for ${event.roundId}/${event.taskId}`);
+      }
       if (candidate && !taskEventMatchesPromptIdentity(event, candidate.promptHash)) {
         throw new Error(`RSI WAL replay prompt hash mismatch for ${event.roundId}/${event.taskId}`);
       }
