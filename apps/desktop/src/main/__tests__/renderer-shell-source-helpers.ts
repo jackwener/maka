@@ -7,6 +7,8 @@ const RENDERER_ROOT = resolve(REPO_ROOT, 'apps', 'desktop', 'src', 'renderer');
 
 const sourcePaths = [
   'main.tsx',
+  'app.tsx',
+  'app-shell.tsx',
 ] as const;
 
 export const RENDERER_SHELL_SOURCE_REPO_PATHS: readonly string[] = sourcePaths.map(
