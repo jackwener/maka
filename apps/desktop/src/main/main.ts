@@ -184,10 +184,7 @@ import {
   persistSynthesisCacheBlocksToArtifacts,
 } from './synthesis-cache-artifacts.js';
 import { buildBrowserTools } from './browser/browser-tools.js';
-import { createBrowserViewHost } from './browser/automation-host.js';
-import { provideBrowserViewHost } from './browser/browser-host.js';
-import { releaseBrowserSession, revokeHiddenBrowserActions } from './browser/session.js';
-import type { BrowserViewRect } from './browser/logic.js';
+import { releaseBrowserSession } from './browser/session.js';
 import { createMainWindowController } from './main-window.js';
 import { createDailyReviewMainService } from './daily-review-main.js';
 import { createPlanReminderMainService } from './plan-reminders-main.js';
@@ -204,6 +201,7 @@ import {
 } from './network-settings-main.js';
 import { registerMemoryIpc } from './memory-ipc-main.js';
 import { registerSubscriptionIpc } from './subscription-ipc-main.js';
+import { registerBrowserIpc } from './browser-ipc-main.js';
 
 const buildInfo = resolveBuildInfo(app.isPackaged, app.getAppPath());
 
@@ -810,11 +808,6 @@ const onboardingService = createOnboardingService(
     listSessions: () => runtime.listSessions(),
   }),
 );
-
-// The session the renderer currently shows; browser:* renderer channels are
-// validated against it so a stale/miswired panel can't steer another
-// conversation's view (the agent path uses the runtime's trusted sessionId).
-let shownBrowserSessionId: string | null = null;
 
 function workspaceInstructionOpenFailureCopy(reason: WorkspaceInstructionOpenFailureReason | 'open-failed'): string {
   switch (reason) {
@@ -1498,73 +1491,7 @@ function registerIpc(): void {
     emitSessionsChanged('deleted', sessionId);
   });
 
-  // ── Embedded browser (P3) ──────────────────────────────────────────────────
-  // Provide the host the browser tools / BrowserSession resolve through. The
-  // endpoint + secret it returns stay same-process and never cross these
-  // renderer channels.
-  // The getter reads the live shownBrowserSessionId so the host's visible-lease
-  // gate (canDrive) reflects the conversation the window currently shows.
-  provideBrowserViewHost(createBrowserViewHost(mainWindowController.getBrowserViews(), () => shownBrowserSessionId));
-
-  // Never trust the renderer's target: it must be the session the calling
-  // window currently shows (reported via browser:active-session). The agent
-  // automation path does NOT use these channels — it uses the runtime's
-  // sessionId — so this only guards the human's manual navigation.
-  ipcMain.on('browser:active-session', (_event, sessionId: unknown) => {
-    shownBrowserSessionId = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null;
-    // Main owns visibility: proactively hide every other conversation's view so a
-    // stale one can never float over the newly-shown conversation, regardless of
-    // renderer effect ordering or a reload. The shown view is re-positioned by
-    // its panel's rect mirror.
-    mainWindowController.getBrowserViews().hideAllExcept(shownBrowserSessionId);
-    // The visible lease is continuous: revoke any browser action still running
-    // for a conversation that just went off screen, so it can't keep reading or
-    // driving a hidden, logged-in page. canDrive only gates the START.
-    revokeHiddenBrowserActions(shownBrowserSessionId);
-  });
-  const browserTargetOk = (target: unknown): target is string =>
-    typeof target === 'string' && target.length > 0 && target === shownBrowserSessionId;
-
-  // The renderer mirrors its browser panel strip's on-screen rect here so the
-  // native view tracks it; a null rect (modal open / panel unmounted) hides it.
-  ipcMain.on('browser:setViewport', (_event, input: { sessionId?: unknown; rect?: BrowserViewRect | null }) => {
-    if (!browserTargetOk(input?.sessionId)) return;
-    mainWindowController.getBrowserViews().setViewport(input.sessionId, input.rect ?? null);
-  });
-  // Create on first navigate so conversations that never open the browser pay nothing.
-  ipcMain.handle('browser:navigate', async (_event, target: unknown, url: unknown) => {
-    if (!browserTargetOk(target)) return;
-    await mainWindowController.getBrowserViews().getOrCreate(target).navigate(String(url ?? ''));
-  });
-  ipcMain.handle('browser:back', (_event, target: unknown) => {
-    if (browserTargetOk(target)) mainWindowController.getBrowserViews().get(target)?.goBack();
-  });
-  ipcMain.handle('browser:forward', (_event, target: unknown) => {
-    if (browserTargetOk(target)) mainWindowController.getBrowserViews().get(target)?.goForward();
-  });
-  ipcMain.handle('browser:reload', (_event, target: unknown) => {
-    if (browserTargetOk(target)) mainWindowController.getBrowserViews().get(target)?.reload();
-  });
-  ipcMain.handle('browser:stop', (_event, target: unknown) => {
-    if (browserTargetOk(target)) mainWindowController.getBrowserViews().get(target)?.stop();
-  });
-  // Read-only state query, intentionally NOT gated by browserTargetOk: the panel
-  // issues it from its mount effect, which runs BEFORE the parent's
-  // setActiveSession updates shownBrowserSessionId. Gating it dropped the seed
-  // during a conversation switch, leaving the switched-to panel stuck on its
-  // empty state with the native view hidden. Reading a session's own view state
-  // is not a trust boundary — only mutation (navigate/back/...) and view
-  // positioning (setViewport) are, and those stay guarded.
-  ipcMain.handle('browser:get-state', (_event, target: unknown) =>
-    typeof target === 'string' && target.length > 0
-      ? (mainWindowController.getBrowserViews().get(target)?.state() ?? null)
-      : null,
-  );
-  // The tab's × promises "Close": destroy the conversation's page outright via
-  // the same dispose chain as session delete.
-  ipcMain.handle('browser:close-page', async (_event, target: unknown) => {
-    if (browserTargetOk(target)) await releaseBrowserSession(target);
-  });
+  registerBrowserIpc({ mainWindowController });
 
   ipcMain.handle('connections:list', async () => {
     await syncOAuthModelConnections();
