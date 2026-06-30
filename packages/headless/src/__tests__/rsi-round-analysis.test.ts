@@ -186,6 +186,48 @@ describe('RSI round analysis', () => {
     });
   });
 
+  test('does not aggregate recovered tool failures from passed held-in tasks', async () => {
+    await withDir(async (dir) => {
+      const passedRuntime = join(dir, 'passed-runtime.jsonl');
+      const passedTrace = join(dir, 'passed-trace.jsonl');
+      const failedRuntime = join(dir, 'failed-runtime.jsonl');
+      const failedTrace = join(dir, 'failed-trace.jsonl');
+
+      await writeJsonl(passedRuntime, [functionCall('passed-call', 'Read', { path: '/app/input.txt' })]);
+      await writeJsonl(passedTrace, [toolFailed('passed-call', 'Read', 'Error')]);
+      await writeJsonl(failedRuntime, [functionCall('failed-call', 'Write', { path: '/app/output.txt' })]);
+      await writeJsonl(failedTrace, [toolFailed('failed-call', 'Write', 'Error')]);
+
+      const analysis = await analyzeRsiRound({
+        heldInTaskIds: ['passed-task', 'failed-task'],
+        lastKeptEvents: [
+          completed({ taskId: 'passed-task', passed: true }),
+          completed({ taskId: 'failed-task', passed: false, errorClass: 'verification_failed' }),
+        ],
+        candidateEvents: [
+          completed({ taskId: 'passed-task', passed: true, runtimeEventsPath: passedRuntime, traceEventsPath: passedTrace }),
+          completed({ taskId: 'failed-task', passed: false, errorClass: 'verification_failed', runtimeEventsPath: failedRuntime, traceEventsPath: failedTrace }),
+        ],
+      });
+
+      assert.deepEqual(analysis.toolFailureClusters, [
+        { name: 'Write', errorClass: 'Error', argsPreview: 'path', count: 1, taskIds: ['failed-task'] },
+      ]);
+      assert.deepEqual(
+        analysis.signals
+          .filter((signal) => signal.kind === 'tool_failure_cluster')
+          .map(({ id: _id, ...signal }) => signal),
+        [
+          {
+            kind: 'tool_failure_cluster',
+            taskIds: ['failed-task'],
+            cluster: { name: 'Write', errorClass: 'Error', argsPreview: 'path', count: 1, taskIds: ['failed-task'] },
+          },
+        ],
+      );
+    });
+  });
+
   test('aggregates tool failure clusters from plumbing events with traces', async () => {
     await withDir(async (dir) => {
       const runtimeEventsPath = join(dir, 'runtime.jsonl');

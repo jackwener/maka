@@ -294,6 +294,7 @@ async function toolFailureClusters(
   for (const taskId of heldInTaskIds) {
     const event = events.get(taskId);
     if (!event || !hasRuntimePath(event)) continue;
+    if (event.type === 'task_completed' && event.eligible && event.scored && event.passed) continue;
     if (!hasTracePath(event)) {
       addTraceUnavailable(traceUnavailable, taskId, 'trace', 'missing_path');
       continue;
