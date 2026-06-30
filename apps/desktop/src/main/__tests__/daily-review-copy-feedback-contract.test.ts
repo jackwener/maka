@@ -12,10 +12,12 @@ function blockBetween(source: string, start: string, end: string): string {
 
 describe('Daily Review copy feedback contract', () => {
   it('lets the app shell own clipboard success and failure feedback', async () => {
-    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/components.tsx'), 'utf8');
+    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/module-panels.tsx'), 'utf8');
+    const chatView = await readFile(resolve(REPO_ROOT, 'packages/ui/src/chat-view.tsx'), 'utf8');
     const main = await readFile(resolve(REPO_ROOT, 'apps/desktop/src/renderer/main.tsx'), 'utf8');
 
-    assert.match(ui, /onCopyDailyReviewMarkdown\?\(input:/);
+    assert.match(chatView, /onCopyDailyReviewMarkdown\?: \(input:/);
+    assert.match(chatView, /onCopyMarkdown=\{props\.onCopyDailyReviewMarkdown\}/);
     assert.match(ui, /onCopyMarkdown\?: \(input:/);
     assert.match(ui, /props\.onCopyMarkdown\?\.\(\{\s*markdown:\s*md,\s*label:\s*dayLabel,\s*summary: visibleSummary\s*\}\)/);
     assert.match(ui, /const hasDailyReviewActions = Boolean\(props\.onCopyMarkdown \|\| props\.onAppendMarkdown \|\| props\.onSaveMarkdown\)/);
@@ -59,12 +61,14 @@ describe('Daily Review copy feedback contract', () => {
   });
 
   it('lets the Daily Review main panel append the current range to the composer', async () => {
-    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/components.tsx'), 'utf8');
+    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/module-panels.tsx'), 'utf8');
+    const chatView = await readFile(resolve(REPO_ROOT, 'packages/ui/src/chat-view.tsx'), 'utf8');
     const main = await readFile(resolve(REPO_ROOT, 'apps/desktop/src/renderer/main.tsx'), 'utf8');
     const panelBlock = ui.match(/function DailyReviewPanel[\s\S]*?function PlanReminderPanel/)?.[0] ?? '';
     const mainPaneBlock = main.match(/onAppendDailyReviewMarkdown=\{\(\{ markdown, label, summary \}\) => \{[\s\S]*?^\s*}\}/m)?.[0] ?? '';
 
-    assert.match(ui, /onAppendDailyReviewMarkdown\?: \(input:/);
+    assert.match(chatView, /onAppendDailyReviewMarkdown\?: \(input:/);
+    assert.match(chatView, /onAppendMarkdown=\{props\.onAppendDailyReviewMarkdown\}/);
     assert.match(panelBlock, /props\.onAppendMarkdown\?\.\(\{\s*markdown:\s*md,\s*label:\s*dayLabel,\s*summary: visibleSummary\s*\}\)/);
     assert.match(panelBlock, /pendingDailyReviewAction === 'append' \? '追加中…' : '粘到输入框'/);
     assert.match(mainPaneBlock, /composerRef\.current\?\.appendText\(markdown\)/);
@@ -73,7 +77,7 @@ describe('Daily Review copy feedback contract', () => {
   });
 
   it('renders Daily Review controls through shared button variants without legacy button classes', async () => {
-    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/components.tsx'), 'utf8');
+    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/module-panels.tsx'), 'utf8');
     const css = await readRendererContractCss();
     const panelBlock = ui.match(/function DailyReviewPanel[\s\S]*?function PlanReminderPanel/)?.[0] ?? '';
 
@@ -91,7 +95,7 @@ describe('Daily Review copy feedback contract', () => {
   });
 
   it('gates Daily Review export actions while async work is pending', async () => {
-    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/components.tsx'), 'utf8');
+    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/module-panels.tsx'), 'utf8');
     const main = await readFile(resolve(REPO_ROOT, 'apps/desktop/src/renderer/main.tsx'), 'utf8');
     const panelBlock = ui.match(/function DailyReviewPanel[\s\S]*?function PlanReminderPanel/)?.[0] ?? '';
     const gateBlock = panelBlock.match(/async function runDailyReviewAction[\s\S]*?const dailyReviewActionBusy/)?.[0] ?? '';
@@ -132,7 +136,7 @@ describe('Daily Review copy feedback contract', () => {
   });
 
   it('guards Daily Review manual run continuations against closed panels', async () => {
-    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/components.tsx'), 'utf8');
+    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/module-panels.tsx'), 'utf8');
     const panelBlock = ui.match(/function DailyReviewPanel[\s\S]*?function PlanReminderPanel/)?.[0] ?? '';
     const manualRunBlock = blockBetween(panelBlock, 'async function triggerManualRun', 'return \\(');
 
@@ -162,7 +166,7 @@ describe('Daily Review copy feedback contract', () => {
   });
 
   it('guards Daily Review archive body loads against stale async responses', async () => {
-    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/components.tsx'), 'utf8');
+    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/module-panels.tsx'), 'utf8');
     const panelBlock = ui.match(/function DailyReviewPanel[\s\S]*?function PlanReminderPanel/)?.[0] ?? '';
     const archiveLoadBlock = panelBlock.match(/useEffect\(\(\) => \{\s*const getArchive = props\.bridge\.getArchive;[\s\S]*?\}, \[archiveReloadToken, selectedArchiveId, props\.bridge\]\);/)?.[0] ?? '';
 
@@ -260,7 +264,7 @@ describe('Daily Review copy feedback contract', () => {
   });
 
   it('scrubs Daily Review load and action failures before rendering them', async () => {
-    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/components.tsx'), 'utf8');
+    const ui = await readFile(resolve(REPO_ROOT, 'packages/ui/src/module-panels.tsx'), 'utf8');
     // PR-UI-LIB-EXTRACT-2 (round 3/10): `dailyReviewPanelErrorMessage`
     // moved out of `components.tsx` into a sibling helper module so
     // pure logic isn't tangled with the panel JSX. The assertion

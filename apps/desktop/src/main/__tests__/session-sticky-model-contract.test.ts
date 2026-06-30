@@ -6,15 +6,17 @@ import { readRendererContractCss } from './contract-css-helpers.js';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../..');
 
-// The model switcher / picker JSX was extracted out of `components.tsx` into the
-// sibling `chat-model-switcher.tsx`. These source-grep contracts assert behavior
-// that now spans both files, so search their union.
+// The model switcher / picker JSX lives in `chat-model-switcher.tsx`, the
+// composer renders it from `composer.tsx`, and turn chips render in
+// `chat-view.tsx`. These source-grep contracts assert behavior that spans the
+// seam, so search their union.
 async function readModelSwitcherUiSource(): Promise<string> {
-  const [components, switcher] = await Promise.all([
-    readFile(resolve(REPO_ROOT, 'packages/ui/src/components.tsx'), 'utf8'),
+  const [composer, chatView, switcher] = await Promise.all([
+    readFile(resolve(REPO_ROOT, 'packages/ui/src/composer.tsx'), 'utf8'),
+    readFile(resolve(REPO_ROOT, 'packages/ui/src/chat-view.tsx'), 'utf8'),
     readFile(resolve(REPO_ROOT, 'packages/ui/src/chat-model-switcher.tsx'), 'utf8'),
   ]);
-  return `${components}\n${switcher}`;
+  return `${composer}\n${chatView}\n${switcher}`;
 }
 
 describe('PR-SESSION-STICKY-MODEL-0 contract', () => {

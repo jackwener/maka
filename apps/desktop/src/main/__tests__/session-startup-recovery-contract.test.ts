@@ -27,7 +27,7 @@ describe('session startup recovery contract', () => {
   });
 
   it('turn summary only shows in-progress for genuinely running turns', async () => {
-    const src = await readFile(join(REPO_ROOT, 'packages/ui/src/components.tsx'), 'utf8');
+    const src = await readFile(join(REPO_ROOT, 'packages/ui/src/chat-view.tsx'), 'utf8');
 
     assert.match(src, /const inProgress = turn\.status === 'running' && turn\.user !== undefined && turn\.assistant === undefined;/);
   });

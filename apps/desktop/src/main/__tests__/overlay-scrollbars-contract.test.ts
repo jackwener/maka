@@ -60,7 +60,7 @@ describe('OverlayScrollbars integration contract', () => {
   });
 
   it('migrates the primary app scroll surfaces onto OverlayScrollArea', async () => {
-    const components = await repoFile('packages/ui/src/components.tsx');
+    const components = await repoFile('packages/ui/src/chat-view.tsx');
     const sessionListPanel = await repoFile('packages/ui/src/session-list-panel.tsx');
     const settings = await repoFile('apps/desktop/src/renderer/settings/SettingsModal.tsx');
 

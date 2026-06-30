@@ -126,7 +126,7 @@ describe('project context workspace picker', () => {
   });
 
   it('renders the guarded project picker below the composer', async () => {
-    const ui = await readRepo('packages/ui/src/components.tsx');
+    const ui = await readRepo('packages/ui/src/composer.tsx');
     const styles = await readRendererContractCss();
     const renderer = await readRepo('apps/desktop/src/renderer/main.tsx');
 

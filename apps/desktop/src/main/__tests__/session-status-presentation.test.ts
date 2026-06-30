@@ -159,10 +159,10 @@ describe('permission mode transition guard copy', () => {
   });
 
   it('composer mode chip disables itself when pending or disabledReason is present', async () => {
-    const ui = await readFile(join(REPO_ROOT, 'packages/ui/src/components.tsx'), 'utf8');
+    const ui = await readFile(join(REPO_ROOT, 'packages/ui/src/composer.tsx'), 'utf8');
     const dropdownBlock = ui.match(/props\.onPermissionModeChange \? \(\(\) => \{[\s\S]*?<\/Menu>/)?.[0] ?? '';
 
-    assert.ok(dropdownBlock, 'components.tsx must render a composer permission-mode Menu dropdown');
+    assert.ok(dropdownBlock, 'composer.tsx must render a composer permission-mode Menu dropdown');
     assert.match(dropdownBlock, /const triggerDisabled = props\.permissionModePending === true \|\| Boolean\(props\.permissionModeDisabledReason\);/);
     assert.match(dropdownBlock, /disabled=\{triggerDisabled\}/);
     assert.match(dropdownBlock, /title=\{props\.permissionModeDisabledReason \?\? meta\.hint\}/);
@@ -171,7 +171,7 @@ describe('permission mode transition guard copy', () => {
   });
 
   it('composer mode menu offers the user-facing permission modes via base-ui Menu', async () => {
-    const ui = await readFile(join(REPO_ROOT, 'packages/ui/src/components.tsx'), 'utf8');
+    const ui = await readFile(join(REPO_ROOT, 'packages/ui/src/composer.tsx'), 'utf8');
 
     // Three-mode picker: explore is retired from the picker entirely
     // (read-only mode has no useful runtime toggle for normal chat —

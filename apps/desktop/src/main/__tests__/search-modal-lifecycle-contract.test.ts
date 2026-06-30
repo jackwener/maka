@@ -40,7 +40,7 @@ import { readRendererContractCss } from './contract-css-helpers.js';
 
 // The desktop test runs with cwd=apps/desktop; the UI package lives
 // two levels up. Resolve once.
-const COMPONENTS_PATH = resolve(process.cwd(), '..', '..', 'packages', 'ui', 'src', 'components.tsx');
+const COMPONENTS_PATH = resolve(process.cwd(), '..', '..', 'packages', 'ui', 'src', 'chat-view.tsx');
 const SEARCH_MODAL_PATH = resolve(process.cwd(), '..', '..', 'packages', 'ui', 'src', 'search-modal.tsx');
 const MODAL_A11Y_PATH = resolve(process.cwd(), '..', '..', 'packages', 'ui', 'src', 'modal-a11y.ts');
 const SESSION_LIST_PANEL_PATH = resolve(process.cwd(), '..', '..', 'packages', 'ui', 'src', 'session-list-panel.tsx');
