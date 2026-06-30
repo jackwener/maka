@@ -136,7 +136,6 @@ import type {
 import { testProxyConnection } from '@maka/runtime/network/proxy-test';
 import { fetchWeChatQrcode, pollWeChatQrcodeStatus } from './wechat-scan-login.js';
 import {
-  CODEX_SUBSCRIPTION_UNSUPPORTED_CHATGPT_MODELS,
   PROVIDER_DEFAULTS,
   type LlmConnection,
 } from '@maka/core/llm-connections';
@@ -216,6 +215,11 @@ import { createBotIncomingMainService } from './bot-incoming-main.js';
 import { createSubscriptionModelFetch } from './subscription-model-fetch.js';
 import { buildContextBudgetPolicy } from './context-budget-policy.js';
 import { createSystemPromptMainService } from './system-prompt-main.js';
+import {
+  CLAUDE_SUBSCRIPTION_CONNECTION_SLUG,
+  CODEX_SUBSCRIPTION_CONNECTION_SLUG,
+  createOAuthModelConnectionsMainService,
+} from './oauth-model-connections-main.js';
 
 const buildInfo = resolveBuildInfo(app.isPackaged, app.getAppPath());
 
@@ -275,179 +279,36 @@ const buildSubscriptionModelFetch = createSubscriptionModelFetch({
   claudeSubscription,
   codexSubscription,
 });
+const oauthModelConnections = createOAuthModelConnectionsMainService({
+  connectionStore,
+  credentialStore,
+  claudeSubscription,
+  codexSubscription,
+});
+const isClaudeSubscriptionAuthenticatedState = oauthModelConnections.isClaudeSubscriptionAuthenticatedState;
+const isCodexSubscriptionAuthenticatedState = oauthModelConnections.isCodexSubscriptionAuthenticatedState;
+
+function syncClaudeSubscriptionConnection(): Promise<LlmConnection | null> {
+  return oauthModelConnections.syncClaudeSubscriptionConnection();
+}
+
+function syncCodexSubscriptionConnection(): Promise<LlmConnection | null> {
+  return oauthModelConnections.syncCodexSubscriptionConnection();
+}
+
+function syncOAuthModelConnections(): Promise<void> {
+  return oauthModelConnections.syncOAuthModelConnections();
+}
+
+function resolveConnectionSecret(slug: string): Promise<string | null> {
+  return oauthModelConnections.resolveConnectionSecret(slug);
+}
 const cursorSubscription = new CursorSubscriptionService({
   userDataDir: app.getPath('userData'),
 });
 const antigravitySubscription = new AntigravitySubscriptionService({
   userDataDir: app.getPath('userData'),
 });
-
-const CLAUDE_SUBSCRIPTION_CONNECTION_SLUG = 'claude-subscription';
-const CODEX_SUBSCRIPTION_CONNECTION_SLUG = 'codex-subscription';
-
-function isClaudeSubscriptionAuthenticatedState(
-  state: Awaited<ReturnType<ClaudeSubscriptionService['getAccountState']>>,
-): boolean {
-  return state.runtimeState === 'authenticated' ||
-    state.runtimeState === 'refreshing' ||
-    state.runtimeState === 'quota_unavailable' ||
-    state.runtimeState === 'provider_rejected';
-}
-
-async function syncClaudeSubscriptionConnection(): Promise<LlmConnection | null> {
-  if (!isSubscriptionExperimentalEnabled()) return null;
-  const state = await claudeSubscription.getAccountState();
-  const existing = await connectionStore.get(CLAUDE_SUBSCRIPTION_CONNECTION_SLUG);
-  if (!isClaudeSubscriptionAuthenticatedState(state)) {
-    if (existing && (state.runtimeState === 'refresh_failed' || state.runtimeState === 'storage_failed' || state.runtimeState === 'not_logged_in')) {
-      return connectionStore.update(existing.slug, {
-        enabled: false,
-        lastTestStatus: 'needs_reauth',
-        lastTestAt: new Date().toISOString(),
-        lastTestMessage: state.errorMessage ?? (state.runtimeState === 'not_logged_in'
-          ? 'Claude OAuth 未登录。'
-          : state.runtimeState === 'storage_failed'
-            ? 'Claude OAuth 本地凭据读取失败。'
-            : 'Claude OAuth 需要重新登录。'),
-      });
-    }
-    return existing;
-  }
-
-  const defaults = PROVIDER_DEFAULTS['claude-subscription'];
-  const fallbackModels = defaults.fallbackModels.map((id) => ({ id }));
-  // PR-OAUTH-NAME-EMAIL-STRIP-0 (WAWQAQ msg `77221a77` 2026-06-30): the
-  // connection display name used to embed the OAuth account email
-  // (`Claude OAuth · user@example.com`). That value leaks the user's
-  // account identity into every model picker, settings dropdown, and
-  // anywhere else `connection.name` shows up. The email belongs on the
-  // Account · 模型 page, not in the model identity. Use the brand-only
-  // label here; the email is still available via the OAuth state for
-  // the dedicated account surfaces that legitimately need it.
-  const displayName = 'Claude OAuth';
-  const now = Date.now();
-  const connection: LlmConnection = {
-    slug: CLAUDE_SUBSCRIPTION_CONNECTION_SLUG,
-    name: existing?.name ?? displayName,
-    providerType: 'claude-subscription',
-    baseUrl: defaults.baseUrl,
-    defaultModel: existing?.defaultModel || defaults.fallbackModels[0] || '',
-    enabled: true,
-    models: existing?.models?.length ? existing.models : fallbackModels,
-    modelSource: existing?.modelSource ?? 'fallback',
-    lastTestStatus: 'verified',
-    lastTestAt: new Date(now).toISOString(),
-    lastTestMessage: 'Claude OAuth 已登录。',
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-  };
-  return connectionStore.save(connection);
-}
-
-function isCodexSubscriptionAuthenticatedState(
-  state: Awaited<ReturnType<CodexSubscriptionService['getAccountState']>>,
-): boolean {
-  return state.runtimeState === 'authenticated' || state.runtimeState === 'refreshing';
-}
-
-async function syncCodexSubscriptionConnection(): Promise<LlmConnection | null> {
-  if (!isCodexSubscriptionExperimentalEnabled()) return null;
-  const state = await codexSubscription.getAccountState();
-  const existing = await connectionStore.get(CODEX_SUBSCRIPTION_CONNECTION_SLUG);
-  if (!isCodexSubscriptionAuthenticatedState(state)) {
-    if (existing && (state.runtimeState === 'refresh_failed' || state.runtimeState === 'storage_failed' || state.runtimeState === 'not_logged_in')) {
-      return connectionStore.update(existing.slug, {
-        enabled: false,
-        lastTestStatus: 'needs_reauth',
-        lastTestAt: new Date().toISOString(),
-        lastTestMessage: state.errorMessage ?? (state.runtimeState === 'not_logged_in'
-          ? 'Codex OAuth 未登录。'
-          : state.runtimeState === 'storage_failed'
-            ? 'Codex OAuth 本地凭据读取失败。'
-            : 'Codex OAuth 需要重新登录。'),
-      });
-    }
-    return existing;
-  }
-
-  const defaults = PROVIDER_DEFAULTS['codex-subscription'];
-  const fallbackModels = defaults.fallbackModels.map((id) => ({ id }));
-  const normalizedModels = normalizeCodexSubscriptionModels(existing?.models, fallbackModels);
-  const normalizedDefaultModel = normalizeCodexSubscriptionDefaultModel(
-    existing?.defaultModel,
-    normalizedModels.map((entry) => entry.id),
-    defaults.fallbackModels[0] || '',
-  );
-  // PR-OAUTH-NAME-EMAIL-STRIP-0 — same email-leak fix as Claude OAuth
-  // above. Codex's was the one that surfaced in the screenshot, but the
-  // symmetric Claude path had the same shape; both now use brand-only.
-  const displayName = 'Codex OAuth';
-  const now = Date.now();
-  const connection: LlmConnection = {
-    slug: CODEX_SUBSCRIPTION_CONNECTION_SLUG,
-    name: existing?.name ?? displayName,
-    providerType: 'codex-subscription',
-    baseUrl: defaults.baseUrl,
-    defaultModel: normalizedDefaultModel,
-    enabled: true,
-    models: normalizedModels,
-    modelSource: existing?.modelSource ?? 'fallback',
-    lastTestStatus: 'verified',
-    lastTestAt: new Date(now).toISOString(),
-    lastTestMessage: 'Codex OAuth 已登录。',
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-  };
-  return connectionStore.save(connection);
-}
-
-function normalizeCodexSubscriptionModels(
-  existingModels: LlmConnection['models'] | undefined,
-  fallbackModels: NonNullable<LlmConnection['models']>,
-): NonNullable<LlmConnection['models']> {
-  const safeExisting = (existingModels ?? []).filter(
-    (entry) => entry.id && !CODEX_SUBSCRIPTION_UNSUPPORTED_CHATGPT_MODELS.has(entry.id),
-  );
-  return safeExisting.length ? safeExisting : fallbackModels;
-}
-
-function normalizeCodexSubscriptionDefaultModel(
-  existingDefaultModel: string | undefined,
-  enabledModelIds: string[],
-  fallbackModel: string,
-): string {
-  if (
-    existingDefaultModel &&
-    !CODEX_SUBSCRIPTION_UNSUPPORTED_CHATGPT_MODELS.has(existingDefaultModel) &&
-    enabledModelIds.includes(existingDefaultModel)
-  ) {
-    return existingDefaultModel;
-  }
-  return enabledModelIds[0] || fallbackModel;
-}
-
-async function syncOAuthModelConnections(): Promise<void> {
-  const results = await Promise.allSettled([
-    syncClaudeSubscriptionConnection(),
-    syncCodexSubscriptionConnection(),
-  ]);
-  for (const result of results) {
-    if (result.status === 'rejected') {
-      console.warn('[maka] OAuth model connection sync failed', result.reason);
-    }
-  }
-}
-
-async function resolveConnectionSecret(slug: string): Promise<string | null> {
-  const connection = await connectionStore.get(slug);
-  if (connection?.providerType === 'claude-subscription') {
-    return claudeSubscription.getAccessTokenInternal();
-  }
-  if (connection?.providerType === 'codex-subscription') {
-    return codexSubscription.getAccessTokenInternal();
-  }
-  return credentialStore.getSecret(slug, 'api_key');
-}
 
 const IPC_CONNECTION_SLUG_MAX_LENGTH = 64;
 const IPC_CONNECTION_SECRET_MAX_LENGTH = 4096;

@@ -19,6 +19,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { resolve } from 'node:path';
 import { readProviderSettingsCombinedSource } from './provider-contract-source-helpers.js';
+import { readMainProcessCombinedSource } from './main-process-contract-source-helpers.js';
 
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
 const SERVICE_SOURCE = resolve(
@@ -303,7 +304,7 @@ describe('Claude OAuth authorize URL compatibility', () => {
 
 describe('Claude OAuth model connection bridge', () => {
   it('main syncs successful Claude OAuth login into the model connection list', async () => {
-    const src = await readFile(MAIN_SOURCE, 'utf8');
+    const src = await readMainProcessCombinedSource();
     assert.match(
       src,
       /async function syncClaudeSubscriptionConnection\(\)/,
@@ -327,7 +328,7 @@ describe('Claude OAuth model connection bridge', () => {
   });
 
   it('OAuth model connection sync is per-provider fail-soft', async () => {
-    const src = await readFile(MAIN_SOURCE, 'utf8');
+    const src = await readMainProcessCombinedSource();
     const syncMatch = src.match(/async function syncOAuthModelConnections\(\): Promise<void> \{[\s\S]*?\n\}/);
     assert.ok(syncMatch, 'syncOAuthModelConnections helper must exist');
     assert.match(
@@ -343,7 +344,7 @@ describe('Claude OAuth model connection bridge', () => {
   });
 
   it('model connection IPC resolves Claude OAuth token from the subscription service, not credentialStore api_key', async () => {
-    const src = await readFile(MAIN_SOURCE, 'utf8');
+    const src = await readMainProcessCombinedSource();
     assert.match(
       src,
       /async function resolveConnectionSecret\(slug:\s*string\)[\s\S]*providerType === 'claude-subscription'[\s\S]*claudeSubscription\.getAccessTokenInternal\(\)/,
@@ -380,7 +381,7 @@ describe('Claude OAuth model connection bridge', () => {
   });
 
   it('main syncs successful Codex OAuth login into the model connection list', async () => {
-    const src = await readFile(MAIN_SOURCE, 'utf8');
+    const src = await readMainProcessCombinedSource();
     assert.match(
       src,
       /async function syncCodexSubscriptionConnection\(\)/,
