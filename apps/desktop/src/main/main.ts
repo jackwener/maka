@@ -23,13 +23,11 @@ import {
   botDisplayLabel,
   botSourceEventKey,
   humanizeBotStatusReason,
-  isBotDeliveryProvider,
   isPlaintextHelpCommand,
   isPlaintextResetCommand,
   nonTextMessageAck,
   plaintextHelpReply,
   formatBotMessageForSession,
-  formatPlanReminderDeliveryMessage,
   buildLocalMemoryPromptBody,
 } from '@maka/core';
 import type {
@@ -54,7 +52,6 @@ import type {
   UpdateConnectionInput,
   UpdateAppSettingsInput,
   UsageRange,
-  PlanReminder,
   LocalMemoryState,
 } from '@maka/core';
 import {
@@ -233,6 +230,7 @@ import { releaseBrowserSession, revokeHiddenBrowserActions } from './browser/ses
 import type { BrowserViewRect } from './browser/logic.js';
 import { createMainWindowController } from './main-window.js';
 import { createDailyReviewMainService } from './daily-review-main.js';
+import { createPlanReminderMainService } from './plan-reminders-main.js';
 
 const buildInfo = resolveBuildInfo(app.isPackaged, app.getAppPath());
 
@@ -696,6 +694,23 @@ const botRegistry = new BotRegistry({
         },
       }).catch(() => {});
     }
+  },
+});
+const planReminders = createPlanReminderMainService({
+  store: planReminderStore,
+  getPrivacyContext: getWorkspacePrivacyContext,
+  sendBotMessage: (platform, chatId, text) =>
+    botRegistry.sendMessage(platform, chatId, text),
+  emitChanged: (reason, reminder) => {
+    safeSendToRenderer('plans:changed', {
+      type: 'plans_changed',
+      reason,
+      reminderId: reminder.id,
+      ts: Date.now(),
+    });
+  },
+  emitDue: (reminder) => {
+    safeSendToRenderer('plans:due', reminder);
   },
 });
 
@@ -1291,9 +1306,6 @@ const onboardingService = createOnboardingService(
   }),
 );
 
-const planReminderTimers = new Map<string, NodeJS.Timeout>();
-const PLAN_REMINDER_DEFAULT_SNOOZE_MS = 10 * 60 * 1000;
-
 // The session the renderer currently shows; browser:* renderer channels are
 // validated against it so a stale/miswired panel can't steer another
 // conversation's view (the agent path uses the runtime's trusted sessionId).
@@ -1845,67 +1857,31 @@ function registerIpc(): void {
     if (error) return { ok: false, reason: 'open_failed' as const };
     return { ok: true as const, target: resolved.target };
   });
-  ipcMain.handle('plans:list', () => planReminderStore.list());
+  ipcMain.handle('plans:list', () => planReminders.list());
   ipcMain.handle('plans:create', async (_event, input: unknown) => {
     const privacy = await getWorkspacePrivacyContext();
     if (privacy.incognitoActive) {
       throw new Error('隐私模式已开启，不能创建计划提醒。');
     }
-    const reminder = await planReminderStore.create(input);
-    schedulePlanReminder(reminder);
-    emitPlansChanged('created', reminder);
-    return reminder;
+    return planReminders.create(input);
   });
-  ipcMain.handle('plans:update', async (_event, id: string, patch: unknown) => {
-    const reminder = await planReminderStore.update(id, patch);
-    schedulePlanReminder(reminder);
-    emitPlansChanged('updated', reminder);
-    return reminder;
-  });
-  ipcMain.handle('plans:setEnabled', async (_event, id: string, enabled: boolean) => {
-    const reminder = await planReminderStore.setEnabled(id, enabled);
-    schedulePlanReminder(reminder);
-    emitPlansChanged('updated', reminder);
-    return reminder;
-  });
-  ipcMain.handle('plans:triggerNow', async (_event, id: string) => {
-    const reminder = (await planReminderStore.list()).find((entry) => entry.id === id);
-    if (!reminder) throw new Error(`No such plan reminder: ${id}`);
-    if (!reminder.enabled) throw new Error('计划提醒已暂停，不能立即触发。');
-    const privacy = await getWorkspacePrivacyContext();
-    const now = Date.now();
-    if (privacy.incognitoActive) {
-      const blocked = await planReminderStore.markBlocked(reminder.id, {
-        at: now,
-        message: '隐私模式已开启，计划提醒没有触发。',
-        blockReason: 'incognito_active',
-      });
-      schedulePlanReminder(blocked);
-      emitPlansChanged('blocked', blocked);
-      return blocked;
-    }
-    await deliverPlanReminder(reminder, now);
-    const updated = (await planReminderStore.list()).find((entry) => entry.id === id);
-    if (!updated) throw new Error(`No such plan reminder: ${id}`);
-    schedulePlanReminder(updated);
-    return updated;
-  });
-  ipcMain.handle('plans:snooze', async (_event, id: string) => {
-    const reminder = await planReminderStore.snooze(id, PLAN_REMINDER_DEFAULT_SNOOZE_MS);
-    schedulePlanReminder(reminder);
-    emitPlansChanged('updated', reminder);
-    return reminder;
-  });
-  ipcMain.handle('plans:clearRunHistory', async (_event, id: string) => {
-    const reminder = await planReminderStore.clearRunHistory(id);
-    schedulePlanReminder(reminder);
-    emitPlansChanged('updated', reminder);
-    return reminder;
-  });
+  ipcMain.handle('plans:update', (_event, id: string, patch: unknown) =>
+    planReminders.update(id, patch),
+  );
+  ipcMain.handle('plans:setEnabled', (_event, id: string, enabled: boolean) =>
+    planReminders.setEnabled(id, enabled),
+  );
+  ipcMain.handle('plans:triggerNow', (_event, id: string) =>
+    planReminders.triggerNow(id),
+  );
+  ipcMain.handle('plans:snooze', (_event, id: string) =>
+    planReminders.snooze(id),
+  );
+  ipcMain.handle('plans:clearRunHistory', (_event, id: string) =>
+    planReminders.clearRunHistory(id),
+  );
   ipcMain.handle('plans:delete', async (_event, id: string) => {
-    clearPlanReminderTimer(id);
-    await planReminderStore.remove(id);
-    emitPlansChanged('deleted', { id });
+    await planReminders.delete(id);
   });
   ipcMain.handle('sessions:list', (_event, filter?: SessionListFilter) => runtime.listSessions(filter));
   ipcMain.handle('sessions:create', async (_event, input?: Partial<CreateSessionInput>) => {
@@ -3680,46 +3656,6 @@ function normalizeSessionModelSelection(input: unknown): { llmConnectionSlug: st
   return { llmConnectionSlug, model };
 }
 
-function emitPlansChanged(
-  reason: 'created' | 'updated' | 'deleted' | 'triggered' | 'blocked',
-  reminder: Pick<PlanReminder, 'id'>,
-): void {
-  safeSendToRenderer('plans:changed', {
-    type: 'plans_changed',
-    reason,
-    reminderId: reminder.id,
-    ts: Date.now(),
-  });
-}
-
-function emitPlanDue(reminder: PlanReminder): void {
-  safeSendToRenderer('plans:due', reminder);
-}
-
-function clearPlanReminderTimer(id: string): void {
-  const timer = planReminderTimers.get(id);
-  if (timer) clearTimeout(timer);
-  planReminderTimers.delete(id);
-}
-
-function schedulePlanReminder(reminder: PlanReminder): void {
-  clearPlanReminderTimer(reminder.id);
-  if (!reminder.enabled || reminder.status !== 'scheduled' || typeof reminder.nextRunAt !== 'number') return;
-  const delay = Math.max(0, reminder.nextRunAt - Date.now());
-  const timer = setTimeout(() => {
-    planReminderTimers.delete(reminder.id);
-    void refreshPlanReminderTimers();
-  }, Math.min(delay, 2_147_483_647));
-  planReminderTimers.set(reminder.id, timer);
-}
-
-async function refreshPlanReminderTimers(): Promise<void> {
-  for (const id of Array.from(planReminderTimers.keys())) clearPlanReminderTimer(id);
-  await triggerDuePlanReminders();
-  const reminders = await planReminderStore.list();
-  for (const reminder of reminders) schedulePlanReminder(reminder);
-}
-
 async function recoverInterruptedSessionsOnStartup(): Promise<void> {
   try {
     await runtime.recoverInterruptedSessions();
@@ -3727,66 +3663,6 @@ async function recoverInterruptedSessionsOnStartup(): Promise<void> {
     // Best-effort: startup should still reach the renderer so users can inspect
     // and repair any remaining local session state.
   }
-}
-
-async function triggerDuePlanReminders(): Promise<void> {
-  const due = await planReminderStore.listDue(Date.now());
-  for (const reminder of due) {
-    const now = Date.now();
-    const privacy = await getWorkspacePrivacyContext();
-    if (privacy.incognitoActive) {
-      const blocked = await planReminderStore.markBlocked(reminder.id, {
-        at: now,
-        message: '隐私模式已开启，计划提醒没有触发。',
-        blockReason: 'incognito_active',
-      });
-      emitPlansChanged('blocked', blocked);
-      continue;
-    }
-    await deliverPlanReminder(reminder, now);
-  }
-}
-
-async function deliverPlanReminder(reminder: PlanReminder, now: number): Promise<void> {
-  if (reminder.delivery.channel === 'bot') {
-    if (!isBotDeliveryProvider(reminder.delivery.platform)) {
-      const blocked = await planReminderStore.markBlocked(reminder.id, {
-        at: now,
-        message: `${botDisplayLabel(reminder.delivery.platform)} 当前不是可投递目标，计划提醒没有投递。`,
-        blockReason: 'bot_delivery_unavailable',
-      });
-      emitPlansChanged('blocked', blocked);
-      return;
-    }
-    const sent = await botRegistry
-      .sendMessage(reminder.delivery.platform, reminder.delivery.chatId, formatPlanReminderDeliveryMessage(reminder))
-      .catch(() => null);
-    if (!sent) {
-      const blocked = await planReminderStore.markBlocked(reminder.id, {
-        at: now,
-        message: `${botDisplayLabel(reminder.delivery.platform)} 通道不可用，计划提醒没有投递。`,
-        blockReason: 'bot_delivery_unavailable',
-      });
-      emitPlansChanged('blocked', blocked);
-      return;
-    }
-    const triggered = await planReminderStore.markTriggered(reminder.id, {
-      at: now,
-      status: 'triggered',
-      message: `已投递到 ${botDisplayLabel(reminder.delivery.platform)}。`,
-    });
-    emitPlansChanged('triggered', triggered);
-    emitPlanDue(triggered);
-    return;
-  }
-
-  const triggered = await planReminderStore.markTriggered(reminder.id, {
-    at: now,
-    status: 'triggered',
-    message: '提醒已触发。',
-  });
-  emitPlansChanged('triggered', triggered);
-  emitPlanDue(triggered);
 }
 
 function toContractNetworkSettings(network: Awaited<ReturnType<typeof settingsStore.get>>['network']): ContractNetworkSettings {
@@ -3934,7 +3810,7 @@ app.whenReady().then(async () => {
   await botRegistry.applySettings(settings.botChat);
   await openGateway.sync(settings.openGateway);
   await mainWindowController.createWindow();
-  await refreshPlanReminderTimers();
+  await planReminders.refreshTimers();
   dailyReview.startScheduler();
 });
 
@@ -3943,7 +3819,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
-  for (const id of Array.from(planReminderTimers.keys())) clearPlanReminderTimer(id);
+  planReminders.stopTimers();
   dailyReview.stopScheduler();
   void botRegistry.stopAll();
   void openGateway.stop();

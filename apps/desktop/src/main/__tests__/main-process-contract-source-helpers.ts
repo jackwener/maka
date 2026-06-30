@@ -8,6 +8,7 @@ export const MAIN_PROCESS_SOURCE_REPO_PATHS: readonly string[] = [
   'apps/desktop/src/main/main.ts',
   'apps/desktop/src/main/daily-review-main.ts',
   'apps/desktop/src/main/main-window.ts',
+  'apps/desktop/src/main/plan-reminders-main.ts',
 ];
 
 export async function readMainProcessCombinedSource(): Promise<string> {
