@@ -11,6 +11,7 @@ const sourcePaths = [
   'app-shell.tsx',
   'cached-theme-bootstrap.ts',
   'conversation-markdown.ts',
+  'daily-review-actions.ts',
   'model-connection-errors.ts',
   'nav-selection.ts',
   'session-list-layout.ts',

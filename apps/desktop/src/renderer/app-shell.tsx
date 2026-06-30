@@ -92,7 +92,6 @@ import { readScrollMotionBehavior } from './scroll-motion-policy';
 import { deriveBranchBanner } from './branch-banner';
 import {
   buildCatalogChatModelChoices,
-  buildCatalogDailyReviewModelOptions,
   pickCatalogDefaultChatModel,
 } from './model-catalog-choices';
 import { applyTheme, applyThemePalette, applyUiLocale } from './theme';
@@ -125,6 +124,12 @@ import {
   noRealConnectionSetupDescription,
   sessionEventErrorMessage,
 } from './model-connection-errors';
+import {
+  buildDailyReviewRunModelOptions,
+  DAILY_REVIEW_CONFIG_MODEL_VALUE,
+  dailyReviewActionErrorMessage,
+  dailyReviewExportDefaultName,
+} from './daily-review-actions';
 
 const USER_MESSAGE_VISIBLE_TIMEOUT_MS = 1_200;
 const USER_MESSAGE_VISIBLE_POLL_MS = 40;
@@ -138,27 +143,6 @@ function basenameFromPath(value: string): string {
   const trimmed = value.replace(/[\\/]+$/, '');
   const name = trimmed.split(/[\\/]/).filter(Boolean).pop();
   return name || trimmed || '当前项目';
-}
-
-function dailyReviewExportDefaultName(label: string): string {
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
-  const scope = label.includes('30')
-    ? '30d'
-    : label.includes('7')
-      ? '7d'
-      : label === '昨天'
-        ? 'yesterday'
-        : label === '今天'
-          ? 'today'
-          : 'day';
-  return `maka-daily-review-${scope}-${yyyy}-${mm}-${dd}.md`;
-}
-
-function dailyReviewActionErrorMessage(error: unknown, fallback: string): string {
-  return generalizedErrorMessageChinese(error, fallback);
 }
 
 function commandPaletteActionErrorMessage(error: unknown, fallback: string): string {
@@ -195,15 +179,6 @@ function commandPaletteConnectionTestFailureFallback(result: ConnectionTestResul
 
 function buildChatModelChoices(connections: readonly LlmConnection[]): ChatModelChoice[] {
   return buildCatalogChatModelChoices(connections);
-}
-
-const DAILY_REVIEW_CONFIG_MODEL_VALUE = '__maka_daily_review_config_model__';
-
-function buildDailyReviewRunModelOptions(connections: readonly LlmConnection[]): Array<readonly [string, string]> {
-  return [
-    [DAILY_REVIEW_CONFIG_MODEL_VALUE, '使用设置中的分析模型'],
-    ...buildCatalogDailyReviewModelOptions(connections, ''),
-  ];
 }
 
 function normalizeActiveChatModel(
