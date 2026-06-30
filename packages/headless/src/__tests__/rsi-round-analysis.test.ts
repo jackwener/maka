@@ -140,6 +140,52 @@ describe('RSI round analysis', () => {
     });
   });
 
+  test('does not expose tool failure clusters as evidence for tasks with pass fail transitions', async () => {
+    await withDir(async (dir) => {
+      const taskARuntime = join(dir, 'task-a-runtime.jsonl');
+      const taskATrace = join(dir, 'task-a-trace.jsonl');
+      const taskBRuntime = join(dir, 'task-b-runtime.jsonl');
+      const taskBTrace = join(dir, 'task-b-trace.jsonl');
+
+      await writeJsonl(taskARuntime, [functionCall('call-a', 'Write', { path: '/app/index.html' })]);
+      await writeJsonl(taskATrace, [toolFailed('call-a', 'Write', 'Validation')]);
+      await writeJsonl(taskBRuntime, [functionCall('call-b', 'Bash', { command: 'pytest -q' })]);
+      await writeJsonl(taskBTrace, [toolFailed('call-b', 'Bash', 'RuntimeError')]);
+
+      const analysis = await analyzeRsiRound({
+        heldInTaskIds: ['task-a', 'task-b'],
+        lastKeptEvents: [
+          completed({ taskId: 'task-a', passed: true }),
+          completed({ taskId: 'task-b', passed: false, errorClass: 'verification_failed' }),
+        ],
+        candidateEvents: [
+          completed({ taskId: 'task-a', passed: false, errorClass: 'verification_failed', runtimeEventsPath: taskARuntime, traceEventsPath: taskATrace }),
+          completed({ taskId: 'task-b', passed: false, errorClass: 'verification_failed', runtimeEventsPath: taskBRuntime, traceEventsPath: taskBTrace }),
+        ],
+      });
+
+      assert.deepEqual(
+        analysis.toolFailureClusters.map(({ taskIds, ...cluster }) => ({ ...cluster, taskIds })),
+        [
+          { name: 'Bash', errorClass: 'RuntimeError', argsPreview: 'command', count: 1, taskIds: ['task-b'] },
+          { name: 'Write', errorClass: 'Validation', argsPreview: 'path', count: 1, taskIds: ['task-a'] },
+        ],
+      );
+      assert.deepEqual(
+        analysis.signals
+          .filter((signal) => signal.kind === 'tool_failure_cluster')
+          .map(({ id: _id, ...signal }) => signal),
+        [
+          {
+            kind: 'tool_failure_cluster',
+            taskIds: ['task-b'],
+            cluster: { name: 'Bash', errorClass: 'RuntimeError', argsPreview: 'command', count: 1, taskIds: ['task-b'] },
+          },
+        ],
+      );
+    });
+  });
+
   test('aggregates tool failure clusters from plumbing events with traces', async () => {
     await withDir(async (dir) => {
       const runtimeEventsPath = join(dir, 'runtime.jsonl');

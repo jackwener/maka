@@ -249,6 +249,12 @@ function summarizeVerifierFailure(text: string | null): string | undefined {
   if (integerAssertionOffByOne(text)) {
     parts.push('integer_output_off_by_one');
   }
+  if (finalStateTextMismatch(text)) {
+    parts.push('final_state_expected_text_mismatch');
+  }
+  if (structuredOutputValuesMismatch(normalized)) {
+    parts.push('structured_output_values_mismatch');
+  }
   if (normalized.includes("module 'numpy' has no attribute 'int'") || normalized.includes('module "numpy" has no attribute "int"')) {
     parts.push('python_numpy_removed_alias_np.int');
   }
@@ -261,6 +267,16 @@ function integerAssertionOffByOne(text: string): boolean {
   const expected = Number(match[1]);
   const actual = Number(match[2]);
   return Number.isSafeInteger(expected) && Number.isSafeInteger(actual) && Math.abs(expected - actual) === 1;
+}
+
+function finalStateTextMismatch(text: string): boolean {
+  return /\bExpected\s+['"][^'"\n]{1,200}['"]/i.test(text)
+    && /\bGot:\s+['"]/i.test(text);
+}
+
+function structuredOutputValuesMismatch(normalizedText: string): boolean {
+  return normalizedText.includes('only found')
+    && normalizedText.includes('expected values');
 }
 
 function mergeAgentEnv(

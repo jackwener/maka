@@ -217,6 +217,12 @@ function analysisSignals(input: {
   toolFailureClusters: readonly RsiToolFailureCluster[];
   traceUnavailable: readonly RsiTraceUnavailableGroup[];
 }): RsiAnalysisSignal[] {
+  const transitionTaskIds = new Set([
+    ...input.transitionVsLastKept.map((transition) => transition.taskId),
+    ...input.transitionVsPreviousCandidate.map((transition) => transition.taskId),
+  ]);
+  const toolFailureEvidenceClusters = input.toolFailureClusters
+    .filter((cluster) => cluster.taskIds.every((taskId) => !transitionTaskIds.has(taskId)));
   return [
     ...input.transitionVsLastKept.map((transition) => transitionSignal('last_kept', transition)),
     ...input.transitionVsPreviousCandidate.map((transition) => transitionSignal('previous_candidate', transition)),
@@ -230,7 +236,7 @@ function analysisSignals(input: {
         errorClass,
         count,
       })),
-    ...input.toolFailureClusters.map((cluster) => withSignalId({
+    ...toolFailureEvidenceClusters.map((cluster) => withSignalId({
       kind: 'tool_failure_cluster' as const,
       taskIds: cluster.taskIds,
       cluster,

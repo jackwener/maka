@@ -1163,6 +1163,45 @@ describe('prompt candidate loop', () => {
     });
   });
 
+  test('tells the meta-agent to prefer transitions and verifier summaries over tool failure clusters', () => {
+    const prompt = renderMetaAgentPrompt({
+      runId: 'run-1',
+      roundId: 'round-1',
+      program: 'Improve conservatively.',
+      currentSystemPrompt: 'original prompt',
+      resultsTsv: 'task_id\tpassed\ntask-a\tfalse\n',
+      heldInDigests: [
+        {
+          taskId: 'task-a',
+          errorClass: 'verification_failed',
+          summary: 'status=failed verifierSummary=final_state_expected_text_mismatch',
+        },
+      ],
+      rsiAnalysis: {
+        heldInTaskSetHash: 'sha256:held-in',
+        transitionVsLastKept: [{ taskId: 'task-a', from: 'pass', to: 'fail' }],
+        transitionVsPreviousCandidate: [],
+        coverageRegressionTaskIds: [],
+        errorClassDistribution: [{ errorClass: 'verification_failed', count: 1 }],
+        toolFailureClusters: [
+          { name: 'Write', errorClass: 'Validation', argsPreview: 'path', count: 1, taskIds: ['task-a'] },
+        ],
+        signals: [
+          {
+            id: 'rsi-sig:transition',
+            kind: 'transition',
+            taskIds: ['task-a'],
+            basis: 'last_kept',
+            transition: { taskId: 'task-a', from: 'pass', to: 'fail' },
+          },
+        ],
+      },
+    });
+
+    assert.match(prompt, /Prefer pass\/fail transitions and verifier failure summaries over tool_failure_cluster/);
+    assert.match(prompt, /Treat tool_failure_cluster as root cause only when it is unrecovered/);
+  });
+
   test('sanitizes trace-derived tool failure fields before rendering the meta-agent prompt', async () => {
     await withDir(async (dir) => {
       const runtimeEventsPath = join(dir, 'runtime-events.jsonl');

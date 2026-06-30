@@ -398,6 +398,7 @@ export function renderMetaAgentPrompt(input: MetaAgentPromptInput): string {
     'You are improving one system prompt for benchmark tasks.',
     'Return JSON only: {"systemPrompt":"...","summary":"...","candidateRationale":{"failurePattern":"coverage_regression|tool_failed|max_tokens|runtime_error|verification_failed|other","evidenceRefs":["rsi-sig:id"],"hypothesis":"short plain text","targetedFix":"short plain text","predictedFixes":["held-in-task-id"],"riskTasks":["held-in-task-id"]}}.',
     'candidateRationale.evidenceRefs may only reference RSI R2 Held-In Analysis signal ids from the prompt; when signals exist and failurePattern is not "other", cite at least one signal. candidateRationale.predictedFixes and riskTasks may only reference held-in task ids from the prompt.',
+    'Prefer pass/fail transitions and verifier failure summaries over tool_failure_cluster. Treat tool_failure_cluster as root cause only when it is unrecovered or aligns with the final task outcome.',
     'Do not include held-out tasks, verifier internals, expected outputs, raw traces, file paths, code fences, or multiline text in candidateRationale.',
     '',
     '# Program',

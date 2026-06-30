@@ -428,6 +428,54 @@ describe('createHarborTaskRunner', () => {
       assert.equal(JSON.stringify(output).includes('79585'), false);
     });
   });
+
+  test('summarizes final-state text mismatches without raw expected output', async () => {
+    await withRun(async ({ jobsDir, repo }) => {
+      const runner = createHarborTaskRunner({
+        makaRepoPath: repo,
+        jobsDir,
+        model: 'deepseek/deepseek-v4-flash',
+        runHarbor: fakeRunner({
+          reward: '0\n',
+          cell: cellOutput(),
+          verifierStdout: [
+            "E       AssertionError: Expected 'hello world'",
+            "E       Got: 'hello from final test'",
+          ].join('\n'),
+        }),
+      });
+
+      const output = await runner(runInput());
+
+      assert.equal(output.harbor.verifierFailureSummary, 'output_assertion_failed final_state_expected_text_mismatch');
+      assert.equal(JSON.stringify(output).includes('hello world'), false);
+      assert.equal(JSON.stringify(output).includes('hello from final test'), false);
+    });
+  });
+
+  test('summarizes structured output value mismatches without raw verifier details', async () => {
+    await withRun(async ({ jobsDir, repo }) => {
+      const runner = createHarborTaskRunner({
+        makaRepoPath: repo,
+        jobsDir,
+        model: 'deepseek/deepseek-v4-flash',
+        runHarbor: fakeRunner({
+          reward: '0\n',
+          cell: cellOutput(),
+          verifierStdout: [
+            'E       AssertionError: Only found 0.00% of expected values in the submitted file',
+            'E       missing values: 0x401234, 0x401250',
+          ].join('\n'),
+        }),
+      });
+
+      const output = await runner(runInput());
+
+      assert.equal(output.harbor.verifierFailureSummary, 'output_assertion_failed structured_output_values_mismatch');
+      assert.equal(JSON.stringify(output).includes('0x401234'), false);
+      assert.equal(JSON.stringify(output).includes('0x401250'), false);
+    });
+  });
 });
 
 describe('buildHarborJobConfig', () => {
