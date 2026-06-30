@@ -1234,6 +1234,7 @@ describe('runHarborCell', () => {
       MAKA_CONTEXT_SEMANTIC_COMPACT_MIN_SAVINGS_RATIO: '0.2',
       MAKA_CONTEXT_SEMANTIC_COMPACT_MIN_NET_SAVINGS_TOKENS: '256',
       MAKA_CONTEXT_SEMANTIC_COMPACT_CALL_TOKEN_COST_WEIGHT: '0.5',
+      MAKA_CONTEXT_SEMANTIC_COMPACT_TOOL_CALL_INTERVAL: '20',
       MAKA_CONTEXT_SEMANTIC_COMPACT_MAX_CALL_TOKENS: '768',
       MAKA_CONTEXT_SEMANTIC_COMPACT_MAX_CONSECUTIVE_INVALID_SUMMARIES: '3',
       MAKA_CONTEXT_SEMANTIC_COMPACT_INVALID_SUMMARY_COOLDOWN_STEPS: '11',
@@ -1255,6 +1256,7 @@ describe('runHarborCell', () => {
     assert.equal(options.contextBudget?.semanticCompact?.minSavingsRatio, 0.2);
     assert.equal(options.contextBudget?.semanticCompact?.minNetSavingsTokens, 256);
     assert.equal(options.contextBudget?.semanticCompact?.compactCallTokenCostWeight, 0.5);
+    assert.equal(options.contextBudget?.semanticCompact?.toolCallInterval, 20);
     assert.equal(options.contextBudget?.semanticCompact?.maxCompactCallTokens, 768);
     assert.equal(options.contextBudget?.semanticCompact?.maxConsecutiveInvalidSummaries, 3);
     assert.equal(options.contextBudget?.semanticCompact?.invalidSummaryCooldownSteps, 11);

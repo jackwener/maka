@@ -1490,6 +1490,14 @@ export class AiSdkBackend implements AgentBackend {
           })
         : model;
       const summarizerModelId = policy.summarizerModel ?? this.input.modelId;
+      const toolCallInterval = positiveInteger(policy.toolCallInterval);
+      const toolCallIntervalTrigger = toolCallInterval !== undefined
+        ? semanticToolCallIntervalTrigger({
+            state: controllerState,
+            toolCallInterval,
+            toolCallCount: collectPrepareStepToolCallIds(options.steps ?? []).size,
+          })
+        : undefined;
       const rewritten = await rewriteSemanticCompactInMessages({
         sessionId: this.sessionId,
         turnId,
@@ -1501,6 +1509,7 @@ export class AiSdkBackend implements AgentBackend {
         now: this.now(),
         charsPerToken: this.input.contextBudget?.charsPerToken,
         requestShapeHashForMessages: (messages) => requestShapeHashForMessages(messages, activeToolsForStep),
+        trigger: toolCallIntervalTrigger,
         abortSignal: this.abortController?.signal,
         summarizer: async (request) => {
           const startedAt = this.now();
@@ -2127,6 +2136,29 @@ export function repairMakaToolCall(input: {
       tool: requestedName,
       error: formatSyntheticToolErrorText(input.error),
     }),
+  };
+}
+
+function positiveInteger(value: number | undefined): number | undefined {
+  if (value === undefined || !Number.isFinite(value)) return undefined;
+  const rounded = Math.floor(value);
+  return rounded > 0 ? rounded : undefined;
+}
+
+function semanticToolCallIntervalTrigger(input: {
+  state: SemanticCompactControllerState;
+  toolCallInterval: number;
+  toolCallCount: number;
+}): { reason: 'tool_call_interval'; toolCallCount: number; toolCallInterval: number } | undefined {
+  if (input.toolCallCount < input.toolCallInterval) return undefined;
+  const bucket = Math.floor(input.toolCallCount / input.toolCallInterval) * input.toolCallInterval;
+  const lastAttempt = input.state.lastToolCallIntervalAttemptCount ?? 0;
+  if (bucket <= lastAttempt) return undefined;
+  input.state.lastToolCallIntervalAttemptCount = bucket;
+  return {
+    reason: 'tool_call_interval',
+    toolCallCount: input.toolCallCount,
+    toolCallInterval: input.toolCallInterval,
   };
 }
 

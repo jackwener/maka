@@ -261,6 +261,49 @@ describe('semantic compact', () => {
     assert.ok((result.block?.estimatedNetTokensSavedSigned ?? 0) < 0);
   });
 
+  test('tool-call interval trigger attempts compact below high-water', async () => {
+    let calls = 0;
+    const result = await rewriteSemanticCompactInMessages({
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      messages: semanticFixtureMessages(),
+      stepNumber: 20,
+      charsPerToken: 1,
+      policy: {
+        enabled: true,
+        maxActiveEstimatedTokens: 1_000_000,
+        highWaterRatio: 1,
+        minRecentMessages: 1,
+        minRecentToolPairs: 1,
+        maxSummaryEstimatedTokens: 512,
+        minSavingsTokens: 1,
+        minSavingsRatio: 0,
+        toolCallInterval: 20,
+      },
+      trigger: {
+        reason: 'tool_call_interval',
+        toolCallCount: 20,
+        toolCallInterval: 20,
+      },
+      summarizer: () => {
+        calls += 1;
+        return {
+          text: semanticSummary({
+            objective: 'Continue after interval compact.',
+            nextAction: 'Resume with preserved tail.',
+          }),
+        };
+      },
+    });
+
+    assert.equal(calls, 1);
+    assert.equal(result.decision, 'replaced');
+    assert.equal(result.block?.trigger.reason, 'tool_call_interval');
+    assert.equal(result.block?.trigger.toolCallCount, 20);
+    assert.equal(result.block?.trigger.toolCallInterval, 20);
+    assert.equal(result.block?.trigger.thresholdTokens, undefined);
+  });
+
   test('brakes semantic compact calls after repeated invalid summaries', async () => {
     const controllerState = {
       consecutiveInvalidSummaries: 0,
@@ -268,6 +311,7 @@ describe('semantic compact', () => {
       compactCallCount: 0,
       compactCallTotalTokens: 0,
       acceptedEstimatedTokensSaved: 0,
+      lastToolCallIntervalAttemptCount: 0,
     };
     let calls = 0;
     const policy = {

@@ -49,6 +49,11 @@ export interface SemanticCompactPolicy {
   minSavingsRatio?: number;
   minNetSavingsTokens?: number;
   compactCallTokenCostWeight?: number;
+  /**
+   * Experimental active-loop trigger: after each N cumulative tool calls in the
+   * current AI SDK turn, attempt semantic compact even if high-water is not met.
+   */
+  toolCallInterval?: number;
   maxCompactCallTokens?: number;
   maxConsecutiveInvalidSummaries?: number;
   invalidSummaryCooldownSteps?: number;
@@ -77,6 +82,7 @@ export interface SemanticCompactControllerState {
   compactCallCount: number;
   compactCallTotalTokens: number;
   acceptedEstimatedTokensSaved: number;
+  lastToolCallIntervalAttemptCount?: number;
   suppressedUntilStep?: number;
   lastInvalidReason?: string;
 }
@@ -113,8 +119,10 @@ export interface SemanticCompactBlock {
   highWaterName: string;
   highWaterSeq: number;
   trigger: {
-    reason: 'high_water' | 'force_ratio' | 'predictive_growth' | 'reactive_prompt_too_long' | 'manual_test';
+    reason: 'high_water' | 'force_ratio' | 'predictive_growth' | 'reactive_prompt_too_long' | 'manual_test' | 'tool_call_interval';
     stepNumber?: number;
+    toolCallCount?: number;
+    toolCallInterval?: number;
     estimatedTokensBefore?: number;
     thresholdTokens?: number;
   };
@@ -171,6 +179,11 @@ export interface SemanticCompactRewriteInput {
   charsPerToken?: number;
   requestShapeHashBefore?: string;
   requestShapeHashForMessages?: (messages: readonly ModelMessage[]) => string;
+  trigger?: {
+    reason: 'tool_call_interval';
+    toolCallCount: number;
+    toolCallInterval: number;
+  };
   summarizer: SemanticCompactSummarizer;
   abortSignal?: AbortSignal;
 }
@@ -208,7 +221,7 @@ export async function rewriteSemanticCompactInMessages(
     stepNumber: input.stepNumber,
     charsPerToken,
   });
-  const selectionPolicy = policyForSemanticSelection(policy, messages);
+  const selectionPolicy = policyForSemanticSelection(policy, messages, input.trigger?.reason === 'tool_call_interval');
   const selection = selectActiveFullCompactCoveredSpan(index, selectionPolicy);
   if (selection.decision !== 'selected') {
     const decision = selection.decision === 'failedOpen' ? 'failedOpen' : 'unchanged';
@@ -449,6 +462,7 @@ export function renderSemanticCompactBlock(block: SemanticCompactBlock): string 
 function policyForSemanticSelection(
   policy: SemanticCompactPolicy,
   messages: readonly ModelMessage[],
+  bypassHighWater: boolean,
 ): ActiveFullCompactPolicy {
   const minRecentMessages = Math.max(
     Math.floor(policy.minRecentMessages ?? 1),
@@ -460,7 +474,7 @@ function policyForSemanticSelection(
     highWaterRatio: policy.highWaterRatio,
     forceRatio: policy.forceRatio,
     targetRatio: policy.targetRatio,
-    maxActiveEstimatedTokens: policy.maxActiveEstimatedTokens,
+    ...(bypassHighWater ? {} : { maxActiveEstimatedTokens: policy.maxActiveEstimatedTokens }),
     minRecentMessages,
     minRecentToolPairs: policy.minRecentToolPairs,
     maxSummaryEstimatedTokens: policy.maxSummaryEstimatedTokens,
@@ -653,10 +667,16 @@ function buildSemanticCompactBlock(input: {
     highWaterName: policy.highWaterName ?? 'semantic-compact-high-water',
     highWaterSeq: input.input.stepNumber,
     trigger: {
-      reason: 'high_water',
+      reason: input.input.trigger?.reason ?? 'high_water',
       stepNumber: input.input.stepNumber,
+      ...(input.input.trigger?.reason === 'tool_call_interval'
+        ? {
+            toolCallCount: input.input.trigger.toolCallCount,
+            toolCallInterval: input.input.trigger.toolCallInterval,
+          }
+        : {}),
       estimatedTokensBefore: input.index.estimatedTokens,
-      ...(policy.maxActiveEstimatedTokens !== undefined
+      ...(input.input.trigger?.reason !== 'tool_call_interval' && policy.maxActiveEstimatedTokens !== undefined
         ? { thresholdTokens: Math.floor(policy.maxActiveEstimatedTokens * finiteRatio(policy.highWaterRatio, 0.8)) }
         : {}),
     },

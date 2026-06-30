@@ -174,6 +174,7 @@ export const HARBOR_CELL_CONTEXT_ENV_KEYS = [
   'MAKA_CONTEXT_SEMANTIC_COMPACT_MIN_SAVINGS_RATIO',
   'MAKA_CONTEXT_SEMANTIC_COMPACT_MIN_NET_SAVINGS_TOKENS',
   'MAKA_CONTEXT_SEMANTIC_COMPACT_CALL_TOKEN_COST_WEIGHT',
+  'MAKA_CONTEXT_SEMANTIC_COMPACT_TOOL_CALL_INTERVAL',
   'MAKA_CONTEXT_SEMANTIC_COMPACT_MAX_CALL_TOKENS',
   'MAKA_CONTEXT_SEMANTIC_COMPACT_MAX_CONSECUTIVE_INVALID_SUMMARIES',
   'MAKA_CONTEXT_SEMANTIC_COMPACT_INVALID_SUMMARY_COOLDOWN_STEPS',
@@ -804,6 +805,10 @@ export function buildHarborCellContextBudgetBackendOptions(
     );
     const minSavingsTokens = firstContextNonNegativeIntEnv(env, ['MAKA_CONTEXT_SEMANTIC_COMPACT_MIN_SAVINGS_TOKENS']);
     const minNetSavingsTokens = firstContextNonNegativeIntEnv(env, ['MAKA_CONTEXT_SEMANTIC_COMPACT_MIN_NET_SAVINGS_TOKENS']);
+    const toolCallInterval = positiveIntEnv(
+      env.MAKA_CONTEXT_SEMANTIC_COMPACT_TOOL_CALL_INTERVAL,
+      'MAKA_CONTEXT_SEMANTIC_COMPACT_TOOL_CALL_INTERVAL',
+    );
     const maxCompactCallTokens = positiveIntEnv(
       env.MAKA_CONTEXT_SEMANTIC_COMPACT_MAX_CALL_TOKENS,
       'MAKA_CONTEXT_SEMANTIC_COMPACT_MAX_CALL_TOKENS',
@@ -842,6 +847,7 @@ export function buildHarborCellContextBudgetBackendOptions(
       ...(minSavingsRatio !== undefined ? { minSavingsRatio } : {}),
       ...(minNetSavingsTokens !== undefined ? { minNetSavingsTokens } : {}),
       ...(compactCallTokenCostWeight !== undefined ? { compactCallTokenCostWeight } : {}),
+      ...(toolCallInterval !== undefined ? { toolCallInterval } : {}),
       ...(maxCompactCallTokens !== undefined ? { maxCompactCallTokens } : {}),
       ...(maxConsecutiveInvalidSummaries !== undefined ? { maxConsecutiveInvalidSummaries } : {}),
       ...(invalidSummaryCooldownSteps !== undefined ? { invalidSummaryCooldownSteps } : {}),
@@ -1022,6 +1028,9 @@ export function buildHarborCellContextBudgetPolicySnapshot(
               : {}),
             ...(contextBudget.semanticCompact.compactCallTokenCostWeight !== undefined
               ? { compactCallTokenCostWeight: contextBudget.semanticCompact.compactCallTokenCostWeight }
+              : {}),
+            ...(contextBudget.semanticCompact.toolCallInterval !== undefined
+              ? { toolCallInterval: contextBudget.semanticCompact.toolCallInterval }
               : {}),
             ...(contextBudget.semanticCompact.maxCompactCallTokens !== undefined
               ? { maxCompactCallTokens: contextBudget.semanticCompact.maxCompactCallTokens }

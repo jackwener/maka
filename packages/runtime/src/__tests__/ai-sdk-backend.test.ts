@@ -2167,8 +2167,9 @@ describe('AiSdkBackend usage telemetry', () => {
           mode: 'replace',
           minStepNumber: 1,
           minRecentMessages: 0,
-          maxActiveEstimatedTokens: 1,
-          highWaterRatio: 0.1,
+          maxActiveEstimatedTokens: 1_000_000,
+          highWaterRatio: 1,
+          toolCallInterval: 1,
           maxSummaryEstimatedTokens: 1024,
           minSavingsTokens: 1,
           minSavingsRatio: 0,
@@ -2192,6 +2193,9 @@ describe('AiSdkBackend usage telemetry', () => {
     assert.equal(model.doGenerateCalls.length, 1);
     assert.equal(recordedBlocks.length, 1);
     assert.equal(recordedBlocks[0]?.kind, 'maka.semantic_compact_block');
+    assert.equal(recordedBlocks[0]?.trigger.reason, 'tool_call_interval');
+    assert.equal(recordedBlocks[0]?.trigger.toolCallCount, 1);
+    assert.equal(recordedBlocks[0]?.trigger.toolCallInterval, 1);
     const secondPrompt = JSON.stringify(model.doStreamCalls[1]?.prompt.map((message) => ({
       role: message.role,
       content: message.content,
