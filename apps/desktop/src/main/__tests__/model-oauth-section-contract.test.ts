@@ -19,6 +19,7 @@ import { describe, it } from 'node:test';
 import { resolve } from 'node:path';
 import { readRendererContractCss } from './contract-css-helpers.js';
 import { readProviderSettingsCombinedSource } from './provider-contract-source-helpers.js';
+import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
 
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
 const MAIN_SOURCE = resolve(REPO_ROOT, 'apps', 'desktop', 'src', 'main', 'main.ts');
@@ -972,10 +973,7 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
     // Before: any truthy `detail.section` was passed to setSection,
     // so a typo or stale dispatch would silently land the user on
     // the "该设置页已纳入 Maka 设置树…" fallback page with no clue.
-    const SETTINGS_MODAL = resolve(
-      REPO_ROOT, 'apps', 'desktop', 'src', 'renderer', 'settings', 'SettingsModal.tsx',
-    );
-    const src = await readFile(SETTINGS_MODAL, 'utf8');
+    const src = await readSettingsCombinedSource();
     // Find the handler body — match from `const handler = ` up to
     // its `addEventListener(...)` registration.
     const handler = src.match(
@@ -992,10 +990,7 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
   it('AccountSettingsPage no longer renders ClaudeSubscriptionCard', async () => {
     // The 账户 panel used to host the card; PR-CLAUDE-CARD-MOVE-0
     // removed it. Confirm SettingsModal no longer references it.
-    const SETTINGS_MODAL = resolve(
-      REPO_ROOT, 'apps', 'desktop', 'src', 'renderer', 'settings', 'SettingsModal.tsx',
-    );
-    const src = await readFile(SETTINGS_MODAL, 'utf8');
+    const src = await readSettingsCombinedSource();
     assert.doesNotMatch(
       src,
       /<ClaudeSubscriptionCard\s*\/>/,

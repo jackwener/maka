@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { describe, it } from 'node:test';
 import { readRendererContractCss } from './contract-css-helpers.js';
+import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../../../../..');
 
@@ -206,7 +207,7 @@ describe('Daily Review copy feedback contract', () => {
   });
 
   it('gates Daily Review settings saves and manual runs with mounted ref owners', async () => {
-    const settings = await readFile(resolve(REPO_ROOT, 'apps/desktop/src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
     const pageBlock = blockBetween(settings, 'function DailyReviewSettingsPage', 'function VoiceModelsSettingsPage');
     const saveBlock = blockBetween(pageBlock, 'async function patchConfig', 'async function triggerRun');
     const runBlock = blockBetween(pageBlock, 'async function triggerRun', 'const effectiveConfig');

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
 import {
   MAX_WORKSPACE_INSTRUCTION_FILE_CHARS,
   buildWorkspaceInstructionsPromptFragment,
@@ -141,7 +142,7 @@ describe('workspace instructions prompt fragment', () => {
   it('wires create action through main, preload, and Settings UI without arbitrary paths', async () => {
     const main = await readFile(join(process.cwd(), 'src/main/main.ts'), 'utf8');
     const preload = await readFile(join(process.cwd(), 'src/preload/preload.ts'), 'utf8');
-    const settings = await readFile(join(process.cwd(), 'src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
 
     assert.match(main, /workspaceInstructions:createFile/);
     assert.match(main, /createWorkspaceInstructionFile\(process\.cwd\(\), typeof file === 'string' \? file : ''\)/);

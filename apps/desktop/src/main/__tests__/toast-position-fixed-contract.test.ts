@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { join } from 'node:path';
 import { readRendererContractCss } from './contract-css-helpers.js';
+import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
 
 const repoRoot = process.cwd().endsWith('apps/desktop')
   ? join(process.cwd(), '..', '..')
@@ -16,7 +17,7 @@ describe('fixed toast position contract', () => {
   it('keeps toast position out of persisted settings and the Settings UI', async () => {
     const coreSettings = await readRepo('packages/core/src/settings.ts');
     const coreIndex = await readRepo('packages/core/src/index.ts');
-    const settingsModal = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
+    const settingsModal = await readSettingsCombinedSource();
     const rendererMain = await readRepo('apps/desktop/src/renderer/main.tsx');
     const styles = await readRendererContractCss();
 

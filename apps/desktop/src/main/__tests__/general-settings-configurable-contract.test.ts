@@ -2,9 +2,9 @@ import { strict as assert } from 'node:assert';
 import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { join, resolve } from 'node:path';
+import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
 
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
-const SETTINGS_MODAL = join(REPO_ROOT, 'apps', 'desktop', 'src', 'renderer', 'settings', 'SettingsModal.tsx');
 const MAIN_SOURCE = join(REPO_ROOT, 'apps', 'desktop', 'src', 'main', 'main.ts');
 const PRELOAD_SOURCE = join(REPO_ROOT, 'apps', 'desktop', 'src', 'preload', 'preload.ts');
 const GLOBAL_DTS = join(REPO_ROOT, 'apps', 'desktop', 'src', 'global.d.ts');
@@ -21,7 +21,7 @@ const GLOBAL_DTS = join(REPO_ROOT, 'apps', 'desktop', 'src', 'global.d.ts');
  */
 describe('General settings configurable contract', () => {
   it('does not ship the three retired read-only SettingRow lines on General', async () => {
-    const src = await readFile(SETTINGS_MODAL, 'utf8');
+    const src = await readSettingsCombinedSource();
     // Each retired line was: `<SettingRow title="启动" detail="…" value="已启用" />`
     // etc. Test the trio of (title, hardcoded value) pairs.
     assert.doesNotMatch(
@@ -45,7 +45,7 @@ describe('General settings configurable contract', () => {
   });
 
   it('renders a real <GeneralDefaultsCard> that persists the default model via model-level IPC', async () => {
-    const src = await readFile(SETTINGS_MODAL, 'utf8');
+    const src = await readSettingsCombinedSource();
     // The card must be defined and used.
     assert.match(
       src,
@@ -84,7 +84,7 @@ describe('General settings configurable contract', () => {
   });
 
   it('guards GeneralDefaultsCard with the same mounted-ref + savingRef ownership pattern used elsewhere in SettingsModal', async () => {
-    const src = await readFile(SETTINGS_MODAL, 'utf8');
+    const src = await readSettingsCombinedSource();
     // Capture the function's body up to the next top-level `function`
     // declaration so per-card guards are checked inside the component.
     const cardBlock =
