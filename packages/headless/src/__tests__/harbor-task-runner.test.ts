@@ -52,6 +52,7 @@ interface FakeOptions {
   cell?: HarborCellOutput | null;
   exitCode?: number;
   events?: string;
+  verifierStdout?: string;
   trialResult?: Record<string, unknown>;
   captured?: { config?: Record<string, unknown> };
 }
@@ -70,6 +71,9 @@ function fakeRunner(opts: FakeOptions): HarborProcessRunner {
     await mkdir(join(trialDir, 'agent'), { recursive: true });
     if (opts.reward !== undefined) {
       await writeFile(join(trialDir, 'verifier', 'reward.txt'), opts.reward, 'utf8');
+    }
+    if (opts.verifierStdout !== undefined) {
+      await writeFile(join(trialDir, 'verifier', 'test-stdout.txt'), opts.verifierStdout, 'utf8');
     }
     if (opts.cell !== null) {
       await writeFile(join(trialDir, 'agent', 'maka-cell-output.json'), JSON.stringify(opts.cell ?? cellOutput()), 'utf8');
@@ -371,6 +375,57 @@ describe('createHarborTaskRunner', () => {
       assert.equal(output.harbor.reward, 0);
       assert.equal(output.cell.status, 'failed');
       assert.equal(output.cell.errorClass, 'runtime_error');
+    });
+  });
+
+  test('marks verifier dependency setup failures as infra on the cell output', async () => {
+    await withRun(async ({ jobsDir, repo }) => {
+      const runner = createHarborTaskRunner({
+        makaRepoPath: repo,
+        jobsDir,
+        model: 'deepseek/deepseek-v4-flash',
+        runHarbor: fakeRunner({
+          reward: '0\n',
+          cell: cellOutput(),
+          verifierStdout: [
+            'Err:1 http://archive.ubuntu.com/ubuntu noble InRelease',
+            '  502  Bad Gateway',
+            'E: Failed to fetch http://archive.ubuntu.com/ubuntu/dists/noble/InRelease  502  Bad Gateway',
+            '/tests/test.sh: line 8: curl: command not found',
+            '/tests/test.sh: line 19: uvx: command not found',
+          ].join('\n'),
+        }),
+      });
+
+      const output = await runner(runInput());
+
+      assert.equal(output.harbor.reward, 0);
+      assert.equal(output.cell.status, 'completed');
+      assert.equal(output.cell.errorClass, 'infra_failed');
+    });
+  });
+
+  test('summarizes verifier assertion failures without raw expected output', async () => {
+    await withRun(async ({ jobsDir, repo }) => {
+      const runner = createHarborTaskRunner({
+        makaRepoPath: repo,
+        jobsDir,
+        model: 'deepseek/deepseek-v4-flash',
+        runHarbor: fakeRunner({
+          reward: '0\n',
+          cell: cellOutput(),
+          verifierStdout: [
+            "E       AssertionError: Expected '79586' to be in answer.txt",
+            "E       assert '79586' in '79585'",
+          ].join('\n'),
+        }),
+      });
+
+      const output = await runner(runInput());
+
+      assert.equal(output.harbor.verifierFailureSummary, 'output_assertion_failed integer_output_off_by_one');
+      assert.equal(JSON.stringify(output).includes('79586'), false);
+      assert.equal(JSON.stringify(output).includes('79585'), false);
     });
   });
 });
