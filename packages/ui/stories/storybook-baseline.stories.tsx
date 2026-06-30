@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Alert, AlertDescription, AlertTitle } from './alert.js';
-import { Button } from './button.js';
+import { Alert, AlertDescription, AlertTitle } from '../src/primitives/alert.js';
+import { Button } from '../src/primitives/button.js';
 import {
   Empty,
   EmptyContent,
@@ -8,8 +8,8 @@ import {
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from './empty.js';
-import { Spinner } from './spinner.js';
+} from '../src/primitives/empty.js';
+import { Spinner } from '../src/primitives/spinner.js';
 
 const meta = {
   title: 'Primitives/Storybook Baseline',
@@ -24,8 +24,8 @@ type Story = StoryObj<typeof meta>;
 
 export const BasicStates: Story = {
   render: () => (
-    <div className="grid w-[420px] gap-5">
-      <div className="flex flex-wrap items-center gap-2">
+    <div style={{ display: 'grid', gap: 20, width: 420 }}>
+      <div style={{ alignItems: 'center', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         <Button>Primary</Button>
         <Button variant="secondary">Secondary</Button>
         <Button variant="outline">Outline</Button>
@@ -37,10 +37,17 @@ export const BasicStates: Story = {
         <AlertDescription>这条 story 只验证 primitive 能离开 app shell 独立渲染。</AlertDescription>
       </Alert>
 
-      <Empty className="min-h-64 rounded-xl border border-dashed bg-card">
+      <Empty
+        style={{
+          background: 'var(--background)',
+          border: '1px dashed var(--border)',
+          borderRadius: 'var(--radius-xl)',
+          minHeight: 256,
+        }}
+      >
         <EmptyHeader>
           <EmptyMedia variant="icon">
-            <Spinner className="size-4" />
+            <Spinner style={{ height: 16, width: 16 }} />
           </EmptyMedia>
           <EmptyTitle>暂无内容</EmptyTitle>
           <EmptyDescription>空状态、按钮和提示组件共享 renderer 的 Tailwind 与 token 环境。</EmptyDescription>

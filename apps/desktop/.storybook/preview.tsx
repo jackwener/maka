@@ -42,9 +42,9 @@ const preview: Preview = {
         icon: 'paintbrush',
         items: [
           { title: 'Default', value: 'default' },
-          { title: 'Sage', value: 'sage' },
-          { title: 'Steel', value: 'steel' },
-          { title: 'Plum', value: 'plum' },
+          { title: 'Onedark', value: 'onedark' },
+          { title: 'Azure', value: 'azure' },
+          { title: 'Forest', value: 'forest' },
         ],
       },
     },
