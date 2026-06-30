@@ -14,12 +14,13 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { join, resolve } from 'node:path';
 import { readAllRendererCss } from './css-test-helpers.js';
+import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
 
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
 
 const RENDERER_FILES = [
   'apps/desktop/src/renderer/main.tsx',
-  'apps/desktop/src/renderer/settings/SettingsModal.tsx',
+  'apps/desktop/src/renderer/settings/web-search-settings-page.tsx',
   'apps/desktop/src/renderer/settings/ProvidersPanel.tsx',
   'apps/desktop/src/renderer/settings/provider-add-form.tsx',
   'apps/desktop/src/renderer/settings/provider-catalog.tsx',
@@ -104,7 +105,7 @@ describe('web-search renderer boundary (PR-WEB-SEARCH-TAVILY-0)', () => {
   });
 
   it('Settings persists credential test results with the observed key version', async () => {
-    const settings = await readFile(join(REPO_ROOT, 'apps/desktop/src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
     assert.match(
       settings,
       /const testedCredentialVersion = tavily\.credentialVersion/,
@@ -128,7 +129,7 @@ describe('web-search renderer boundary (PR-WEB-SEARCH-TAVILY-0)', () => {
   });
 
   it('Settings surfaces save failures without turning search results into query failures', async () => {
-    const settings = await readFile(join(REPO_ROOT, 'apps/desktop/src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
     const page = settings.match(/function WebSearchSettingsPage[\s\S]*?function webSearchQueryDisabledReason/);
 
     assert.ok(page, 'Web search settings page block must exist');
@@ -165,7 +166,7 @@ describe('web-search renderer boundary (PR-WEB-SEARCH-TAVILY-0)', () => {
   });
 
   it('Settings gates web-search credential actions and live query with visible pending feedback', async () => {
-    const settings = await readFile(join(REPO_ROOT, 'apps/desktop/src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
     const page = settings.match(/function WebSearchSettingsPage[\s\S]*?function webSearchQueryDisabledReason/);
 
     assert.ok(page, 'Web search settings page block must exist');
@@ -219,7 +220,7 @@ describe('web-search renderer boundary (PR-WEB-SEARCH-TAVILY-0)', () => {
   });
 
   it('Settings web-search async actions stop writing component state after unmount', async () => {
-    const settings = await readFile(join(REPO_ROOT, 'apps/desktop/src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
     const page = settings.match(/function WebSearchSettingsPage[\s\S]*?function webSearchQueryDisabledReason/);
 
     assert.ok(page, 'Web search settings page block must exist');
@@ -276,7 +277,7 @@ describe('web-search renderer boundary (PR-WEB-SEARCH-TAVILY-0)', () => {
   });
 
   it('Settings web-search thrown errors pass through the shared Settings scrubber', async () => {
-    const settings = await readFile(join(REPO_ROOT, 'apps/desktop/src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
     const page = settings.match(/function WebSearchSettingsPage[\s\S]*?function webSearchQueryDisabledReason/);
 
     assert.ok(page, 'Web search settings page block must exist');
@@ -298,7 +299,7 @@ describe('web-search renderer boundary (PR-WEB-SEARCH-TAVILY-0)', () => {
   });
 
   it('Settings live query button explains the actionable disabled reason', async () => {
-    const settings = await readFile(join(REPO_ROOT, 'apps/desktop/src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
     const helper = settings.match(/function webSearchQueryDisabledReason[\s\S]*?function presentWebSearchCredentialStatus/);
 
     assert.ok(helper, 'Web search settings must have a dedicated disabled-reason helper');
@@ -315,7 +316,7 @@ describe('web-search renderer boundary (PR-WEB-SEARCH-TAVILY-0)', () => {
   });
 
   it('Settings web-search simple controls use grouped Settings row cards instead of naked form blocks', async () => {
-    const settings = await readFile(join(REPO_ROOT, 'apps/desktop/src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
     const styles = await readAllRendererCss();
     const page = settings.match(/function WebSearchSettingsPage[\s\S]*?function webSearchQueryDisabledReason/);
 
@@ -353,7 +354,7 @@ describe('web-search renderer boundary (PR-WEB-SEARCH-TAVILY-0)', () => {
   });
 
   it('Settings credential badge uses waiting-state copy instead of raw missing configuration copy', async () => {
-    const settings = await readFile(join(REPO_ROOT, 'apps/desktop/src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
     const page = settings.match(/function WebSearchSettingsPage[\s\S]*?function webSearchQueryDisabledReason/);
     const helper = settings.match(/function presentWebSearchCredentialStatus[\s\S]*?function MemorySettingsPage/);
 
@@ -377,7 +378,7 @@ describe('web-search renderer boundary (PR-WEB-SEARCH-TAVILY-0)', () => {
   });
 
   it('Settings exposes env credential source without enabling renderer key access', async () => {
-    const settings = await readFile(join(REPO_ROOT, 'apps/desktop/src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
     const page = settings.match(/function WebSearchSettingsPage[\s\S]*?function webSearchQueryDisabledReason/);
 
     assert.ok(page, 'Web search settings page block must exist');
@@ -402,7 +403,7 @@ describe('web-search renderer boundary (PR-WEB-SEARCH-TAVILY-0)', () => {
   });
 
   it('Settings live query copy uses product language instead of demo/debug wording', async () => {
-    const settings = await readFile(join(REPO_ROOT, 'apps/desktop/src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const settings = await readSettingsCombinedSource();
     const page = settings.match(/function WebSearchSettingsPage[\s\S]*?function webSearchQueryDisabledReason/);
 
     assert.ok(page, 'Web search settings page block must exist');

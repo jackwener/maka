@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { readRendererContractCss } from './contract-css-helpers.js';
 import { readProviderSettingsCombinedSource } from './provider-contract-source-helpers.js';
+import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
 
 const repoRoot = process.cwd().endsWith('apps/desktop')
   ? join(process.cwd(), '..', '..')
@@ -106,7 +107,7 @@ describe('Settings form accessibility labels', () => {
   });
 
   it('keeps migrated Settings text fields and action buttons on shared UI primitives', async () => {
-    const settings = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
+    const settings = await readSettingsCombinedSource();
     const settingsSelect = await readRepo('packages/ui/src/primitives/settings-select.tsx');
     const passwordInput = await readRepo('apps/desktop/src/renderer/settings/password-input.tsx');
     const providersPanel = await readProviderSettingsCombinedSource();
@@ -214,7 +215,7 @@ describe('Settings form accessibility labels', () => {
 
   it('keeps every Settings input/select/textarea named for assistive tech', async () => {
     for (const [path, src] of [
-      ['apps/desktop/src/renderer/settings/SettingsModal.tsx', await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx')],
+      ['apps/desktop/src/renderer/settings/SettingsModal.tsx', await readSettingsCombinedSource()],
       ['apps/desktop/src/renderer/settings/provider settings sources', await readProviderSettingsCombinedSource()],
     ] as const) {
       for (const tagName of ['input', 'select', 'textarea'] as const) {
@@ -230,7 +231,7 @@ describe('Settings form accessibility labels', () => {
   });
 
   it('names the high-risk Settings fields found by the real app AX sweep', async () => {
-    const settings = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
+    const settings = await readSettingsCombinedSource();
     const providers = await readProviderSettingsCombinedSource();
 
     for (const label of [
@@ -266,7 +267,7 @@ describe('Settings form accessibility labels', () => {
   });
 
   it('keeps Settings sidebar navigation groups named', async () => {
-    const settings = await readRepo('apps/desktop/src/renderer/settings/SettingsModal.tsx');
+    const settings = await readSettingsCombinedSource();
     const settingsSurface = settings.match(/function SettingsSurface\([\s\S]*?function SettingsPage/)?.[0] ?? '';
 
     assert.match(settingsSurface, /<nav aria-label="设置分组">/);

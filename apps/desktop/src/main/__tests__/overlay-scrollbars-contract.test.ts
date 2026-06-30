@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { resolve } from 'node:path';
 import { readRendererContractCss } from './contract-css-helpers.js';
+import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
 
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
 
@@ -62,7 +63,7 @@ describe('OverlayScrollbars integration contract', () => {
   it('migrates the primary app scroll surfaces onto OverlayScrollArea', async () => {
     const components = await repoFile('packages/ui/src/chat-view.tsx');
     const sessionListPanel = await repoFile('packages/ui/src/session-list-panel.tsx');
-    const settings = await repoFile('apps/desktop/src/renderer/settings/SettingsModal.tsx');
+    const settings = await readSettingsCombinedSource();
 
     assert.match(sessionListPanel, /import \{ OverlayScrollArea \} from '\.\/overlay-scroll-area\.js';/, 'session list panel must import OverlayScrollArea');
     assert.match(sessionListPanel, /<OverlayScrollArea[\s\S]*className="maka-list-stack"[\s\S]*contentClassName="maka-list-stackContent"/, 'sidebar session list must use OverlayScrollArea');

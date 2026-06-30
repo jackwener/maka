@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { join, resolve } from 'node:path';
 import { readAllRendererCss } from './css-test-helpers.js';
+import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
 
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
 const CAPABILITY_SNAPSHOT = join(REPO_ROOT, 'apps', 'desktop', 'src', 'main', 'capability-snapshot.ts');
@@ -44,7 +45,7 @@ describe('Office document capability contract', () => {
 
   it('renders capability guidance as visible action copy', async () => {
     const [settings, styles] = await Promise.all([
-      readFile(join(REPO_ROOT, 'apps', 'desktop', 'src', 'renderer', 'settings', 'SettingsModal.tsx'), 'utf8'),
+      readSettingsCombinedSource(),
       readAllRendererCss(),
     ]);
 

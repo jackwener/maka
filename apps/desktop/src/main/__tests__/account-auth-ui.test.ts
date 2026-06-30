@@ -2,6 +2,7 @@ import { strict as assert } from 'node:assert';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
+import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
 import {
   deriveProviderAuthContract,
   type ProviderAuthContract,
@@ -140,7 +141,7 @@ describe('Account auth UI contract mapping', () => {
 
 describe('Account settings credential probe UI', () => {
   it('keeps account overview security and status copy Chinese-first', async () => {
-    const source = await readFile(join(process.cwd(), 'src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const source = await readSettingsCombinedSource();
     const authUi = await readFile(join(process.cwd(), 'src/renderer/settings/account-auth-ui.ts'), 'utf8');
     const connectionStatus = await readFile(join(process.cwd(), 'src/renderer/connection-status.ts'), 'utf8');
     const providerAuth = await readFile(join(process.cwd(), '../../packages/core/src/provider-auth.ts'), 'utf8');
@@ -183,7 +184,7 @@ describe('Account settings credential probe UI', () => {
   });
 
   it('sanitizes account-page connection test failures before toast', async () => {
-    const source = await readFile(join(process.cwd(), 'src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const source = await readSettingsCombinedSource();
     const page = source.match(/function AccountSettingsPage[\s\S]*?function AccountConnectionRow/)?.[0] ?? '';
     const helper = source.match(/function accountConnectionTestFailureMessage\(result: ConnectionTestResult\): string \{[\s\S]*?\n\}/)?.[0] ?? '';
     const fallback = source.match(/function accountConnectionTestFailureFallback\(result: ConnectionTestResult\): string \{[\s\S]*?\n\}/)?.[0] ?? '';
@@ -215,7 +216,7 @@ describe('Account settings credential probe UI', () => {
   });
 
   it('gates account-page connection tests and handles post-test refresh failures', async () => {
-    const source = await readFile(join(process.cwd(), 'src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const source = await readSettingsCombinedSource();
     const page = source.match(/function AccountSettingsPage[\s\S]*?function AccountConnectionRow/)?.[0] ?? '';
 
     assert.match(
@@ -246,7 +247,7 @@ describe('Account settings credential probe UI', () => {
   });
 
   it('drops late account-page connection test feedback after Settings is closed', async () => {
-    const source = await readFile(join(process.cwd(), 'src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const source = await readSettingsCombinedSource();
     const page = source.match(/function AccountSettingsPage[\s\S]*?function AccountConnectionRow/)?.[0] ?? '';
 
     assert.match(
@@ -282,7 +283,7 @@ describe('Account settings credential probe UI', () => {
   });
 
   it('normalizes legacy persisted connection-test messages before display', async () => {
-    const source = await readFile(join(process.cwd(), 'src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const source = await readSettingsCombinedSource();
     const helper = source.match(/function accountLastTestMessageDisplay\(message: string \| undefined\): string \| undefined \{[\s\S]*?\n\}/)?.[0] ?? '';
     const row = source.match(/function AccountConnectionRow[\s\S]*?function AccountAuthActionView/)?.[0] ?? '';
 
@@ -314,7 +315,7 @@ describe('Account settings credential probe UI', () => {
     // `connections.hasSecret(slug)` to `false`, which rendered an
     // unknown safeStorage/OAuth read failure as "待配置". Unknown is
     // not missing.
-    const source = await readFile(join(process.cwd(), 'src/renderer/settings/SettingsModal.tsx'), 'utf8');
+    const source = await readSettingsCombinedSource();
     const page = source.match(/function AccountSettingsPage[\s\S]*?function AccountConnectionRow/)?.[0] ?? '';
     const row = source.match(/function AccountConnectionRow[\s\S]*?function AccountAuthActionView/)?.[0] ?? '';
 
