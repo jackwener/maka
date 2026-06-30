@@ -25,7 +25,6 @@ import type {
   ThemePreference,
 } from '@maka/core';
 import {
-  CODEX_SUBSCRIPTION_UNSUPPORTED_CHATGPT_MODELS,
   generalizedErrorMessageChinese,
   MAX_IMPORTED_TEXT_FILE_SAMPLE_BYTES,
   preflightDroppedTextFilesForPromptImport,
@@ -90,10 +89,7 @@ import {
 import { deriveTurnFooterActions } from './turn-footer-actions';
 import { readScrollMotionBehavior } from './scroll-motion-policy';
 import { deriveBranchBanner } from './branch-banner';
-import {
-  buildCatalogChatModelChoices,
-  pickCatalogDefaultChatModel,
-} from './model-catalog-choices';
+import { pickCatalogDefaultChatModel } from './model-catalog-choices';
 import { applyTheme, applyThemePalette, applyUiLocale } from './theme';
 import { openPathActionLabel, openPathFailureCopy } from './open-path';
 import {
@@ -130,6 +126,7 @@ import {
   dailyReviewActionErrorMessage,
   dailyReviewExportDefaultName,
 } from './daily-review-actions';
+import { buildChatModelChoices, chatModelChoiceLabel, normalizeActiveChatModel } from './chat-model-selection';
 
 const USER_MESSAGE_VISIBLE_TIMEOUT_MS = 1_200;
 const USER_MESSAGE_VISIBLE_POLL_MS = 40;
@@ -175,40 +172,6 @@ function commandPaletteConnectionTestFailureFallback(result: ConnectionTestResul
     return '模型服务返回错误，请稍后重试。';
   }
   return '连接测试失败，请稍后重试。';
-}
-
-function buildChatModelChoices(connections: readonly LlmConnection[]): ChatModelChoice[] {
-  return buildCatalogChatModelChoices(connections);
-}
-
-function normalizeActiveChatModel(
-  session: SessionSummary | undefined,
-  connection: LlmConnection | undefined,
-  choices: readonly ChatModelChoice[],
-): string | undefined {
-  if (!session || session.backend === 'fake') return undefined;
-  const requested = session.model || connection?.defaultModel;
-  const matchingChoice = choices.find(
-    (choice) => choice.connectionSlug === session.llmConnectionSlug && choice.model === requested,
-  );
-  if (matchingChoice) return matchingChoice.model;
-  if (
-    connection?.providerType === 'codex-subscription' &&
-    requested &&
-    CODEX_SUBSCRIPTION_UNSUPPORTED_CHATGPT_MODELS.has(requested)
-  ) {
-    return choices.find((choice) => choice.connectionSlug === session.llmConnectionSlug)?.model;
-  }
-  return requested;
-}
-
-function chatModelChoiceLabel(
-  choices: readonly ChatModelChoice[],
-  connectionSlug: string | undefined,
-  model: string | undefined,
-): string | undefined {
-  if (!connectionSlug || !model) return model;
-  return choices.find((choice) => choice.connectionSlug === connectionSlug && choice.model === model)?.label ?? model;
 }
 
 type ComposerImportOwner = {
