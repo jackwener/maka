@@ -1,6 +1,6 @@
 import { app, ipcMain, nativeImage, safeStorage, shell } from 'electron';
 import { randomUUID } from 'node:crypto';
-import { copyFile, mkdir, readFile, realpath } from 'node:fs/promises';
+import { mkdir, readFile, realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { release as osRelease, arch as osArch } from 'node:os';
 import {
@@ -18,7 +18,6 @@ import {
 } from '@maka/core';
 import type {
   AppSettings,
-  ArtifactSaveResult,
   BotProvider,
   BotReadinessState,
   ConnectionEvent,
@@ -110,7 +109,7 @@ import type {
 import { testProxyConnection } from '@maka/runtime/network/proxy-test';
 import { fetchWeChatQrcode, pollWeChatQrcodeStatus } from './wechat-scan-login.js';
 import type { LlmConnection } from '@maka/core/llm-connections';
-import { createAgentRunStore, createArtifactStore, createConnectionStore, createPlanReminderStore, createRuntimeEventStore, createSessionStore, createSettingsStore, createTelemetryRepo, resolveArtifactPath } from '@maka/storage';
+import { createAgentRunStore, createArtifactStore, createConnectionStore, createPlanReminderStore, createRuntimeEventStore, createSessionStore, createSettingsStore, createTelemetryRepo } from '@maka/storage';
 import {
   ensureSessionCanSendOrRebind,
   errorCode,
@@ -128,10 +127,7 @@ import { createDailyReviewArchiveStore } from './daily-review-archive-store.js';
 import { botTestErrorMessage, buildSettingsUpdateResult, maskAppSettings, preserveSensitivePlaceholders, toSettingsTestResult } from './settings-ipc-helpers.js';
 import {
   buildSkillAgentTool,
-  createStarterSkill,
   ensureBundledOfficeSkills,
-  listInstalledSkills,
-  resolveSkillOpenPath,
 } from './skills.js';
 import {
   createWorkspaceInstructionFile,
@@ -194,6 +190,7 @@ import { registerSubscriptionIpc } from './subscription-ipc-main.js';
 import { registerBrowserIpc } from './browser-ipc-main.js';
 import { registerConnectionsIpc } from './connections-ipc-main.js';
 import { registerPlanReminderIpc } from './plan-reminders-ipc-main.js';
+import { registerWorkspaceResourcesIpc } from './workspace-resources-ipc-main.js';
 
 const buildInfo = resolveBuildInfo(app.isPackaged, app.getAppPath());
 
@@ -953,72 +950,11 @@ function registerIpc(): void {
       return imported;
     },
   );
-  // Opens an artifact in Finder. Reuses the artifact-root realpath guard
-  // (mirrors PR56 open-path-guard) so renderer never assembles absolute
-  // paths — it only passes an artifactId; main looks up the record, runs
-  // the same prefix + symlink-escape check ArtifactStore uses for
-  // readText/readBinary, and only then hands the absolute path to
-  // `shell.openPath`. Failure-reason shape matches `app:openPath` so the
-  // renderer can route both through the same toast copy.
-  ipcMain.handle(
-    'app:openArtifactPath',
-    async (
-      _event,
-      artifactId: string,
-    ): Promise<
-      | { ok: true; opened: string }
-      | {
-          ok: false;
-          reason: 'unknown-key' | 'not-allowed' | 'missing' | 'not-a-directory' | 'open-failed';
-        }
-    > => {
-      const record = await artifactStore.get(artifactId);
-      if (!record) return { ok: false, reason: 'missing' };
-      if (record.status === 'deleted') return { ok: false, reason: 'missing' };
-      const artifactRoot = join(workspaceRoot, 'artifacts');
-      const resolved = await resolveArtifactPath({
-        artifactRoot,
-        relativePath: record.relativePath,
-      });
-      if (!resolved.ok) {
-        // Map storage-layer reasons onto the openPath taxonomy so toast
-        // routing in the renderer doesn't have to learn a second enum.
-        if (resolved.reason === 'not_allowed') return { ok: false, reason: 'not-allowed' };
-        return { ok: false, reason: 'missing' };
-      }
-      // "在 Finder 中打开" means reveal-in-OS, not open-with-default-app.
-      // `shell.showItemInFinder` highlights the file in its containing
-      // folder so the user can manually open it themselves — keeps the
-      // "preview in pane is view-only, escape valve = OS" boundary
-      // explicit (per §9.1.5 contract).
-      shell.showItemInFolder(resolved.path);
-      return { ok: true, opened: record.name };
-    },
-  );
-  ipcMain.handle('app:saveArtifactAs', async (_event, artifactId: string): Promise<ArtifactSaveResult> => {
-    const record = await artifactStore.get(artifactId);
-    if (!record) return { ok: false, reason: 'not_found' };
-    if (record.status === 'deleted') return { ok: false, reason: 'deleted' };
-    const resolved = await resolveArtifactPath({
-      artifactRoot: join(workspaceRoot, 'artifacts'),
-      relativePath: record.relativePath,
-    });
-    if (!resolved.ok) {
-      if (resolved.reason === 'not_allowed') return { ok: false, reason: 'not_allowed' };
-      return { ok: false, reason: 'not_found' };
-    }
-    const saveDialogOptions = {
-      title: `另存为 ${record.name}`,
-      defaultPath: record.name,
-    };
-    const result = await mainWindowController.showSaveDialog(saveDialogOptions);
-    if (result.canceled || !result.filePath) return { ok: false, reason: 'canceled' };
-    try {
-      await copyFile(resolved.path, result.filePath);
-      return { ok: true, saved: record.name };
-    } catch {
-      return { ok: false, reason: 'write_failed' };
-    }
+  registerWorkspaceResourcesIpc({
+    workspaceRoot,
+    artifactStore,
+    mainWindowController,
+    sendToRenderer: safeSendToRenderer,
   });
   ipcMain.handle('visualSmoke:getState', () => getVisualSmokeState(visualSmokeFixture));
   /**
@@ -1078,33 +1014,6 @@ function registerIpc(): void {
       return { ok: true, path: filePath };
     },
   );
-  ipcMain.handle('artifacts:list', (_event, sessionId: string, opts?: { includeDeleted?: boolean }) =>
-    artifactStore.list(sessionId, opts),
-  );
-  ipcMain.handle('artifacts:get', (_event, artifactId: string) => artifactStore.get(artifactId));
-  ipcMain.handle('artifacts:readText', (_event, artifactId: string) => artifactStore.readText(artifactId));
-  ipcMain.handle('artifacts:readBinary', (_event, artifactId: string) => artifactStore.readBinary(artifactId));
-  ipcMain.handle('artifacts:delete', async (_event, artifactId: string) => {
-    await artifactStore.delete(artifactId);
-    const artifact = await artifactStore.get(artifactId);
-    if (artifact) {
-      safeSendToRenderer('artifacts:changed', {
-        reason: 'deleted',
-        artifactId,
-        sessionId: artifact.sessionId,
-        ts: Date.now(),
-      });
-    }
-  });
-  ipcMain.handle('skills:list', async () => listInstalledSkills(workspaceRoot));
-  ipcMain.handle('skills:createStarter', async () => createStarterSkill(workspaceRoot));
-  ipcMain.handle('skills:open', async (_event, id: string, target: 'file' | 'directory' = 'file') => {
-    const resolved = await resolveSkillOpenPath(workspaceRoot, id, target);
-    if (!resolved.ok) return resolved;
-    const error = await shell.openPath(resolved.path);
-    if (error) return { ok: false, reason: 'open_failed' as const };
-    return { ok: true as const, target: resolved.target };
-  });
   registerPlanReminderIpc({ planReminders, getWorkspacePrivacyContext });
   ipcMain.handle('sessions:list', (_event, filter?: SessionListFilter) => runtime.listSessions(filter));
   ipcMain.handle('sessions:create', async (_event, input?: Partial<CreateSessionInput>) => {

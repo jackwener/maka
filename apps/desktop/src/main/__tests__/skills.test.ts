@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { readMainProcessCombinedSource } from './main-process-contract-source-helpers.js';
 import {
   MAX_SKILLS_PROMPT_CHARS,
   MAX_SKILL_TOOL_BODY_CHARS,
@@ -295,7 +296,7 @@ name: Writer
     const ui = await readFile(join(repoRoot, 'packages/ui/src/module-panels.tsx'), 'utf8');
     const renderer = await readFile(join(repoRoot, 'apps/desktop/src/renderer/main.tsx'), 'utf8');
     const preload = await readFile(join(repoRoot, 'apps/desktop/src/preload/preload.ts'), 'utf8');
-    const main = await readFile(join(repoRoot, 'apps/desktop/src/main/main.ts'), 'utf8');
+    const main = await readMainProcessCombinedSource();
 
     assert.match(ui, /onRefreshSkills\?\(\): void \| Promise<void>/);
     assert.match(ui, /onCreateSkillTemplate\?\(\): void \| Promise<void>/);

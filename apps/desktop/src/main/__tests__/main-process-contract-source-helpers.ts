@@ -19,6 +19,7 @@ export const MAIN_PROCESS_SOURCE_REPO_PATHS: readonly string[] = [
   'apps/desktop/src/main/subscription-model-fetch.ts',
   'apps/desktop/src/main/subscription-ipc-main.ts',
   'apps/desktop/src/main/system-prompt-main.ts',
+  'apps/desktop/src/main/workspace-resources-ipc-main.ts',
 ];
 
 export async function readMainProcessCombinedSource(): Promise<string> {
