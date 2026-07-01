@@ -319,10 +319,11 @@ describe('runPromptOptimizationLoop', () => {
     });
   });
 
-  test('does not quarantine held-in tasks without verifier-only patterns', async () => {
+  test('quarantines held-in tasks without verifier-only patterns instead of keeping them', async () => {
     await withHarness(async (harness) => {
       const heldInTasks = makeTasks('hin', 20);
       const heldOutTasks = makeTasks('hout', 8);
+      const taskRuns: string[] = [];
       const rewardFor = (roundId: string, taskId: string): number => {
         const index = taskIndex(taskId);
         if (taskId.startsWith('hout-')) return index < 4 ? 1 : 0;
@@ -339,12 +340,16 @@ describe('runPromptOptimizationLoop', () => {
         rewardHackVerifierPatternsByTaskId: Object.fromEntries(
           heldInTasks.map((task) => [task.id, []]),
         ),
+        onTaskRun: (roundId, taskId) => taskRuns.push(`${roundId}:${taskId}`),
       });
 
-      assert.equal(result.decisions[0]?.decision, 'keep');
-      assert.equal(result.decisions[0]?.reason, 'held_in_improved');
-      assert.deepEqual(result.decisions[0]?.rewardHackScan, { decision: 'clean' });
-      assert.equal(result.smoke.quarantineCount, 0);
+      assert.equal(result.decisions[0]?.decision, 'discard');
+      assert.equal(result.decisions[0]?.reason, 'reward_hack_quarantined');
+      assert.deepEqual(result.decisions[0]?.rewardHackScan, {
+        decision: 'quarantine',
+        reason: 'no_verifier_patterns',
+      });
+      assert.ok(taskRuns.every((item) => !item.startsWith('round-0:hout-')));
     });
   });
 
