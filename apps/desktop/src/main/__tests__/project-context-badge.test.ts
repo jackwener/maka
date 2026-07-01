@@ -5,12 +5,14 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { resolveProjectGitInfo, resolveProjectRoot } from '../project-context.js';
 import { readRendererContractCss } from './contract-css-helpers.js';
+import { readMainProcessCombinedSource } from './main-process-contract-source-helpers.js';
 
 const repoRoot = process.cwd().endsWith('apps/desktop')
   ? join(process.cwd(), '..', '..')
   : process.cwd();
 
 async function readRepo(path: string): Promise<string> {
+  if (path === 'apps/desktop/src/main/main.ts') return readMainProcessCombinedSource();
   return readFile(join(repoRoot, path), 'utf8');
 }
 
@@ -74,7 +76,8 @@ describe('project context workspace picker', () => {
     assert.match(main, /let selectedProjectRoot: string \| null = null;/);
     assert.match(main, /if \(selectedProjectRoot\) return selectedProjectRoot;/);
     assert.match(main, /ipcMain\.handle\(\s*'app:selectProjectDirectory'/);
-    assert.match(main, /dialog\.showOpenDialog\(mainWindow,\s*\{[\s\S]*title:\s*'选择工作目录'[\s\S]*properties:\s*\['openDirectory'\]/);
+    assert.match(main, /mainWindowController\.showOpenDialog\(\{[\s\S]*title:\s*'选择工作目录'[\s\S]*properties:\s*\['openDirectory'\]/);
+    assert.match(main, /dialog\.showOpenDialog\(mainWindow,\s*options\)/);
     assert.match(main, /const projectPath = await resolveProjectRoot\(\[selectedPath\]\)/);
     assert.match(main, /selectedProjectRoot = projectPath;/);
     assert.match(main, /projectGit:\s*await resolveProjectGitInfo\(projectPath\)/);

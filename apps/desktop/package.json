@@ -12,7 +12,7 @@
     "storybook": "storybook dev -p 6006 -c .storybook",
     "build-storybook": "storybook build -c .storybook --output-dir storybook-static",
     "build": "npm run build:main && npm run build:preload && npm run build:renderer",
-    "clean:main": "rm -rf dist/main",
+    "clean:main": "rm -rf dist/main tsconfig.main.tsbuildinfo",
     "build:main": "tsc -p tsconfig.main.json",
     "build:preload": "esbuild src/preload/preload.ts --bundle --platform=node --format=cjs --outfile=dist/preload/preload.cjs --external:electron",
     "build:renderer": "vite build",
