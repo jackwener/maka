@@ -198,8 +198,8 @@ describe('permission mode transition guard copy', () => {
     assert.match(renderer, /const \[pendingPermissionModeBySession, setPendingPermissionModeBySession\] = useState<Record<string, boolean>>\(\{\}\);/);
     assert.match(
       setPermissionModeBlock,
-      /const sessionId = activeIdRef\.current;[\s\S]*if \(!sessionId\) return;[\s\S]*pendingPermissionModeChangesRef\.current\.has\(sessionId\)/,
-      'Permission mode changes must capture the active session id and gate duplicate changes for that session',
+      /const sessionId = activeIdRef\.current;[\s\S]*if \(!sessionId\) \{[\s\S]*setPendingNewChatPermissionMode\(mode\);[\s\S]*return;[\s\S]*\}[\s\S]*pendingPermissionModeChangesRef\.current\.has\(sessionId\)/,
+      'Permission mode changes must capture the active session id, store no-session picks for the next chat, and gate duplicate changes for active sessions',
     );
     assert.match(setPermissionModeBlock, /pendingPermissionModeChangesRef\.current\.add\(sessionId\);[\s\S]*setPendingPermissionModeBySession\(\(current\) => \(\{ \.\.\.current, \[sessionId\]: true \}\)\);/);
     assert.match(setPermissionModeBlock, /sessionsRef\.current\.find\(\(session\) => session\.id === sessionId\)/);

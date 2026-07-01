@@ -1913,6 +1913,7 @@ export function AppShell() {
             ? { llmConnectionSlug: validPendingNewChatModel.llmConnectionSlug, model: validPendingNewChatModel.model }
             : {}),
         });
+        setPendingNewChatPermissionMode(null);
         upsertSessionSummary(session);
         optimisticSessionId = session.id;
         optimisticTurnId = turnId;
