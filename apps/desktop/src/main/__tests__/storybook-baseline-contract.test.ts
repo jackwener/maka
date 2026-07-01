@@ -130,6 +130,50 @@ describe('Storybook baseline contract', () => {
     assert.doesNotMatch(src, /app-shell/, 'Sidebar stories must not import the desktop app shell.');
   });
 
+  it('storyboards ToolActivity result variants before visual polish', () => {
+    const storyPath = join(REPO_ROOT, 'packages', 'ui', 'stories', 'tool-activity.stories.tsx');
+    const fixturePath = join(REPO_ROOT, 'packages', 'ui', 'stories', 'tool-activity.fixtures.ts');
+    assert.ok(existsSync(storyPath), 'ToolActivity must have a surface-scoped Storybook storyboard');
+    assert.ok(existsSync(fixturePath), 'ToolActivity stories must keep dense fixture data in a sibling fixture file');
+
+    const story = readFileSync(storyPath, 'utf8');
+    const fixtures = readFileSync(fixturePath, 'utf8');
+
+    assert.match(story, /title:\s*'Product\/Tool Activity'/);
+    assert.match(story, /satisfies\s+Meta/);
+    assert.match(story, /\bToolActivity\b/);
+
+    for (const exportName of [
+      'StatusOverview',
+      'TerminalAndLiveOutput',
+      'FileDiffAndWebSearch',
+      'SubagentAndExplore',
+      'OfficeDocument',
+      'ErrorsAndPermissionDenied',
+      'CopyFeedback',
+      'DenseMixedResults',
+    ]) {
+      assert.match(story, new RegExp(`export const ${exportName}: Story`), `${exportName} story must be exported`);
+    }
+
+    for (const requiredKind of [
+      'terminal',
+      'file_diff',
+      'web_search',
+      'web_search_error',
+      'subagent',
+      'explore_agent',
+      'office_document',
+    ]) {
+      assert.match(fixtures, new RegExp(`kind:\\s*'${requiredKind}'`), `${requiredKind} fixture must exist`);
+    }
+
+    assert.match(fixtures, /outputTruncated:\s*true/, 'stories must cover live-output truncation');
+    assert.match(fixtures, /User denied permission/, 'stories must cover permission-denied copy');
+    assert.match(story, /expandAll/, 'result preview stories must expose collapsed successful previews for visual review');
+    assert.match(story, /autoCopyLabel/, 'stories must expose copy feedback rather than only idle copy buttons');
+  });
+
   it('keeps Storybook stories out of the regular @maka/ui TypeScript build', () => {
     const config = readTypescriptConfig(REPO_ROOT, join(REPO_ROOT, 'packages', 'ui', 'tsconfig.json'));
 
