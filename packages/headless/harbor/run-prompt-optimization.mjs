@@ -165,6 +165,9 @@ async function main() {
   const outDir = envPath('MAKA_PROMPT_OUT_DIR', join(localEvalRoot, 'maka-eval', 'rsi-runs'));
   const keyFile = envPath('MAKA_PROMPT_KEY_FILE', join(localEvalRoot, '.local-secrets', 'deepseek-key'));
   const tasksRoot = envPath('MAKA_PROMPT_TASKS_ROOT', join(homedir(), '.cache/harbor/tasks'));
+  const initialSystemPromptFile = process.env.MAKA_PROMPT_INITIAL_SYSTEM_PROMPT_FILE
+    ? envPath('MAKA_PROMPT_INITIAL_SYSTEM_PROMPT_FILE')
+    : undefined;
   // Model is pinned, not env-overridable: the RSI loop is contractually a
   // deepseek-v4-flash run, and DEEPSEEK_V4_FLASH_PRICING below is tied to it.
   // Allowing an override would let cost/smoke accounting silently use the wrong
@@ -240,8 +243,11 @@ async function main() {
   // below once the no-canary drop has settled heldInTasks/heldOutTasks.
   const minStableRatio = envRatioOf('MAKA_PROMPT_MIN_STABLE_RATIO', 0.5);
 
-  // Verify the key file exists before spending Docker time (never print it).
+  // Verify local inputs exist before spending Docker time (never print secrets).
   await readFile(keyFile, 'utf8');
+  const initialSystemPrompt = initialSystemPromptFile
+    ? await readFile(initialSystemPromptFile, 'utf8')
+    : `${BENCHMARK_BASE_SYSTEM_PROMPT}\n`;
 
   const allTasks = await discoverCachedHarborTasks(tasksRoot);
   console.log(`Discovered ${allTasks.length} cached tasks under ${tasksRoot}`);
@@ -344,7 +350,7 @@ async function main() {
   } = await ensurePromptOptimizationPromptRepo({
     promptRepoDir,
     program: PROGRAM,
-    systemPrompt: `${BENCHMARK_BASE_SYSTEM_PROMPT}\n`,
+    systemPrompt: initialSystemPrompt,
   });
   await preparePromptOptimizationResume({ promptRepoDir, resultsJsonlPath });
 
