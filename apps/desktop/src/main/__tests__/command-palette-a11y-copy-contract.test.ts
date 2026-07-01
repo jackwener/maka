@@ -169,7 +169,7 @@ describe('Command palette accessibility and visible copy', () => {
 
   it('scrubs thrown command action failures before toast', async () => {
     const main = await readRendererShellCombinedSource();
-    const commandPaletteBlock = main.match(/commands=\{buildCommandList\(\{[\s\S]*?\n\s*\}\)\}/)?.[0] ?? '';
+    const commandPaletteBlock = main.match(/return buildCommandList\(\{[\s\S]*?\n\s*\}\);/)?.[0] ?? '';
     const helperBlock = main.match(/function commandPaletteActionErrorMessage\(error: unknown, fallback: string\): string \{[\s\S]*?\n\}/)?.[0] ?? '';
     const connectionTestHelperBlock = main.match(/function commandPaletteConnectionTestFailureMessage\(result: ConnectionTestResult\): string \{[\s\S]*?\n\}/)?.[0] ?? '';
     const connectionTestFallbackBlock = main.match(/function commandPaletteConnectionTestFailureFallback\(result: ConnectionTestResult\): string \{[\s\S]*?\n\}/)?.[0] ?? '';

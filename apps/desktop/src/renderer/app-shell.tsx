@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { CircleGauge, Grid3X3, HelpCircle, MessageCircleQuestion, PanelLeftOpen, Search, SquarePen } from '@maka/ui/icons';
 import type {
-  ConnectionTestResult,
   ConnectionEvent,
   DailyReviewArchive,
   DailyReviewArchiveSummary,
@@ -11,34 +10,18 @@ import type {
   LlmConnection,
   PermissionMode,
   PlanReminder,
-  PlanReminderDeliveryTarget,
-  PlanReminderRecurrence,
   QuickChatMode,
   PermissionResponse,
   SessionEventStreamSnapshot,
-  SessionEvent,
   SessionSummary,
   SettingsSection,
   StoredMessage,
-  TextFileImportPreflightFailureReason,
   ThemePalette,
   ThemePreference,
 } from '@maka/core';
+import { generalizedErrorMessageChinese } from '@maka/core';
 import {
-  generalizedErrorMessageChinese,
-  MAX_IMPORTED_TEXT_FILE_SAMPLE_BYTES,
-  preflightDroppedTextFilesForPromptImport,
-} from '@maka/core';
-import {
-  applyAssistantComplete,
-  applyAssistantDelta,
-  clearSettledAssistantStreamSlot,
-  drainAssistantStreamSlot,
-  markAssistantStreamSlotDraining,
   type AssistantStreamSlot,
-  applyThinkingComplete,
-  applyThinkingDelta,
-  applyToolOutputChunk,
   type ChatHeaderAlert,
   type ChatModelChoice,
   ChatView,
@@ -58,18 +41,12 @@ import {
   type TurnLineageBadge,
   useToast,
   type ToolActivityItem,
-  type ToolOutputChunk,
-  formatDailyReviewMarkdown,
-  enqueuePermission,
-  dequeuePermission,
-  dequeuePermissionByToolUseId,
-  clearPermissions,
   activePermissionFor,
   type PermissionQueues,
 } from '@maka/ui';
 import { SettingsModal } from './settings/SettingsModal';
 import { KeyboardHelpModal, useKeyboardHelp } from './keyboard-help';
-import { CommandPalette, buildCommandList, useCommandPalette } from './command-palette';
+import { CommandPalette, useCommandPalette } from './command-palette';
 import { OnboardingHero } from './OnboardingHero';
 import { FirstRunChecklist } from './FirstRunChecklist';
 import { useOnboardingSnapshot } from './use-onboarding-snapshot';
@@ -91,17 +68,9 @@ import { readScrollMotionBehavior } from './scroll-motion-policy';
 import { deriveBranchBanner } from './branch-banner';
 import { pickCatalogDefaultChatModel } from './model-catalog-choices';
 import { applyTheme, applyThemePalette, applyUiLocale } from './theme';
-import { openPathActionLabel, openPathFailureCopy } from './open-path';
-import {
-  createSessionEventStreamSubscription,
-  evaluateSessionEventStreamSnapshot,
-  hasInFlightToolActivity,
-  recordSessionEventStreamChange,
-  recordSessionEventStreamEvent,
-} from './session-event-health';
+import { hasInFlightToolActivity } from './session-event-health';
 import { safeLocalStorageSet } from './browser-storage';
 import { applyLocalSessionRead, createSessionListRefresher, type SessionListRefresher, type SessionReadBoundaries } from './session-read-state';
-import { renderConversationMarkdown } from './conversation-markdown';
 import { countSessions, filterSessions, readNavSelection } from './nav-selection';
 import {
   clampSessionListWidth,
@@ -113,12 +82,9 @@ import {
 } from './session-list-layout';
 import {
   isNoRealConnectionError,
-  isNoRealConnectionEvent,
   modelSetupToastCopy,
   noRealConnectionReasonFromError,
-  noRealConnectionReasonFromEvent,
   noRealConnectionSetupDescription,
-  sessionEventErrorMessage,
 } from './model-connection-errors';
 import {
   buildDailyReviewRunModelOptions,
@@ -127,52 +93,28 @@ import {
   dailyReviewExportDefaultName,
 } from './daily-review-actions';
 import { buildChatModelChoices, chatModelChoiceLabel, normalizeActiveChatModel } from './chat-model-selection';
+import { basenameFromPath } from './app-shell-copy';
+import { buildAppShellCommandList } from './app-shell-command-actions';
+import { createAppShellPlanActions } from './app-shell-plan-actions';
+import { createAppShellProjectActions, type RendererAppInfo } from './app-shell-project-actions';
+import { createAppShellSkillActions } from './app-shell-skill-actions';
+import { createAppShellSessionEventHandlers } from './app-shell-session-events';
+import { createAppShellVisualSmokeActions } from './app-shell-visual-smoke';
+import { createAppShellImportActions } from './app-shell-import-actions';
+import { createAppShellSessionRowActions } from './app-shell-session-row-actions';
+import { createAppShellSessionSettingsActions } from './app-shell-session-settings-actions';
+import { createAppShellStopAction } from './app-shell-stop-action';
+import {
+  useActiveSessionEvents,
+  useAppShellBootstrapSubscriptions,
+  useAppShellHostEffects,
+  useAppShellPersistenceEffects,
+  useAppShellRefSync,
+  useSessionEventHealthPolling,
+} from './app-shell-effects';
 
 const USER_MESSAGE_VISIBLE_TIMEOUT_MS = 1_200;
 const USER_MESSAGE_VISIBLE_POLL_MS = 40;
-
-interface RendererAppInfo {
-  projectPath: string;
-  projectGit: { isGitRepo: boolean; branch?: string };
-}
-
-function basenameFromPath(value: string): string {
-  const trimmed = value.replace(/[\\/]+$/, '');
-  const name = trimmed.split(/[\\/]/).filter(Boolean).pop();
-  return name || trimmed || '当前项目';
-}
-
-function commandPaletteActionErrorMessage(error: unknown, fallback: string): string {
-  return generalizedErrorMessageChinese(error, fallback);
-}
-
-function openPathActionErrorMessage(error: unknown, key: 'workspace' | 'project' | 'skills'): string {
-  return generalizedErrorMessageChinese(error, `无法打开${openPathActionLabel(key)}，请稍后重试。`);
-}
-
-function selectProjectDirectoryFailureCopy(reason: 'missing-selection'): string {
-  if (reason === 'missing-selection') return '没有读取到选中的目录，请重新选择。';
-  return '工作目录暂时无法切换，请稍后重试。';
-}
-
-function commandPaletteConnectionTestFailureMessage(result: ConnectionTestResult): string {
-  const fallback = commandPaletteConnectionTestFailureFallback(result);
-  if (!result.errorMessage) return fallback;
-  return generalizedErrorMessageChinese(new Error(result.errorMessage), fallback);
-}
-
-function commandPaletteConnectionTestFailureFallback(result: ConnectionTestResult): string {
-  if (result.statusCode === 429) return '当前账号或模型服务触发速率限制，请稍后重试。';
-  if (result.errorClass === 'timeout') return '请求超时，请检查网络或代理后重试。';
-  if (result.errorClass === 'auth' || result.statusCode === 401 || result.statusCode === 403) {
-    return '鉴权失败，请检查模型密钥、订阅账号登录或凭据配置后重试。';
-  }
-  if (result.errorClass === 'network') return '网络错误，请检查网络或代理后重试。';
-  if (result.errorClass === 'provider_unavailable' || (result.statusCode && result.statusCode >= 500)) {
-    return '模型服务返回错误，请稍后重试。';
-  }
-  return '连接测试失败，请稍后重试。';
-}
 
 type ComposerImportOwner = {
   sessionId: string | undefined;
@@ -565,24 +507,6 @@ export function AppShell() {
       if (key.startsWith(prefix)) clearPendingTurnAction(key);
     }
   }
-  async function runSessionRowAction(
-    sessionId: string,
-    actionId: 'flag' | 'archive' | 'rename' | 'delete',
-    errorTitle: string,
-    action: () => Promise<void>,
-  ): Promise<void> {
-    const sessionPrefix = `${sessionId}:`;
-    if (Array.from(pendingSessionRowActionsRef.current).some((key) => key.startsWith(sessionPrefix))) return;
-    const key = `${sessionId}:${actionId}`;
-    pendingSessionRowActionsRef.current.add(key);
-    try {
-      await action();
-    } catch (error) {
-      toastApi.error(errorTitle, generalizedErrorMessageChinese(error, '会话操作失败，请稍后重试。'));
-    } finally {
-      pendingSessionRowActionsRef.current.delete(key);
-    }
-  }
   function omitSessionKey<T>(current: Record<string, T>, sessionId: string): Record<string, T> {
     if (!(sessionId in current)) return current;
     const next = { ...current };
@@ -629,6 +553,39 @@ export function AppShell() {
     setPermissionBySession((current) => omitSessionKey(current, sessionId));
     setSessionEventHealthBySession((current) => omitSessionKey(current, sessionId));
   }
+
+  const {
+    flagSession,
+    archiveSession,
+    unarchiveSession,
+    renameSession,
+    deleteSession,
+  } = createAppShellSessionRowActions({
+    activeIdRef,
+    clearSessionRendererState,
+    pendingSessionRowActionsRef,
+    refreshSessions,
+    sessionsRef,
+    setActiveId,
+    setMessages,
+    toastApi,
+  });
+
+  const {
+    setPermissionMode,
+    setSessionModel,
+  } = createAppShellSessionSettingsActions({
+    activeIdRef,
+    connections,
+    pendingPermissionModeChangesRef,
+    pendingSessionModelChangesRef,
+    refreshSessions,
+    sessionsRef,
+    setPendingPermissionModeBySession,
+    setPendingSessionModelBySession,
+    setSessions,
+    toastApi,
+  });
 
   // PR109e: per-turn auxiliary view-model. Combines:
   //  - footer actions (PR109d) — status + lineage + pending
@@ -915,6 +872,170 @@ export function AppShell() {
     return navSelectionRef.current.section === 'daily-review';
   }
 
+  const {
+    refreshPlanReminders,
+    createPlanReminder,
+    updatePlanReminder,
+    togglePlanReminder,
+    triggerPlanReminderNow,
+    snoozePlanReminder,
+    clearPlanReminderRunHistory,
+    deletePlanReminder,
+  } = createAppShellPlanActions({
+    getPlanReminders: () => planReminders,
+    isAutomationsSurfaceActive,
+    setPlanReminders,
+    toastApi,
+  });
+
+  const {
+    refreshAppInfo,
+    selectProjectDirectory,
+    openProjectFolder,
+    openWorkspaceFolder,
+    openSkillsFolder,
+  } = createAppShellProjectActions({
+    projectPickerPendingRef,
+    projectPickerRequestRef,
+    rendererMountedRef,
+    setAppInfo,
+    setProjectPickerPending,
+    toastApi,
+  });
+
+  const {
+    refreshSkills,
+    createSkillTemplate,
+    openSkill,
+  } = createAppShellSkillActions({
+    isSkillsSurfaceActive,
+    setSkills,
+    toastApi,
+  });
+
+  const { applyVisualSmokeFixture } = createAppShellVisualSmokeActions({
+    openPalette,
+    openSettingsSection,
+    refreshSessions,
+    setActiveId,
+    setLiveToolsBySession,
+    setNavSelection,
+    setPermissionBySession,
+    setSearchModalOpen,
+    setSessionListCollapsed,
+    setStreamingBySession,
+    setThemePref,
+    setThinkingBySession,
+  });
+
+  const {
+    importDroppedTextFilesIntoComposer,
+    importDroppedTextFilesPrompt,
+    importFolderOutlineIntoComposer,
+    importTextFileIntoComposer,
+  } = createAppShellImportActions({
+    captureComposerImportOwner,
+    composerRef,
+    isComposerImportOwnerActive,
+    toastApi,
+  });
+
+  const stop = createAppShellStopAction({
+    activeIdRef,
+    addPendingSessionAction,
+    clearPendingSessionAction,
+    setStopPendingBySession,
+    stopPendingRef,
+    toastApi,
+  });
+
+  const { handleEvent, settleAssistantStreaming } = createAppShellSessionEventHandlers({
+    activeIdRef,
+    refreshMessages,
+    refreshSessions,
+    setLiveToolsBySession,
+    setPermissionBySession,
+    setStreamingBySession,
+    setThinkingBySession,
+    setThinkingTruncatedBySession,
+    showModelSetupToast,
+    streamingBySessionRef,
+    toastApi,
+  });
+
+  const hasModalOpen = Boolean(activePermission) || helpOpen || paletteOpen || searchModalOpen;
+
+  useAppShellRefSync({
+    activeId,
+    activeIdRef,
+    navSelection,
+    navSelectionRef,
+    sessions,
+    sessionsRef,
+  });
+  useAppShellHostEffects({
+    activeId,
+    hasModalOpen,
+    setLiveBrowserSessionIds,
+  });
+  useAppShellBootstrapSubscriptions({
+    activeIdRef,
+    applyVisualSmokeFixture,
+    bootstrapSessions,
+    clearPendingTurnActionsForSession,
+    clearSessionRendererState,
+    handleConnectionEvent,
+    openSettings,
+    pendingPermissionModeChangesRef,
+    pendingSessionModelChangesRef,
+    pendingTurnActionTimersRef,
+    pendingTurnActionsRef,
+    projectPickerPendingRef,
+    projectPickerRequestRef,
+    refreshAppInfo,
+    refreshConnections,
+    refreshMemoryActive,
+    refreshMessages,
+    refreshPlanReminders,
+    refreshShellSettings,
+    refreshSkills,
+    refreshSessions,
+    rendererMountedRef,
+    setActiveId,
+    setMessages,
+    setNavSelection,
+    setSessionEventHealthBySession,
+    toastApi,
+  });
+  useAppShellPersistenceEffects({
+    navSelection,
+    sessionListCollapsed,
+    sessionListWidth,
+    themePalette,
+    themePref,
+  });
+  useActiveSessionEvents({
+    activeId,
+    activeIdRef,
+    handleEvent,
+    markSessionReadLocally,
+    setMessageLoadErrorBySession,
+    setMessages,
+    setSessionEventHealthBySession,
+    toastApi,
+  });
+  useSessionEventHealthPolling({
+    activeId,
+    activePermission,
+    activeSession,
+    activeStreaming,
+    hasInFlightLiveTools,
+    refreshMessages,
+    refreshSessions,
+    sessionEventHealthBySessionRef,
+    setSessionEventHealthBySession,
+  });
+
   function captureComposerImportOwner(): ComposerImportOwner {
     return {
       sessionId: activeIdRef.current,
@@ -939,269 +1060,6 @@ export function AppShell() {
     return navSelectionRef.current.section === owner.navSection
       && activeIdRef.current === owner.sessionId;
   }
-
-  useEffect(() => {
-    activeIdRef.current = activeId;
-  }, [activeId]);
-
-  // Tag the document with the host OS so glass-material CSS rules
-  // (sidebar vibrancy passthrough — see notes/reference-atlas.md §1 + §12.1)
-  // can light up only on macOS, where `BrowserWindow({ vibrancy: 'sidebar' })`
-  // paints the native blur material behind the renderer. Other platforms
-  // keep their opaque chrome since vibrancy is a no-op there.
-  useEffect(() => {
-    let cancelled = false;
-    void window.maka.app.info().then((info) => {
-      if (cancelled) return;
-      document.documentElement.setAttribute('data-os', info.platform);
-    }).catch(() => {
-      /* swallow — leaves data-os unset, CSS falls back to opaque chrome */
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // P3 embedded browser: track which sessions have a live view (panel mounts
-  // only for those) and tell main which session this window shows (so it can
-  // validate browser:* IPC targets).
-  useEffect(() => {
-    const off = window.maka.browser.onLive((payload) => setLiveBrowserSessionIds(payload.sessionIds));
-    return off;
-  }, []);
-  useEffect(() => {
-    window.maka.browser.setActiveSession(activeId ?? null);
-  }, [activeId]);
-
-  useEffect(() => {
-    navSelectionRef.current = navSelection;
-  }, [navSelection]);
-
-  useEffect(() => {
-    sessionsRef.current = sessions;
-  }, [sessions]);
-
-  useEffect(() => {
-    void bootstrapSessions();
-    void refreshConnections();
-    void refreshAppInfo();
-    // Pull the persisted theme preference (auto/light/dark) and apply it
-    // before any first paint settles. If settings are unreadable we leave the
-    // default `auto` which still produces a correct result.
-    void refreshMemoryActive('载入本地记忆状态失败');
-    void refreshShellSettings();
-    void refreshSkills();
-    void refreshPlanReminders();
-    void applyVisualSmokeFixture();
-    const unsubscribeConnections = window.maka.connections.subscribeEvents(handleConnectionEvent);
-    const unsubscribeSessionChanges = window.maka.sessions.subscribeChanges((event) => {
-      void refreshSessions();
-      if (event.sessionId) {
-        setSessionEventHealthBySession((current) => {
-          const previous = current[event.sessionId!];
-          if (!previous) return current;
-          return {
-            ...current,
-            [event.sessionId!]: recordSessionEventStreamChange(previous, event.ts),
-          };
-        });
-      }
-      if (
-        event.sessionId &&
-        (event.reason === 'turn-status-change' || event.reason === 'message-appended' || event.reason === 'deleted')
-      ) {
-        clearPendingTurnActionsForSession(event.sessionId);
-      }
-      const changedSessionId = event.sessionId;
-      if (event.reason === 'message-appended' && changedSessionId && changedSessionId === activeIdRef.current) {
-        void refreshMessages(changedSessionId);
-      }
-      if (event.reason === 'rebound') {
-        const modelSuffix = event.modelId ? ` · ${event.modelId}` : '';
-        toastApi.info('已切换到默认模型', `原会话使用的连接已不可用${modelSuffix}`);
-      }
-      if (event.reason === 'deleted' && event.sessionId && event.sessionId === activeIdRef.current) {
-        const deletedSessionId = event.sessionId;
-        setActiveId(undefined);
-        setMessages([]);
-        clearSessionRendererState(deletedSessionId);
-      }
-    });
-    const unsubscribeOpenSettings = window.maka.appWindow.subscribeOpenSettings(openSettings);
-    const unsubscribePlanChanges = window.maka.plans.subscribeChanges(() => {
-      void refreshPlanReminders();
-    });
-    const unsubscribePlanDue = window.maka.plans.subscribeDue((reminder) => {
-      void refreshPlanReminders();
-      toastApi.toast({
-        title: '计划提醒',
-        description: reminder.title,
-        variant: 'info',
-        duration: 8000,
-        action: {
-          label: '查看定时任务',
-          onClick: () => setNavSelection({ section: 'automations' }),
-        },
-      });
-    });
-    function onKeyDown(event: globalThis.KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key === ',') {
-        event.preventDefault();
-        openSettings();
-      }
-    }
-    rendererMountedRef.current = true;
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      rendererMountedRef.current = false;
-      projectPickerRequestRef.current += 1;
-      projectPickerPendingRef.current = false;
-      unsubscribeConnections();
-      unsubscribeSessionChanges();
-      unsubscribeOpenSettings();
-      unsubscribePlanChanges();
-      unsubscribePlanDue();
-      for (const timeoutHandle of pendingTurnActionTimersRef.current.values()) {
-        clearTimeout(timeoutHandle);
-      }
-      pendingTurnActionTimersRef.current.clear();
-      pendingTurnActionsRef.current.clear();
-      pendingPermissionModeChangesRef.current.clear();
-      pendingSessionModelChangesRef.current.clear();
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, []);
-
-  // Keep <html class="dark"> in sync with the active preference. The Settings
-  // modal also calls applyTheme on local change so the effect is immediate,
-  // but this keeps the listener for 'auto' alive at the app level.
-  useEffect(() => {
-    const unsubscribe = applyTheme(themePref);
-    return unsubscribe;
-  }, [themePref]);
-
-  // PR-THEME-APPLY-AND-DONE-POLISH-0 (WAWQAQ msg `dec85e5b`): re-apply the
-  // palette data attribute whenever the persisted setting changes, so
-  // switching themes in Settings is immediately visible. Previously the
-  // attribute was only set once at mount, so a palette change required a
-  // restart before the new colors took effect.
-  useEffect(() => {
-    applyThemePalette(themePalette);
-  }, [themePalette]);
-
-  useEffect(() => {
-    if (!activeId) return;
-    let disposed = false;
-    const subscribedAt = Date.now();
-    setMessages([]);
-    setMessageLoadErrorBySession((current) => {
-      if (!current[activeId]) return current;
-      const next = { ...current };
-      delete next[activeId];
-      return next;
-    });
-    setSessionEventHealthBySession((current) => ({
-      ...current,
-      [activeId]: createSessionEventStreamSubscription({ sessionId: activeId, now: subscribedAt }),
-    }));
-    void window.maka.sessions.readMessages(activeId)
-      .then((next) => {
-        if (!disposed && activeIdRef.current === activeId) {
-          markSessionReadLocally(activeId, next);
-          setMessages(next);
-        }
-      })
-      .catch((error) => {
-        if (!disposed && activeIdRef.current === activeId) {
-          const message = generalizedErrorMessageChinese(error, '对话内容暂时无法读取，请稍后重试。');
-          setMessageLoadErrorBySession((current) => ({ ...current, [activeId]: message }));
-          toastApi.error('读取对话失败', message);
-        }
-      });
-    const unsubscribe = window.maka.sessions.subscribeEvents(activeId, (event) => {
-      setSessionEventHealthBySession((current) => {
-        const previous = current[activeId];
-        if (!previous) return current;
-        return { ...current, [activeId]: recordSessionEventStreamEvent(previous, Date.now()) };
-      });
-      handleEvent(activeId, event);
-    });
-    return () => {
-      disposed = true;
-      unsubscribe();
-      setSessionEventHealthBySession((current) => {
-        const previous = current[activeId];
-        if (!previous) return current;
-        return {
-          ...current,
-          [activeId]: {
-            ...previous,
-            status: 'closed',
-            checkedAt: Date.now(),
-            staleSince: undefined,
-          },
-        };
-      });
-    };
-  }, [activeId]);
-
-  useEffect(() => {
-    if (!activeId) return;
-    const hasLiveActivity = activeStreaming.length > 0 || hasInFlightLiveTools || Boolean(activePermission);
-    const evaluate = () => {
-      const result = evaluateSessionEventStreamSnapshot({
-        previous: sessionEventHealthBySessionRef.current[activeId],
-        now: Date.now(),
-        sessionStatus: activeSession?.status,
-        hasLiveActivity,
-      });
-      if (!result.snapshot) return;
-      setSessionEventHealthBySession((current) => ({
-        ...current,
-        [activeId]: result.snapshot!,
-      }));
-      if (result.shouldRefresh) {
-        void refreshSessions();
-        void refreshMessages(activeId);
-      }
-    };
-    evaluate();
-    const interval = window.setInterval(evaluate, 5_000);
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') evaluate();
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
-  }, [activeId, activeSession?.status, activeStreaming.length, hasInFlightLiveTools, activePermission?.requestId]);
-
-  // PR-FE-BUG-HUNT-5 (kenji bug-hunt 2026-06-24 LOW): pointer drag on
-  // the sidebar resizer fires `setSessionListWidth` on every move
-  // event — at ~60Hz over a long drag, that's a couple hundred
-  // localStorage writes for a single resize gesture. The setting
-  // converges to the user's final width at rest; intermediate
-  // values aren't load-bearing. 200ms trailing debounce keeps the
-  // last-render value in storage without flushing every pixel.
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      safeLocalStorageSet('maka-chat-list-width-v1', String(sessionListWidth));
-    }, 200);
-    return () => window.clearTimeout(handle);
-  }, [sessionListWidth]);
-
-  useEffect(() => {
-    safeLocalStorageSet('maka-chat-list-collapsed-v1', sessionListCollapsed ? 'true' : 'false');
-  }, [sessionListCollapsed]);
-
-  // Persist sidebar nav selection so the app remembers what bucket the user
-  // had open (Chats / Pinned / Archived / Skills) across restarts. Strict
-  // localStorage availability check — Vite dev sometimes runs through a
-  // worker where it isn't defined.
-  useEffect(() => {
-    safeLocalStorageSet('maka-nav-selection-v1', JSON.stringify(navSelection));
-  }, [navSelection]);
 
   async function refreshSessions(): Promise<SessionSummary[]> {
     return sessionListRefresherRef.current!.refresh();
@@ -1286,313 +1144,6 @@ export function AppShell() {
     setMessages((current) => current.filter((message) => message.id !== `optimistic-user-${turnId}`));
   }
 
-  async function applyVisualSmokeFixture() {
-    const state = await window.maka.visualSmoke.getState();
-    if (!state) return;
-    if (state.now) {
-      // Fixture-only clock freeze: screenshot baselines should not drift
-      // because relative timestamps or fetched-at labels crossed a minute
-      // boundary between two runs. Real users never receive a visual
-      // smoke state, so their Date API remains untouched.
-      Date.now = () => state.now!;
-    }
-    document.documentElement.setAttribute('data-maka-visual-smoke', 'true');
-    if (state.streamingBySession) {
-      // PR-UI-Cx fixup v2: `VisualSmokeState.streamingBySession` is a
-      // `Record<string, string>` (fixture-side contract; can stay
-      // simple since fixtures are pre-canned safe text). Map each
-      // entry into the combined `AssistantStreamSlot` shape on
-      // hydration. `truncated: false` because fixture text is
-      // explicitly authored and never exceeds caps.
-      const seed = state.streamingBySession;
-      setStreamingBySession((current) => {
-        const next = { ...current };
-        for (const [sid, text] of Object.entries(seed)) {
-          next[sid] = { text, truncated: false, phase: 'streaming' };
-        }
-        return next;
-      });
-    }
-    if (state.thinkingBySession) {
-      // PR-UI-LAYOUT-42: mirror streamingBySession init pattern so
-      // visual smoke fixtures can seed the ReasoningPanel mid-stream
-      // and capture a deterministic screenshot of the live state.
-      setThinkingBySession((current) => ({ ...current, ...state.thinkingBySession }));
-    }
-    if (state.permissionBySession) {
-      const seeded: PermissionQueues = {};
-      for (const [seedSessionId, request] of Object.entries(state.permissionBySession)) {
-        if (request) seeded[seedSessionId] = [request];
-      }
-      setPermissionBySession((current) => ({ ...current, ...seeded }));
-    }
-    if (state.liveToolsBySession) {
-      setLiveToolsBySession((current) => ({ ...current, ...state.liveToolsBySession }));
-    }
-    // PR-IR-01b: theme override applied BEFORE the persisted user pref so
-    // the screenshot variant matches `<theme>-<viewport>-<motion>.png`
-    // exactly. `applyTheme` writes both the React state + the `.dark` class
-    // on the html element. Real users never hit this branch because
-    // `state` is null without `MAKA_VISUAL_SMOKE_FIXTURE`.
-    if (state.theme) {
-      applyTheme(state.theme);
-      setThemePref(state.theme);
-    }
-    // PR-IR-04: apply reduced-motion attribute when the fixture asks for it.
-    // The matching CSS rule in styles.css collapses all animations to
-    // ~0.01ms so the screenshot pipeline can capture a reduced-motion
-    // variant without depending on the host OS accessibility setting.
-    // Real users never reach this code path (visualSmoke.getState returns
-    // null without MAKA_VISUAL_SMOKE_FIXTURE).
-    if (state.reducedMotion) {
-      document.documentElement.setAttribute('data-maka-reduced-motion', 'true');
-    }
-    // PR-UI-VISUAL-SMOKE-LOCALE: lock the UI locale BEFORE
-    // `refreshSessions()` resolves and BEFORE any locale-dependent
-    // content (EmptyChatHero / Composer / OnboardingHero quickChat)
-    // enters the React tree — all of those gate on sessions /
-    // connection state which load inside this same effect. The
-    // attribute is attached to `<html>` so `detectUiLocale()` reads
-    // the deterministic value on every subsequent render. The
-    // AppShell initial mount already ran when this effect fires,
-    // but that initial mount renders no locale-aware copy yet
-    // (it's a loading shell), so there's no observable host-locale
-    // leak in the captured baseline. See @kenji review
-    // @msg 7b96e182.
-    if (state.locale) {
-      document.documentElement.setAttribute('data-maka-visual-smoke-locale', state.locale);
-    }
-    // PR-UI-VISUAL-SMOKE-TIMEZONE (@kenji msg 45486cdf): mirror the
-    // locale attribute pattern. When `MAKA_VISUAL_SMOKE_TIMEZONE` is
-    // set and validates against `Intl.DateTimeFormat`, the IANA name
-    // lands on `<html>` so any date / time formatting helper can
-    // opt in by reading `document.documentElement.dataset.makaVisualSmokeTz`.
-    // The attribute alone is the contract; per-call timezone
-    // consumption is up to individual formatters as they migrate.
-    if (state.timezone) {
-      document.documentElement.setAttribute('data-maka-visual-smoke-tz', state.timezone);
-    }
-    await refreshSessions();
-    if (state.activeSessionId) {
-      setActiveId(state.activeSessionId);
-    }
-    if (state.sidebarCollapsed !== undefined) {
-      setSessionListCollapsed(state.sidebarCollapsed);
-    }
-    if (state.openSettingsSection) {
-      openSettingsSection(state.openSettingsSection);
-    }
-    // PR-SIDEBAR-IA-0 Phase 2 fixup v3 (xuan msg `dce5a6fb` #2): when
-    // the fixture sets `searchModalOpen`, auto-open the sidebar
-    // Search modal so the screenshot pipeline captures the modal
-    // shell deterministically. Real users never reach this branch
-    // (visualSmoke.getState returns null without MAKA_VISUAL_SMOKE_FIXTURE).
-    if (state.searchModalOpen) {
-      setSearchModalOpen(true);
-    }
-    // PR-shared primitive-COMMAND-INPUT-0: visual-smoke-only opener for the command
-    // palette so screenshot baselines can cover its input shell without
-    // requiring Cmd/Ctrl+K in the capture harness.
-    if (state.paletteOpen) {
-      openPalette();
-    }
-    if (state.sidebarSection === 'automations') {
-      setNavSelection({ section: 'automations' });
-    } else if (state.sidebarSection === 'skills') {
-      setNavSelection({ section: 'skills' });
-    } else if (state.sidebarSection === 'daily-review') {
-      setNavSelection({ section: 'daily-review' });
-    } else if (state.sidebarSection === 'sessions') {
-      setNavSelection({ section: 'sessions', filter: 'chats' });
-    }
-    // PR-SIDEBAR-IA-0 Phase 3 P0 fixup v4 (WAWQAQ msg `5dd1c348`,
-    // kenji `b3d156e9`): when the fixture sets `focusActiveRow`,
-    // focus the active row's button after the next paint so the
-    // row's `:focus-within` triggers and the `.maka-list-row-actions`
-    // overlay becomes visible. The auto-capture then shows the
-    // actions cluster against the slim row, proving the time meta
-    // + unread dot are hidden underneath (no overlap with the
-    // action icons — the bug WAWQAQ flagged). Two RAFs let React
-    // commit the active selection before we query the DOM.
-    if (state.focusActiveRow) {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const activeRowButton = document.querySelector<HTMLButtonElement>(
-            '.maka-list-row[data-active="true"] .maka-list-row-main',
-          );
-          activeRowButton?.focus({ preventScroll: true });
-        });
-      });
-    }
-    // PR-IR-01: when MAKA_VISUAL_SMOKE_AUTO_CAPTURE is set, snap a
-    // screenshot once the fixture has settled and the renderer has
-    // committed. We wait two RAFs + a small idle delay so async layout
-    // (Settings modal mount, sidebar group rendering, etc.) finishes
-    // before the capture lands. The driver script reads the stdout
-    // marker emitted from main and kills the subprocess after.
-    if (state.autoCaptureVariant) {
-      const variant = state.autoCaptureVariant;
-      // Two RAFs + 400ms idle is the same pattern Chromium uses for
-      // settled layout in DevTools "Capture full size screenshot" —
-      // gives @starting-style + fonts + late-stream IPC time to flush.
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setTimeout(async () => {
-            // Keep screenshot baselines free of focus rings / caret blink.
-            // Interaction-specific focus behavior is covered by node tests
-            // and manual smoke paths; auto-capture should measure layout.
-            //
-            // PR-SIDEBAR-IA-0 Phase 3 P0 fixup v4 exception (WAWQAQ
-            // msg `5dd1c348`): when the fixture asks for a focused
-            // active row (e.g. the `sidebar-row-actions-visible`
-            // scenario, which proves the action overlay doesn't
-            // overlap the time meta), the blur step would defeat the
-            // whole point of the capture. Skip the blur in that
-            // narrow case; other captures still get a clean (focusless)
-            // baseline.
-            if (!state.focusActiveRow && document.activeElement instanceof HTMLElement) {
-              document.activeElement.blur();
-            }
-            if ('fonts' in document) {
-              await document.fonts.ready;
-            }
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                void window.maka.visualSmoke.capture({ scenario: state.scenario, variant });
-              });
-            });
-          }, 400);
-        });
-      });
-    }
-  }
-
-  // Hover-action callbacks for SessionListPanel. Each one calls the
-  // corresponding IPC and then refreshes the session list so the sidebar
-  // reflects the new state immediately.
-  async function flagSession(sessionId: string, flagged: boolean) {
-    await runSessionRowAction(sessionId, 'flag', flagged ? '标记会话失败' : '取消标记失败', async () => {
-      await window.maka.sessions.setFlagged(sessionId, flagged);
-      await refreshSessions();
-    });
-  }
-  async function archiveSession(sessionId: string) {
-    await runSessionRowAction(sessionId, 'archive', '归档会话失败', async () => {
-      await window.maka.sessions.archive(sessionId);
-      if (activeIdRef.current === sessionId) {
-        setActiveId(undefined);
-        setMessages([]);
-        clearSessionRendererState(sessionId);
-      }
-      await refreshSessions();
-    });
-  }
-  async function unarchiveSession(sessionId: string) {
-    await runSessionRowAction(sessionId, 'archive', '恢复会话失败', async () => {
-      await window.maka.sessions.unarchive(sessionId);
-      await refreshSessions();
-    });
-  }
-  async function renameSession(sessionId: string, name: string) {
-    await runSessionRowAction(sessionId, 'rename', '重命名会话失败', async () => {
-      await window.maka.sessions.rename(sessionId, name);
-      await refreshSessions();
-    });
-  }
-  async function setPermissionMode(mode: PermissionMode) {
-    const sessionId = activeIdRef.current;
-    if (!sessionId) return;
-    if (pendingPermissionModeChangesRef.current.has(sessionId)) return;
-    const current = sessionsRef.current.find((session) => session.id === sessionId);
-    if (!current || current.permissionMode === mode) return;
-    pendingPermissionModeChangesRef.current.add(sessionId);
-    setPendingPermissionModeBySession((current) => ({ ...current, [sessionId]: true }));
-    try {
-      const next = await window.maka.sessions.setPermissionMode(sessionId, mode);
-      // Patch the session in-place so the chat header reflects the new mode
-      // immediately without waiting for a full list refresh.
-      if (activeIdRef.current === sessionId) {
-        setSessions((prev) => prev.map((session) => (session.id === next.id ? next : session)));
-      }
-      const labels: Record<PermissionMode, string> = {
-        explore: '只读模式',
-        ask: '询问权限',
-        execute: '自动执行',
-        bypass: 'Bypass permissions',
-      };
-      if (activeIdRef.current === sessionId) toastApi.success(`已切到 ${labels[mode]}`, modeDescriptions[mode]);
-      await refreshSessions();
-    } catch (error) {
-      if (activeIdRef.current === sessionId) {
-        toastApi.error(
-          '切换权限模式失败',
-          generalizedErrorMessageChinese(error, '权限模式暂时无法切换，请稍后重试。'),
-        );
-      }
-    } finally {
-      pendingPermissionModeChangesRef.current.delete(sessionId);
-      setPendingPermissionModeBySession((current) => {
-        if (!current[sessionId]) return current;
-        const next = { ...current };
-        delete next[sessionId];
-        return next;
-      });
-    }
-  }
-
-  async function setSessionModel(input: { llmConnectionSlug: string; model: string }) {
-    const sessionId = activeIdRef.current;
-    if (!sessionId) return;
-    if (pendingSessionModelChangesRef.current.has(sessionId)) return;
-    pendingSessionModelChangesRef.current.add(sessionId);
-    setPendingSessionModelBySession((current) => ({ ...current, [sessionId]: true }));
-    try {
-      const next = await window.maka.sessions.setModel(sessionId, input);
-      setSessions((prev) => prev.map((session) => (session.id === next.id ? next : session)));
-      const connection = connections.find((entry) => entry.slug === next.llmConnectionSlug);
-      if (activeIdRef.current === sessionId) {
-        toastApi.success(
-          '已切换当前会话模型',
-          `${connection?.name ?? next.llmConnectionSlug} · ${next.model}`,
-        );
-      }
-      await refreshSessions();
-    } catch (error) {
-      if (activeIdRef.current === sessionId) toastApi.error('切换模型失败', generalizedErrorMessageChinese(error, '模型暂时无法切换，请稍后重试。'));
-    } finally {
-      pendingSessionModelChangesRef.current.delete(sessionId);
-      setPendingSessionModelBySession((current) => {
-        if (!current[sessionId]) return current;
-        const next = { ...current };
-        delete next[sessionId];
-        return next;
-      });
-    }
-  }
-
-  async function deleteSession(sessionId: string) {
-    await runSessionRowAction(sessionId, 'delete', '删除会话失败', async () => {
-      const session = sessionsRef.current.find((entry) => entry.id === sessionId);
-      const name = session?.name ?? '当前会话';
-      const ok = await toastApi.confirm({
-        title: `删除 "${name}"`,
-        description: '会话和全部消息会从磁盘上永久移除。该操作不可撤销。',
-        confirmLabel: '删除',
-        cancelLabel: '取消',
-        destructive: true,
-      });
-      if (!ok) return;
-      await window.maka.sessions.remove(sessionId);
-      if (activeIdRef.current === sessionId) {
-        setActiveId(undefined);
-        setMessages([]);
-      }
-      clearSessionRendererState(sessionId);
-      await refreshSessions();
-      toastApi.success(`已删除 ${name}`);
-    });
-  }
-
   async function refreshConnections() {
     try {
       const [next, nextDefault] = await Promise.all([
@@ -1604,166 +1155,6 @@ export function AppShell() {
     } catch (error) {
       toastApi.error('刷新模型连接失败', generalizedErrorMessageChinese(error, '模型连接暂时无法刷新，请稍后重试。'));
     }
-  }
-
-  async function refreshAppInfo() {
-    try {
-      const next = await window.maka.app.info();
-      setAppInfo({ projectPath: next.projectPath, projectGit: next.projectGit });
-    } catch (error) {
-      toastApi.error('读取项目路径失败', generalizedErrorMessageChinese(error, '项目路径暂时无法读取，请稍后重试。'));
-    }
-  }
-
-  async function selectProjectDirectory() {
-    if (projectPickerPendingRef.current) return;
-    const requestId = projectPickerRequestRef.current + 1;
-    projectPickerRequestRef.current = requestId;
-    projectPickerPendingRef.current = true;
-    setProjectPickerPending(true);
-    const isCurrentProjectPickerRequest = () => rendererMountedRef.current && projectPickerRequestRef.current === requestId;
-    try {
-      const result = await window.maka.app.selectProjectDirectory();
-      if (!isCurrentProjectPickerRequest()) return;
-      if (!result.ok) {
-        if (result.reason !== 'cancelled') {
-          toastApi.error('选择工作目录失败', selectProjectDirectoryFailureCopy(result.reason));
-        }
-        return;
-      }
-      setAppInfo({ projectPath: result.projectPath, projectGit: result.projectGit });
-      toastApi.success('已切换工作目录', basenameFromPath(result.projectPath));
-    } catch (error) {
-      if (isCurrentProjectPickerRequest()) {
-        toastApi.error('选择工作目录失败', generalizedErrorMessageChinese(error, '项目路径暂时无法读取，请稍后重试。'));
-      }
-    } finally {
-      if (projectPickerRequestRef.current === requestId) {
-        projectPickerPendingRef.current = false;
-        if (rendererMountedRef.current) setProjectPickerPending(false);
-      }
-    }
-  }
-
-  async function refreshPlanReminders(options: { shouldShowError?: () => boolean } = {}) {
-    try {
-      const next = await window.maka.plans.list();
-      setPlanReminders(next);
-    } catch (error) {
-      if (options.shouldShowError?.() ?? true) {
-        toastApi.error('刷新计划失败', generalizedErrorMessageChinese(error, '刷新计划提醒失败，请稍后重试。'));
-      }
-    }
-  }
-
-  async function runPlanReminderMutation(options: {
-    run: () => Promise<unknown>;
-    successTitle?: string;
-    successDetail?: string;
-    errorTitle: string;
-    errorFallback: string;
-  }): Promise<boolean> {
-    try {
-      await options.run();
-      await refreshPlanReminders({ shouldShowError: isAutomationsSurfaceActive });
-      if (options.successTitle && isAutomationsSurfaceActive()) {
-        toastApi.success(options.successTitle, options.successDetail);
-      }
-      return true;
-    } catch (error) {
-      if (isAutomationsSurfaceActive()) {
-        toastApi.error(options.errorTitle, generalizedErrorMessageChinese(error, options.errorFallback));
-      }
-      return false;
-    }
-  }
-
-  async function createPlanReminder(input: { title: string; note?: string; runAt: number; recurrence?: PlanReminderRecurrence; cronExpression?: string; delivery?: PlanReminderDeliveryTarget }) {
-    return runPlanReminderMutation({
-      run: () => window.maka.plans.create(input),
-      successTitle: '已创建计划提醒',
-      successDetail: input.title,
-      errorTitle: '创建计划失败',
-      errorFallback: '创建计划提醒失败，请稍后重试。',
-    });
-  }
-
-  async function updatePlanReminder(id: string, patch: { title?: string; note?: string; runAt?: number; recurrence?: PlanReminderRecurrence; cronExpression?: string; delivery?: PlanReminderDeliveryTarget; enabled?: boolean }) {
-    return runPlanReminderMutation({
-      run: () => window.maka.plans.update(id, patch),
-      successTitle: '已保存计划提醒',
-      successDetail: patch.title,
-      errorTitle: '保存计划失败',
-      errorFallback: '保存计划提醒失败，请稍后重试。',
-    });
-  }
-
-  async function togglePlanReminder(id: string, enabled: boolean) {
-    await runPlanReminderMutation({
-      run: () => window.maka.plans.setEnabled(id, enabled),
-      successTitle: enabled ? '已启用提醒' : '已暂停提醒',
-      errorTitle: '更新计划失败',
-      errorFallback: '更新计划提醒失败，请稍后重试。',
-    });
-  }
-
-  async function triggerPlanReminderNow(id: string) {
-    const reminder = planReminders.find((entry) => entry.id === id);
-    await runPlanReminderMutation({
-      run: () => window.maka.plans.triggerNow(id),
-      successTitle: '已触发计划提醒',
-      successDetail: reminder?.title,
-      errorTitle: '触发计划失败',
-      errorFallback: '触发计划提醒失败，请稍后重试。',
-    });
-  }
-
-  async function snoozePlanReminder(id: string) {
-    const reminder = planReminders.find((entry) => entry.id === id);
-    await runPlanReminderMutation({
-      run: () => window.maka.plans.snooze(id),
-      successTitle: '已延后 10 分钟',
-      successDetail: reminder?.title,
-      errorTitle: '延后计划失败',
-      errorFallback: '延后计划提醒失败，请稍后重试。',
-    });
-  }
-
-  async function clearPlanReminderRunHistory(id: string) {
-    const reminder = planReminders.find((entry) => entry.id === id);
-    const ok = await toastApi.confirm({
-      title: `清空 "${reminder?.title ?? '计划提醒'}" 的执行记录`,
-      description: '定时任务本身会保留；只清空最近执行记录和最近状态。',
-      confirmLabel: '清空记录',
-      cancelLabel: '取消',
-      destructive: true,
-    });
-    if (!ok) return;
-    await runPlanReminderMutation({
-      run: () => window.maka.plans.clearRunHistory(id),
-      successTitle: '已清空执行记录',
-      successDetail: reminder?.title,
-      errorTitle: '清空记录失败',
-      errorFallback: '清空定时任务记录失败，请稍后重试。',
-    });
-  }
-
-  async function deletePlanReminder(id: string) {
-    const reminder = planReminders.find((entry) => entry.id === id);
-    const ok = await toastApi.confirm({
-      title: `删除 "${reminder?.title ?? '计划提醒'}"`,
-      description: '该提醒和最近执行记录会被删除。该操作不可撤销。',
-      confirmLabel: '删除',
-      cancelLabel: '取消',
-      destructive: true,
-    });
-    if (!ok) return;
-    await runPlanReminderMutation({
-      run: () => window.maka.plans.delete(id),
-      successTitle: '已删除计划提醒',
-      errorTitle: '删除计划失败',
-      errorFallback: '删除计划提醒失败，请稍后重试。',
-    });
   }
 
   async function createSession() {
@@ -1783,20 +1174,6 @@ export function AppShell() {
     });
   }
 
-  // Open the workspace's skills/ directory in Finder via the IPC allowlist.
-  // Earlier we silently dropped the structured failure result; surface it
-  // so missing-skills-dir / open-failed don't look like the button did nothing.
-  async function refreshSkills(options: { shouldShowError?: () => boolean } = {}) {
-    try {
-      const next = await window.maka.skills.list();
-      setSkills(next);
-    } catch (error) {
-      if (options.shouldShowError?.() ?? true) {
-        toastApi.error('刷新技能失败', generalizedErrorMessageChinese(error, '刷新技能失败，请稍后重试。'));
-      }
-    }
-  }
-
   async function refreshMemoryActive(failureTitle = '刷新本地记忆状态失败') {
     try {
       const next = await window.maka.memory.getState();
@@ -1804,90 +1181,6 @@ export function AppShell() {
     } catch (error) {
       toastApi.error(failureTitle, generalizedErrorMessageChinese(error, '本地记忆状态暂时无法刷新，请稍后重试。'));
     }
-  }
-
-  async function createSkillTemplate() {
-    try {
-      const result = await window.maka.skills.createStarter();
-      if (!result.ok) {
-        if (isSkillsSurfaceActive()) toastApi.error('无法创建示例技能', createSkillFailureCopy(result.reason));
-        return;
-      }
-      await refreshSkills({ shouldShowError: isSkillsSurfaceActive });
-      if (!isSkillsSurfaceActive()) return;
-      toastApi.success('已创建示例技能', `${result.skill.id}/SKILL.md 已放到工作区 skills 目录。`);
-      const openResult = await window.maka.skills.open(result.skill.id, 'file');
-      if (!openResult.ok) {
-        if (isSkillsSurfaceActive()) toastApi.error('无法打开示例技能', openSkillFailureCopy(openResult.reason));
-      }
-    } catch (error) {
-      if (isSkillsSurfaceActive()) {
-        toastApi.error('无法创建示例技能', generalizedErrorMessageChinese(error, '无法创建示例技能，请稍后重试。'));
-      }
-    }
-  }
-
-  async function openSkillsFolder() {
-    try {
-      const result = await window.maka.app.openPath('skills');
-      if (!result.ok) {
-        toastApi.error(`无法打开${openPathActionLabel('skills')}`, openPathFailureCopy(result.reason));
-      }
-    } catch (error) {
-      toastApi.error(`无法打开${openPathActionLabel('skills')}`, openPathActionErrorMessage(error, 'skills'));
-    }
-  }
-
-  async function openSkill(skillId: string) {
-    try {
-      const result = await window.maka.skills.open(skillId, 'file');
-      if (!result.ok) {
-        if (isSkillsSurfaceActive()) toastApi.error('无法打开 Skill', openSkillFailureCopy(result.reason));
-      }
-    } catch (error) {
-      if (isSkillsSurfaceActive()) {
-        toastApi.error('无法打开 Skill', generalizedErrorMessageChinese(error, '无法打开 Skill，请稍后重试。'));
-      }
-    }
-  }
-
-  async function openProjectFolder() {
-    try {
-      const result = await window.maka.app.openPath('project');
-      if (!result.ok) {
-        toastApi.error(`无法打开${openPathActionLabel('project')}`, openPathFailureCopy(result.reason));
-      }
-    } catch (error) {
-      toastApi.error(`无法打开${openPathActionLabel('project')}`, openPathActionErrorMessage(error, 'project'));
-    }
-  }
-
-  async function openWorkspaceFolder() {
-    try {
-      const result = await window.maka.app.openPath('workspace');
-      if (!result.ok) {
-        toastApi.error(`无法打开${openPathActionLabel('workspace')}`, openPathFailureCopy(result.reason));
-      }
-    } catch (error) {
-      toastApi.error(`无法打开${openPathActionLabel('workspace')}`, openPathActionErrorMessage(error, 'workspace'));
-    }
-  }
-
-  function createSkillFailureCopy(reason: 'blocked_path' | 'already_exists' | 'write_failed'): string {
-    if (reason === 'blocked_path') return 'skills 目录不是普通工作区目录，已阻止写入。';
-    if (reason === 'already_exists') return '示例技能编号已占满，请先整理 skills 目录。';
-    return '写入 skills 目录失败，请检查工作区权限。';
-  }
-
-  function openSkillFailureCopy(
-    reason: 'invalid_id' | 'missing' | 'blocked_path' | 'not_file' | 'not_directory' | 'open_failed',
-  ): string {
-    if (reason === 'invalid_id') return 'Skill 名称不在允许范围内。';
-    if (reason === 'missing') return '没有找到对应的 SKILL.md。';
-    if (reason === 'blocked_path') return 'Skill 路径不在工作区 skills 目录内，已阻止打开。';
-    if (reason === 'not_file') return '目标不是一个可打开的 SKILL.md 文件。';
-    if (reason === 'not_directory') return '目标不是一个可打开的目录。';
-    return '系统打开文件失败。';
   }
 
   async function send(text: string): Promise<boolean> {
@@ -1945,123 +1238,6 @@ export function AppShell() {
         toastApi.error('发送失败', generalizedErrorMessageChinese(error, '消息暂时无法发送，请稍后重试。'));
       }
       return false;
-    }
-  }
-
-  async function importTextFilePrompt(options: { shouldShowFeedback?: () => boolean } = {}): Promise<string | undefined> {
-    const shouldShowFeedback = options.shouldShowFeedback ?? (() => true);
-    const result = await window.maka.context.importTextFile();
-    if (!result.ok) {
-      if (result.reason !== 'cancelled' && shouldShowFeedback()) toastApi.error('导入文件失败', result.message);
-      return undefined;
-    }
-    if (shouldShowFeedback()) toastApi.success('已导入文件内容', `${result.name}${result.truncated ? ' · 已截断' : ''}`);
-    return result.prompt;
-  }
-
-  async function importTextFileIntoComposer() {
-    const owner = captureComposerImportOwner();
-    const prompt = await importTextFilePrompt({ shouldShowFeedback: () => isComposerImportOwnerActive(owner) });
-    if (!prompt) return;
-    if (!isComposerImportOwnerActive(owner)) return;
-    composerRef.current?.appendText(prompt);
-  }
-
-  function droppedTextFilePreflightFailureCopy(reason: TextFileImportPreflightFailureReason): string {
-    switch (reason) {
-      case 'missing':
-        return '没有可导入的文件。';
-      case 'too-large':
-        return '文件过大；请先截取需要讨论的部分。';
-      case 'too-many-files':
-        return '一次最多导入 5 个文件。';
-      case 'office-file':
-        return 'Office 文档请点导入文件按钮选择；拖放或粘贴拿不到可授权的本地路径。';
-      case 'unsupported-type':
-        return '只支持拖放或粘贴文本文件；Office 文档请点导入文件按钮选择。';
-    }
-  }
-
-  async function buildDroppedTextFilePreflightInputs(files: File[]) {
-    return Promise.all(files.map(async (file) => ({
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      sampleBytes: new Uint8Array(await file.slice(0, MAX_IMPORTED_TEXT_FILE_SAMPLE_BYTES).arrayBuffer()),
-    })));
-  }
-
-  async function importDroppedTextFilesPrompt(files: File[], options: { shouldShowFeedback?: () => boolean } = {}): Promise<string | undefined> {
-    const shouldShowFeedback = options.shouldShowFeedback ?? (() => true);
-    if (files.length === 0) return;
-    try {
-      const preflightInputs = await buildDroppedTextFilePreflightInputs(files);
-      const preflight = preflightDroppedTextFilesForPromptImport(preflightInputs);
-      if (!preflight.ok) {
-        if (shouldShowFeedback()) toastApi.error('导入文件失败', droppedTextFilePreflightFailureCopy(preflight.reason));
-        return undefined;
-      }
-      const payloads = await Promise.all(files.map(async (file) => ({
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        text: await file.text(),
-      })));
-      const result = await window.maka.context.importDroppedTextFiles(payloads);
-      if (!result.ok) {
-        if (shouldShowFeedback()) toastApi.error('导入文件失败', result.message);
-        return undefined;
-      }
-      if (shouldShowFeedback()) toastApi.success('已导入文件内容', `${result.name}${result.truncated ? ' · 已截断' : ''}`);
-      return result.prompt;
-    } catch (error) {
-      if (shouldShowFeedback()) toastApi.error('导入文件失败', generalizedErrorMessageChinese(error, '导入文件内容失败，请稍后重试。'));
-      return undefined;
-    }
-  }
-
-  async function importDroppedTextFilesIntoComposer(files: File[]) {
-    const owner = captureComposerImportOwner();
-    const prompt = await importDroppedTextFilesPrompt(files, { shouldShowFeedback: () => isComposerImportOwnerActive(owner) });
-    if (!prompt) return;
-    if (!isComposerImportOwnerActive(owner)) return;
-    composerRef.current?.appendText(prompt);
-  }
-
-  async function importFolderOutlinePrompt(options: { shouldShowFeedback?: () => boolean } = {}): Promise<string | undefined> {
-    const shouldShowFeedback = options.shouldShowFeedback ?? (() => true);
-    const result = await window.maka.context.importFolderOutline();
-    if (!result.ok) {
-      if (result.reason !== 'cancelled' && shouldShowFeedback()) toastApi.error('导入目录失败', result.message);
-      return undefined;
-    }
-    if (shouldShowFeedback()) toastApi.success('已导入文件夹目录', `${result.name} · ${result.entries} 项${result.truncated ? ' · 已截断' : ''}`);
-    return result.prompt;
-  }
-
-  async function importFolderOutlineIntoComposer() {
-    const owner = captureComposerImportOwner();
-    const prompt = await importFolderOutlinePrompt({ shouldShowFeedback: () => isComposerImportOwnerActive(owner) });
-    if (!prompt) return;
-    if (!isComposerImportOwnerActive(owner)) return;
-    composerRef.current?.appendText(prompt);
-  }
-
-  async function stop() {
-    const sessionId = activeIdRef.current;
-    if (!sessionId || !addPendingSessionAction(sessionId, stopPendingRef, setStopPendingBySession)) return;
-    try {
-      await window.maka.sessions.stop(sessionId, { source: 'stop_button' });
-    } catch (error) {
-      // The Composer wires this through both the Stop button onClick
-      // and the Escape key. Both invoke `onStop` without awaiting, so
-      // a rejected IPC would otherwise surface as an
-      // UnhandledPromiseRejection and the user would see nothing.
-      // Surface it as a toast so the user knows the model wasn't
-      // actually interrupted and can retry.
-      if (activeIdRef.current === sessionId) toastApi.error('停止失败', generalizedErrorMessageChinese(error, '会话操作失败，请稍后重试。'));
-    } finally {
-      clearPendingSessionAction(sessionId, stopPendingRef, setStopPendingBySession);
     }
   }
 
@@ -2137,269 +1313,6 @@ export function AppShell() {
     }
     if (activeIdRef.current === sessionId) {
       await refreshMessages(sessionId);
-    }
-  }
-
-  function clearStreaming(sessionId: string) {
-    // PR-UI-Cx fixup v2 (@kenji msg 3c01e901 Blocker 2): the
-    // combined-state shape means clearing the streaming buffer +
-    // truncated flag is ONE functional update on `streamingBySession`,
-    // not two separate setStates that could observably race.
-    setStreamingBySession((current) => {
-      const prev = current[sessionId];
-      if (!prev || (prev.text === '' && prev.truncated === false)) return current;
-      return { ...current, [sessionId]: { text: '', truncated: false, phase: 'streaming' } };
-    });
-    clearThinking(sessionId);
-  }
-
-  function clearThinking(sessionId: string) {
-    // PR-UI-LAYOUT-42: thinking is part of the same streaming turn —
-    // any clearStreaming caller (abort / error / complete) means the
-    // turn is done, so the Reasoning panel should also collapse.
-    setThinkingBySession((current) => ({ ...current, [sessionId]: '' }));
-    // PR-UI-C0 review fixup: also clear the truncated flag so the
-    // "已截断" pill doesn't stick around after the panel collapses.
-    // Next turn's thinking starts with a fresh `false` flag and the
-    // helper will re-set it if caps fire again.
-    setThinkingTruncatedBySession((current) => {
-      if (!current[sessionId]) return current;
-      const next = { ...current };
-      delete next[sessionId];
-      return next;
-    });
-  }
-
-  function drainAssistantStreaming(sessionId: string, text: string, messageId?: string) {
-    const applied = applyAssistantComplete(text);
-    if (!applied.text) {
-      clearStreaming(sessionId);
-      void refreshMessages(sessionId);
-      return;
-    }
-    setStreamingBySession((current) => drainAssistantStreamSlot(current, sessionId, applied, messageId));
-    clearThinking(sessionId);
-  }
-
-  async function settleAssistantStreaming(sessionId: string, messageId?: string) {
-    const settledSlot = streamingBySessionRef.current[sessionId];
-    if (!settledSlot || settledSlot.phase !== 'draining') return;
-    if (messageId && settledSlot.messageId && settledSlot.messageId !== messageId) return;
-    await refreshMessages(sessionId).catch(() => false);
-    setStreamingBySession((current) => clearSettledAssistantStreamSlot(current, sessionId, settledSlot, messageId));
-  }
-
-  function handleEvent(sessionId: string, event: SessionEvent) {
-    switch (event.type) {
-      case 'text_delta': {
-        // PR-UI-Cx (@kenji msg 94b0063d / cd09bcac / fixup v2 3c01e901):
-        // assistant `text_delta` chokepoint. The pure
-        // `applyAssistantDelta` helper from `@maka/ui/assistant-stream`
-        // is the single trust-boundary point for:
-        //   1. per-delta `redactSecrets` BEFORE state,
-        //   2. per-delta cap (tail-keep single misbehaving multi-MB
-        //      delta with a marker),
-        //   3. CROSS-DELTA `redactSecrets` on the freshly-appended
-        //      candidate — catches secrets that span delta seams
-        //      (e.g. `"Authorization: Bearer sk-"` + `"abcdef..."`).
-        //   4. per-session total cap (head-keep + trailing marker —
-        //      assistant text is read top-down).
-        //
-        // raw `event.text` only flows through the helper input; it
-        // never enters state un-redacted or un-capped.
-        //
-        // Combined state shape: one functional updater owns visible
-        // text, truncation, phase, and message identity, so the final
-        // `text_complete` handoff can drain the same bubble instead of
-        // racing a committed-message refresh.
-        setStreamingBySession((current) => {
-          const prevSlot = current[sessionId];
-          const prevText = prevSlot?.text ?? '';
-          const applied = applyAssistantDelta(prevText, event.text);
-          const nextTruncated = (prevSlot?.truncated ?? false) || applied.truncated;
-          // Avoid a re-render when nothing materially changed (e.g.
-          // a non-string `event.text` defensively dropped by the
-          // helper, no truncated change).
-          if (
-            prevSlot !== undefined &&
-            prevSlot.text === applied.text &&
-            prevSlot.truncated === nextTruncated
-          ) {
-            return current;
-          }
-          return {
-            ...current,
-            [sessionId]: {
-              text: applied.text,
-              truncated: nextTruncated,
-              phase: 'streaming',
-              messageId: event.messageId,
-            },
-          };
-        });
-        break;
-      }
-      case 'text_complete':
-        drainAssistantStreaming(sessionId, event.text, event.messageId);
-        break;
-      case 'thinking_delta':
-        // PR-UI-LAYOUT-42 / C0 review fixup (@kenji msg 7885a347):
-        // Anthropic extended-thinking stream. The pure
-        // `applyThinkingDelta` helper from `@maka/ui/thinking-stream`
-        // is the single chokepoint for:
-        //   1. secondary `redactSecrets` BEFORE state (thinking can
-        //      echo prompts / env / tool stderr / pasted credentials;
-        //      raw text must not enter React state),
-        //   2. per-delta cap (tail-keep a single misbehaving multi-MB
-        //      delta with a truncation marker),
-        //   3. per-session total cap (tail-keep most recent reasoning
-        //      so the user sees the current chain of thought, not the
-        //      start of an old run).
-        // The renderer also tracks a per-session monotonic
-        // `outputTruncated`-style flag so the `ReasoningPanel` header
-        // can show a "已截断" pill.
-        setThinkingBySession((current) => {
-          const prev = current[sessionId] ?? '';
-          const applied = applyThinkingDelta(prev, event.text);
-          if (applied.truncated) {
-            setThinkingTruncatedBySession((flags) =>
-              flags[sessionId] ? flags : { ...flags, [sessionId]: true },
-            );
-          }
-          return { ...current, [sessionId]: applied.text };
-        });
-        break;
-      case 'thinking_complete':
-        // PR-UI-LAYOUT-42 / C0 review fixup: final thinking block —
-        // ProviderEvent's `text` is the FULL final reasoning string,
-        // so we replace rather than append (still through the
-        // redaction + cap chokepoint via `applyThinkingComplete`).
-        // Keep visible until `text_complete` collapses the panel; this
-        // avoids the flicker between "thinking done" and "answer streaming".
-        setThinkingBySession((current) => {
-          const applied = applyThinkingComplete(event.text);
-          // PR-UI-C0 review nit #1 (@kenji msg 68ca6bc7): `complete`
-          // is the replace path — the final payload is the source of
-          // truth. If earlier deltas triggered the cap but the final
-          // complete fits clean, the `已截断` pill should reset to
-          // match reality, not remain monotonically true. Overwrite
-          // the per-session truncated flag with `applied.truncated`.
-          setThinkingTruncatedBySession((flags) => {
-            if ((flags[sessionId] === true) === applied.truncated) return flags;
-            if (applied.truncated) {
-              return { ...flags, [sessionId]: true };
-            }
-            const next = { ...flags };
-            delete next[sessionId];
-            return next;
-          });
-          return { ...current, [sessionId]: applied.text };
-        });
-        break;
-      case 'tool_start':
-        upsertTool(sessionId, event.toolUseId, {
-          toolUseId: event.toolUseId,
-          toolName: event.toolName,
-          displayName: event.displayName,
-          intent: event.intent,
-          status: 'pending',
-          args: event.args,
-        });
-        break;
-      case 'tool_output_delta':
-        // PR-UI-12 (@yuejing 2026-05-22): consume PR-REAL-4 typed
-        // streaming. We dedupe by `seq` (per-toolCallId monotonic from
-        // runtime) and insert in sorted order, so out-of-order delivery
-        // or `tool_result`-vs-delta races repair without flicker.
-        // Runtime already redacts secrets at chunk granularity; the
-        // renderer still runs a secondary redaction/cap pass inside
-        // `appendToolOutputChunk` before text reaches React state.
-        appendToolOutputChunk(sessionId, event.toolUseId, {
-          seq: event.seq,
-          stream: event.stream,
-          text: event.chunk,
-          redacted: event.redacted,
-          createdAt: event.createdAt,
-        });
-        break;
-      case 'permission_request':
-        setPermissionBySession((current) => enqueuePermission(current, sessionId, event));
-        upsertTool(sessionId, event.toolUseId, {
-          toolUseId: event.toolUseId,
-          toolName: event.toolName,
-          status: 'waiting_permission',
-          args: event.args,
-        });
-        break;
-      case 'permission_decision_ack':
-        setPermissionBySession((current) => dequeuePermission(current, sessionId, event.requestId));
-        upsertTool(sessionId, event.toolUseId, {
-          toolUseId: event.toolUseId,
-          status: event.decision === 'allow' ? 'running' : 'errored',
-        });
-        break;
-      case 'tool_result':
-        // A permission that ended without a user decision (runtime timeout /
-        // expiry) emits a tool_result, not a permission_decision_ack — drain any
-        // stale queue entry for this tool so it can't resurface as an
-        // un-answerable overlay. No-op when the ack already dequeued it.
-        setPermissionBySession((current) => dequeuePermissionByToolUseId(current, sessionId, event.toolUseId));
-        upsertTool(sessionId, event.toolUseId, {
-          toolUseId: event.toolUseId,
-          status: event.isError ? 'errored' : 'completed',
-          result: event.content,
-          durationMs: event.durationMs,
-        });
-        void refreshMessages(sessionId);
-        break;
-      case 'error':
-        clearStreaming(sessionId);
-        setPermissionBySession((current) => clearPermissions(current, sessionId));
-        if (activeIdRef.current === sessionId) {
-          if (isNoRealConnectionEvent(event)) {
-            const reason = noRealConnectionReasonFromEvent(event);
-            showModelSetupToast(noRealConnectionSetupDescription(reason), reason);
-          } else {
-            toastApi.error('对话出错', sessionEventErrorMessage(event));
-          }
-        }
-        markInFlightToolsInterrupted(sessionId);
-        void refreshSessions();
-        void refreshMessages(sessionId);
-        break;
-      case 'abort':
-        clearStreaming(sessionId);
-        setPermissionBySession((current) => clearPermissions(current, sessionId));
-        markInFlightToolsInterrupted(sessionId);
-        void refreshSessions();
-        void refreshMessages(sessionId);
-        break;
-      case 'complete':
-        let deferMessageRefresh = false;
-        if (event.stopReason !== 'permission_handoff') {
-          const slot = streamingBySessionRef.current[sessionId];
-          if (slot?.text) {
-            setStreamingBySession((current) => markAssistantStreamSlotDraining(current, sessionId));
-            clearThinking(sessionId);
-            deferMessageRefresh = true;
-          } else {
-            clearStreaming(sessionId);
-          }
-          // PR-PERMISSION-UI-CLEANUP-0: parallel the `abort` branch
-          // above — drop any stranded permission request for this
-          // session when it completes for non-permission-handoff
-          // reasons. Without this, a session that finishes while a
-          // permission overlay was mounted would leave the overlay
-          // stuck on screen until the user manually switches away.
-          setPermissionBySession((current) => clearPermissions(current, sessionId));
-        }
-        void refreshSessions();
-        if (!deferMessageRefresh) {
-          void refreshMessages(sessionId);
-        }
-        break;
-      default:
-        break;
     }
   }
 
@@ -2554,151 +1467,6 @@ export function AppShell() {
     openSettingsSection('models');
   }
 
-  function upsertTool(sessionId: string, toolUseId: string, patch: Partial<ToolActivityItem> & { toolUseId: string }) {
-    setLiveToolsBySession((current) => {
-      const list = current[sessionId] ?? [];
-      const index = list.findIndex((item) => item.toolUseId === toolUseId);
-      const base: ToolActivityItem =
-        index >= 0
-          ? list[index]!
-          : {
-              toolUseId,
-              toolName: patch.toolName ?? 'Tool',
-              status: 'pending',
-              args: patch.args,
-            };
-      // PR-UI-12 fixup (@xuan review): never let `tool_start` arriving
-      // AFTER an in-flight `tool_output_delta` regress a `running` item
-      // back to `pending`. The delta itself already proved the tool is
-      // live; the status dot must not lie. Keep `base.status` whenever
-      // the incoming patch wants `pending` but we have output or are
-      // already in a later state.
-      const wantsPending = patch.status === 'pending';
-      const hasOutput = (base.outputChunks?.length ?? 0) > 0;
-      const isLaterStatus =
-        base.status === 'running'
-        || base.status === 'waiting_permission'
-        || base.status === 'completed'
-        || base.status === 'errored'
-        || base.status === 'interrupted';
-      const nextStatus = wantsPending && (hasOutput || isLaterStatus)
-        ? base.status
-        : patch.status ?? base.status;
-      const nextItem: ToolActivityItem = { ...base, ...patch, status: nextStatus };
-      const nextList = index >= 0 ? list.map((item, itemIndex) => (itemIndex === index ? nextItem : item)) : [...list, nextItem];
-      return { ...current, [sessionId]: nextList };
-    });
-  }
-
-  /**
-   * PR-UI-12 fixup (@xuan post-signoff cleanup): shared helper for the
-   * abort + error event paths. A turn-ending event leaves any tool
-   * that was `pending` / `running` / `waiting_permission` orphaned
-   * because the runtime won't emit a per-tool terminal `tool_result`
-   * for it. Flip those tools to `interrupted` so the `ToolOutputStream`
-   * header reads "已中断 · 已收到的输出", the live pulse stops, and
-   * the `materializeTurns` merge `{...persisted, ...live}` doesn't
-   * mask the persisted `interrupted` status with stale live state.
-   *
-   * Tools that already reached terminal (`completed` / `errored` /
-   * `interrupted`) are left alone. Tools without buffer are still
-   * flipped — the user shouldn't see a forever-spinning status dot
-   * just because the tool happened to produce no streamed output.
-   */
-  function markInFlightToolsInterrupted(sessionId: string) {
-    setLiveToolsBySession((current) => {
-      const list = current[sessionId];
-      if (!list || list.length === 0) return current;
-      let changed = false;
-      const nextList = list.map((tool) => {
-        const isInFlight =
-          tool.status === 'pending'
-          || tool.status === 'running'
-          || tool.status === 'waiting_permission';
-        if (!isInFlight) return tool;
-        changed = true;
-        return { ...tool, status: 'interrupted' as const };
-      });
-      return changed ? { ...current, [sessionId]: nextList } : current;
-    });
-  }
-
-  /**
-   * PR-UI-12 — append a streamed chunk to a tool's output buffer.
-   *
-   * Invariants enforced here, not relied on from the event source:
-   *  - Dedup by `seq` (per-toolCallId monotonic from runtime). If a
-   *    seq already exists, we drop the incoming chunk — important on
-   *    sessionEvents replays or main-process reconnects.
-   *  - Sorted insert by `seq`. The runtime emits in-order, but
-   *    `tool_result` racing against the last delta could land here
-   *    after a flush, and renderer reconnect could deliver fragments
-   *    out of order. Always keep the array sorted so React renders
-   *    stable visual order.
-   *  - **Secondary redaction** (PR-UI-12 fixup #2, @kenji A3 msg
-   *    365ff8b9): chunk text runs through `redactSecrets` BEFORE
-   *    landing in React state. The renderer does not trust upstream
-   *    redaction alone — raw secrets must not reach state /
-   *    DevTools / clipboard / future serialization paths.
-   *  - **Per-chunk + per-tool caps** (same fixup): single oversize
-   *    chunk is tail-truncated; per-tool count + total-char caps
-   *    drop oldest chunks. Defense in depth against a runaway tool
-   *    flooding the renderer.
-   *  - If the tool doesn't exist yet in `liveToolsBySession`, we
-   *    create a minimal `pending` entry. This covers the rare race
-   *    where `tool_output_delta` arrives before `tool_start` is
-   *    flushed to the renderer; we'd rather show output than drop it.
-   *
-   * All of the above lives in the pure helper `applyToolOutputChunk`
-   * (`@maka/ui/tool-output-stream`) so the redaction + cap logic is
-   * unit-tested without a renderer. This function is just the React
-   * state plumbing around it.
-   */
-  function appendToolOutputChunk(sessionId: string, toolUseId: string, chunk: ToolOutputChunk) {
-    setLiveToolsBySession((current) => {
-      const list = current[sessionId] ?? [];
-      const index = list.findIndex((item) => item.toolUseId === toolUseId);
-      const base: ToolActivityItem =
-        index >= 0
-          ? list[index]!
-          : { toolUseId, toolName: 'Tool', status: 'running', args: undefined };
-      // PR-UI-12 review fixup #2 (@kenji A3 msg 365ff8b9):
-      // `applyToolOutputChunk` is the single chokepoint for
-      // - dedupe-by-seq
-      // - sorted insertion
-      // - SECONDARY REDACTION via `redactSecrets` (never trust the
-      //   upstream redactor alone; raw text must not enter React state)
-      // - per-chunk size cap (tail-keep + truncation marker)
-      // - per-tool count + total-char caps (drop oldest)
-      // The pure helper lives in `@maka/ui/tool-output-stream` so the
-      // logic is testable without a renderer.
-      const applied = applyToolOutputChunk(base.outputChunks, chunk);
-      // Dedupe short-circuit: helper returned the same `chunks` array
-      // reference, meaning the seq was already present. Skip the
-      // re-render entirely if the tool item already exists; the only
-      // observable change would be re-asserting `outputTruncated`,
-      // which is monotonic so no-op.
-      if (index >= 0 && applied.chunks === (base.outputChunks ?? [])) {
-        return current;
-      }
-      const nextItem: ToolActivityItem = {
-        ...base,
-        outputChunks: applied.chunks,
-        // Once `truncated` flips true we stick — a later non-truncated
-        // chunk shouldn't make the UI claim the stream is now complete.
-        outputTruncated: base.outputTruncated || applied.truncated,
-        // Promote `pending` → `running` once we see live output, so the
-        // status dot doesn't lie about activity.
-        status: base.status === 'pending' ? 'running' : base.status,
-      };
-      const nextList =
-        index >= 0
-          ? list.map((item, itemIndex) => (itemIndex === index ? nextItem : item))
-          : [...list, nextItem];
-      return { ...current, [sessionId]: nextList };
-    });
-  }
-
   function startColumnResize(event: PointerEvent<HTMLDivElement>) {
     if (sessionListCollapsed) return;
     event.preventDefault();
@@ -2761,7 +1529,6 @@ export function AppShell() {
     setSessionListWidth(clampSessionListWidth(next));
   }
 
-  const hasModalOpen = Boolean(activePermission) || helpOpen || paletteOpen || searchModalOpen;
   const activeMessageLoadError = activeId ? messageLoadErrorBySession[activeId] : undefined;
   const homeSurfaceActive =
     navSelection.section === 'sessions'
@@ -2771,12 +1538,6 @@ export function AppShell() {
     && liveTools.length === 0
     && !activeMessageLoadError;
   const onboardingComposerHidden = showOnboardingHero && onboardingState !== undefined;
-  useEffect(() => {
-    void window.maka.appWindow.setTitlebarControlsVisible(!hasModalOpen).catch(() => {});
-    return () => {
-      void window.maka.appWindow.setTitlebarControlsVisible(true).catch(() => {});
-    };
-  }, [hasModalOpen]);
 
   return (
     <div className="appFrame agents-layout-root" data-agents-page>
@@ -3224,281 +1985,39 @@ export function AppShell() {
         <CommandPalette
           onClose={closePalette}
           onSelectSession={paletteOnSelectSession}
-          commands={buildCommandList({
-            sessions: visibleSessions,
-            activeSessionId: activeId,
-            themePref,
-            connections,
-            defaultSlug: defaultConnection,
-            onSelectSession: (sessionId) => {
-              openSessionInChat(sessionId);
-            },
-            onNewChat: () => createSession(),
-            onStartDeepResearch: async () => {
-              await handleQuickChatSubmit('', 'deep_research');
-            },
-            onStartPlanReminder: openPlanReminderForm,
-            onOpenSettings: openSettings,
-            onOpenSettingsSection: (section) => openSettingsSection(section),
-            // PR-UX-POLISH-1 commit 4 (WAWQAQ `e0dbad11` + kenji `2844f64f`):
-            // use the openHelp callback returned by useKeyboardHelp directly,
-            // instead of dispatching a synthetic KeyboardEvent. Same effect,
-            // clearer intent, and avoids the foot-gun where a typed `?` in a
-            // text input would be swallowed by the global keydown listener.
-            onOpenShortcuts: openHelp,
-            onSetTheme: setThemePref,
-            onTestConnection: async (slug) => {
-              try {
-                const result = await window.maka.connections.test(slug);
-                const conn = connections.find((c) => c.slug === slug);
-                const name = conn?.name ?? slug;
-                if (result.ok) {
-                  toastApi.success(
-                    `连接已验证 · ${name}`,
-                    `延迟 ${result.latencyMs ?? '?'} ms${result.modelTested ? ' · ' + result.modelTested : ''}`,
-                  );
-                } else {
-                  toastApi.error(`连接测试失败 · ${name}`, commandPaletteConnectionTestFailureMessage(result));
-                }
-                await refreshConnections();
-              } catch (err) {
-                toastApi.error(
-                  '测试出错',
-                  commandPaletteActionErrorMessage(err, '连接测试暂时不可用，请稍后重试。'),
-                );
-              }
-            },
-            onSetDefaultConnection: async (slug) => {
-              try {
-                await window.maka.connections.setDefault(slug);
-                await refreshConnections();
-                const conn = connections.find((c) => c.slug === slug);
-                toastApi.success(`已设为默认 · ${conn?.name ?? slug}`);
-              } catch (err) {
-                toastApi.error(
-                  '切换默认失败',
-                  commandPaletteActionErrorMessage(err, '默认模型暂时无法切换，请稍后重试。'),
-                );
-              }
-            },
-            onOpenWorkspace: async () => {
-              await openWorkspaceFolder();
-            },
-            onOpenProjectFolder: () => openProjectFolder(),
-            onOpenSkillsFolder: () => openSkillsFolder(),
-            onSelectModule: (selection) => {
-              setNavSelection(selection);
-              closePalette();
-            },
-            onExportActiveConversation: async () => {
-              if (!activeId) return;
-              const session = sessions.find((s) => s.id === activeId);
-              const markdown = renderConversationMarkdown(session?.name ?? '新建对话', messages);
-              try {
-                await navigator.clipboard.writeText(markdown);
-                toastApi.success(
-                  '已复制对话为 Markdown',
-                  `${markdown.split('\n').length} 行 · 可粘贴到 Notion / Obsidian / GitHub`,
-                );
-              } catch {
-                toastApi.error('复制失败', '剪贴板不可用');
-              }
-            },
-            onSaveActiveConversationToFile: async () => {
-              if (!activeId) return;
-              const session = sessions.find((s) => s.id === activeId);
-              const sessionName = session?.name ?? '新建对话';
-              const markdown = renderConversationMarkdown(sessionName, messages);
-              const now = new Date();
-              const yyyy = now.getFullYear();
-              const mm = String(now.getMonth() + 1).padStart(2, '0');
-              const dd = String(now.getDate()).padStart(2, '0');
-              // Make the filename mostly portable: collapse whitespace
-              // and quote chars that some file pickers don't like.
-              const sanitizedSession = sessionName
-                .replace(/[\s ]+/g, '-')
-                .replace(/["<>:|?*]/g, '')
-                .slice(0, 80);
-              const defaultName = `maka-${sanitizedSession}-${yyyy}-${mm}-${dd}.md`;
-              try {
-                const result = await window.maka.sessions.saveConversationToFile({ markdown, defaultName });
-                if (result.ok) {
-                  toastApi.success(
-                    '已保存当前对话',
-                    `${markdown.split('\n').length} 行 · 保存为 ${defaultName}`,
-                  );
-                } else if (result.reason === 'canceled') {
-                  // User dismissed the dialog — no toast.
-                } else if (result.reason === 'invalid_input') {
-                  toastApi.error('保存失败', '导出内容无效');
-                } else {
-                  toastApi.error('保存失败', '无法写入选择的位置');
-                }
-              } catch (err) {
-                toastApi.error(
-                  '保存失败',
-                  commandPaletteActionErrorMessage(err, '导出当前对话失败，请稍后重试。'),
-                );
-              }
-            },
-            onOpenLocalMemoryFile: async () => {
-              try {
-                const result = await window.maka.memory.openFile();
-                if (!result.ok) {
-                  toastApi.error('无法打开 MEMORY.md', result.message);
-                }
-              } catch (err) {
-                toastApi.error(
-                  '打开失败',
-                  commandPaletteActionErrorMessage(err, '无法打开 MEMORY.md，请稍后重试。'),
-                );
-              }
-            },
-            onOpenWorkspaceInstructionsFile: async () => {
-              try {
-                // PR-CMD-PALETTE-OPEN-WORKSPACE-INSTRUCTIONS-0: open the
-                // first available workspace instruction file. If none are
-                // available, surface a hint so the user knows where to
-                // create one rather than getting a silent no-op.
-                const state = await window.maka.workspaceInstructions.getState();
-                const available = state.files.find((f) => f.status === 'available');
-                if (!available) {
-                  toastApi.info(
-                    '等待创建项目指引',
-                    '在 Settings · 记忆 创建 AGENTS.md 或 CLAUDE.md',
-                  );
-                  return;
-                }
-                const result = await window.maka.workspaceInstructions.openFile(available.file);
-                if (!result.ok) {
-                  toastApi.error(`无法打开 ${available.file}`, result.message);
-                }
-              } catch (err) {
-                toastApi.error(
-                  '打开失败',
-                  commandPaletteActionErrorMessage(err, '无法打开项目指引，请稍后重试。'),
-                );
-              }
-            },
-            onSetPermissionMode: (mode) => setPermissionMode(mode),
+          commands={buildAppShellCommandList({
+            activeId,
             activePermissionMode: activeSessionForView?.permissionMode,
-            onCopyTodayDailyReview: async () => {
-              try {
-                const summary = await dailyReviewBridge.fetchDay(0, 1);
-                const markdown = formatDailyReviewMarkdown(summary, '今天');
-                await navigator.clipboard.writeText(markdown);
-                toastApi.success(
-                  '已复制今日回顾为 Markdown',
-                  `${summary.totals.sessionCount} 个对话 · ${summary.totals.requestCount} 个请求`,
-                );
-              } catch (err) {
-                toastApi.error(
-                  '复制失败',
-                  dailyReviewActionErrorMessage(err, '今日回顾暂时不可用，或剪贴板被系统拒绝。'),
-                );
-              }
-            },
-            onPasteTodayDailyReviewIntoComposer: async () => {
-              const owner = captureComposerImportOwner();
-              if (!owner.sessionId) return;
-              try {
-                const summary = await dailyReviewBridge.fetchDay(0, 1);
-                const markdown = formatDailyReviewMarkdown(summary, '今天');
-                if (!isComposerImportOwnerActive(owner)) return;
-                composerRef.current?.appendText(markdown);
-                toastApi.success(
-                  '已追加今日回顾到输入框',
-                  `${summary.totals.sessionCount} 个对话 · ${summary.totals.requestCount} 个请求`,
-                );
-              } catch (err) {
-                if (isComposerImportOwnerActive(owner)) {
-                  toastApi.error(
-                    '粘贴失败',
-                    dailyReviewActionErrorMessage(err, '今日回顾暂时不可用，请稍后重试。'),
-                  );
-                }
-              }
-            },
-            onSaveTodayDailyReviewToFile: async () => {
-              try {
-                const summary = await dailyReviewBridge.fetchDay(0, 1);
-                const markdown = formatDailyReviewMarkdown(summary, '今天');
-                await saveDailyReviewMarkdown({ markdown, label: '今天', summary });
-              } catch (err) {
-                toastApi.error(
-                  '保存失败',
-                  dailyReviewActionErrorMessage(err, '今日回顾暂时不可用，请稍后重试。'),
-                );
-              }
-            },
-            onCopyEnvSummary: async () => {
-              try {
-                const info = await window.maka.app.info();
-                const platformPretty =
-                  info.platform === 'darwin'
-                    ? 'macOS'
-                    : info.platform === 'win32'
-                      ? 'Windows'
-                      : info.platform === 'linux'
-                        ? 'Linux'
-                        : info.platform;
-                const buildLine =
-                  info.buildMode === 'dev'
-                    ? `- Build: dev${info.buildCommit ? ` @ ${info.buildCommit}` : ''}`
-                    : '- Build: packaged';
-                const summary = [
-                  `**Maka** v${info.appVersion}`,
-                  ``,
-                  `- Electron: ${info.electronVersion}`,
-                  `- Node: ${info.nodeVersion}`,
-                  `- Chrome: ${info.chromeVersion}`,
-                  `- Platform: ${platformPretty} ${info.osRelease}`,
-                  `- Arch: ${info.arch}`,
-                  buildLine,
-                ].join('\n');
-                await navigator.clipboard.writeText(summary);
-                toastApi.success(
-                  '已复制环境信息',
-                  `Maka v${info.appVersion} · ${platformPretty} · ${info.arch}`,
-                );
-              } catch (err) {
-                toastApi.error(
-                  '复制失败',
-                  commandPaletteActionErrorMessage(err, '剪贴板不可用或被系统拒绝'),
-                );
-              }
-            },
-            onTestNetworkProxy: async () => {
-              try {
-                // PR-CMD-PALETTE-NETWORK-PROXY-TEST-0: surface the
-                // proxy test result via toast so a user debugging a
-                // connection issue does not need to open Settings →
-                // 网络. `testNetworkProxy(undefined)` uses the
-                // current persisted proxy config.
-                const result = await window.maka.settings.testNetworkProxy(undefined);
-                if (result.ok) {
-                  const latency = result.latencyMs ? ` · ${result.latencyMs}ms` : '';
-                  toastApi.success('网络代理测试通过', `${result.message}${latency}`);
-                } else {
-                  toastApi.error('网络代理测试失败', result.message);
-                }
-              } catch (err) {
-                toastApi.error(
-                  '测试失败',
-                  commandPaletteActionErrorMessage(err, '网络代理测试暂时不可用，请稍后重试。'),
-                );
-              }
-            },
+            connections,
+            defaultConnection,
+            dailyReviewBridge,
+            messages,
+            sessions,
+            themePref,
+            visibleSessions,
+            captureComposerImportOwner,
+            closePalette,
+            composerRef,
+            createSession,
+            handleQuickChatSubmit,
+            isComposerImportOwnerActive,
+            openHelp,
+            openPlanReminderForm,
+            openProjectFolder,
+            openSessionInChat,
+            openSettings,
+            openSettingsSection,
+            openSkillsFolder,
+            openWorkspaceFolder,
+            refreshConnections,
+            saveDailyReviewMarkdown,
+            setNavSelection,
+            setPermissionMode,
+            setThemePref,
+            toastApi,
           })}
         />
       )}
     </div>
   );
 }
-
-const modeDescriptions: Record<PermissionMode, string> = {
-  explore: '只读工具直通，写入或网络仍需确认。',
-  ask: '所有敏感工具调用前都会停下来征求允许或拒绝。',
-  execute: '常见工具直通；破坏性操作、特权操作和浏览器操作仍然确认。',
-  bypass: '跳过全部工具确认，包括破坏性操作、特权操作和浏览器操作。',
-};

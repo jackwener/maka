@@ -5,7 +5,7 @@ import { readRendererShellCombinedSource } from './renderer-shell-source-helpers
 describe('command palette session navigation contract', () => {
   it('routes normal session commands back to the chat surface before selecting the session', async () => {
     const main = await readRendererShellCombinedSource();
-    const paletteBlock = main.match(/commands=\{buildCommandList\(\{[\s\S]*?onNewChat:/)?.[0] ?? '';
+    const paletteBlock = main.match(/return buildCommandList\(\{[\s\S]*?onNewChat:/)?.[0] ?? '';
 
     assert.match(
       paletteBlock,
