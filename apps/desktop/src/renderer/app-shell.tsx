@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { useCallback, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { CircleGauge, Grid3X3, HelpCircle, MessageCircleQuestion, PanelLeftOpen, Search, SquarePen } from '@maka/ui/icons';
 import type {
   ConnectionEvent,
@@ -72,7 +72,6 @@ import { safeLocalStorageSet } from './browser-storage';
 import { applyLocalSessionRead, createSessionListRefresher, type SessionListRefresher, type SessionReadBoundaries } from './session-read-state';
 import { countSessions, filterSessions, readNavSelection } from './nav-selection';
 import {
-  clampSessionListWidth,
   readSessionListCollapsed,
   readSessionListWidth,
   SESSION_LIST_COLLAPSED_WIDTH,
@@ -98,6 +97,7 @@ import { createAppShellSessionEventHandlers } from './app-shell-session-events';
 import { createAppShellVisualSmokeActions } from './app-shell-visual-smoke';
 import { createAppShellChatActions } from './app-shell-chat-actions';
 import { createAppShellTurnActions } from './app-shell-turn-actions';
+import { createAppShellLayoutActions } from './app-shell-layout-actions';
 import { createAppShellImportActions } from './app-shell-import-actions';
 import { createAppShellSessionRowActions } from './app-shell-session-row-actions';
 import { createAppShellSessionSettingsActions } from './app-shell-session-settings-actions';
@@ -812,6 +812,11 @@ export function AppShell() {
     sessions.length === 0 && onboardingState !== undefined && onboardingState.kind !== 'ready_with_history';
   const [sessionListWidth, setSessionListWidth] = useState(() => readSessionListWidth());
   const [sessionListCollapsed, setSessionListCollapsed] = useState(() => readSessionListCollapsed());
+  const { startColumnResize, onResizeHandleKeyDown } = createAppShellLayoutActions({
+    sessionListCollapsed,
+    sessionListWidth,
+    setSessionListWidth,
+  });
 
   function setActiveId(next: string | undefined): void {
     activeIdRef.current = next;
@@ -1293,68 +1298,6 @@ export function AppShell() {
       },
     });
     openSettingsSection('models');
-  }
-
-  function startColumnResize(event: PointerEvent<HTMLDivElement>) {
-    if (sessionListCollapsed) return;
-    event.preventDefault();
-    try {
-      event.currentTarget.setPointerCapture(event.pointerId);
-    } catch {
-      /* pointer capture can fail if the target is detached mid-drag */
-    }
-    const startX = event.clientX;
-    const start = sessionListWidth;
-    document.body.classList.add('isResizingColumns');
-    let cleaned = false;
-
-    function onMove(moveEvent: globalThis.PointerEvent) {
-      const delta = moveEvent.clientX - startX;
-      setSessionListWidth(clampSessionListWidth(start + delta));
-    }
-
-    function cleanupResize() {
-      if (cleaned) return;
-      cleaned = true;
-      document.body.classList.remove('isResizingColumns');
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', cleanupResize);
-      window.removeEventListener('pointercancel', cleanupResize);
-      window.removeEventListener('blur', cleanupResize);
-    }
-
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', cleanupResize);
-    window.addEventListener('pointercancel', cleanupResize);
-    window.addEventListener('blur', cleanupResize);
-  }
-
-  function onResizeHandleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (sessionListCollapsed) return;
-    // Keyboard-accessible separator (WAI-ARIA orientation=vertical convention):
-    //   ArrowLeft  → -10 px       ArrowRight → +10 px
-    //   Shift+Arrow → ±50 px       Home → min       End → max
-    const SMALL = 10;
-    const LARGE = 50;
-    let next = sessionListWidth;
-    switch (event.key) {
-      case 'ArrowLeft':
-        next = sessionListWidth - (event.shiftKey ? LARGE : SMALL);
-        break;
-      case 'ArrowRight':
-        next = sessionListWidth + (event.shiftKey ? LARGE : SMALL);
-        break;
-      case 'Home':
-        next = SESSION_LIST_EXPANDED_MIN_WIDTH;
-        break;
-      case 'End':
-        next = SESSION_LIST_EXPANDED_MAX_WIDTH;
-        break;
-      default:
-        return;
-    }
-    event.preventDefault();
-    setSessionListWidth(clampSessionListWidth(next));
   }
 
   const activeMessageLoadError = activeId ? messageLoadErrorBySession[activeId] : undefined;
