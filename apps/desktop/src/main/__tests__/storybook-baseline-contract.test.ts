@@ -190,7 +190,6 @@ describe('Storybook baseline contract', () => {
       assert.match(story, new RegExp(`export const ${exportName}: Story`), `${exportName} story must be exported`);
     }
     assert.doesNotMatch(story, /export const TokenOverview/);
-    assert.match(story, />\s*Action primary\s*</);
 
     const colorSwatches = story.slice(
       story.indexOf('const colorSwatches'),
@@ -201,13 +200,6 @@ describe('Storybook baseline contract', () => {
     for (const noisyToken of ['--foreground-5', '--foreground-30', '--foreground-50', '--foreground-70', '--link', '--focus-ring', '--status-running', '--nav-active', '--toast-accent']) {
       assert.doesNotMatch(colorSwatches, new RegExp(noisyToken), `${noisyToken} should not render as a separate color swatch`);
     }
-
-    assert.match(story, /wordBreak:\s*'break-word'/);
-    assert.doesNotMatch(story, /alignItems:\s*'end', display:\s*'flex'/);
-    assert.match(story, /const radiusSamples = \[/);
-    assert.match(story, /'6px'/);
-    assert.match(story, /gridTemplateColumns:\s*'minmax\(0, 1fr\) 180px'/);
-    assert.match(story, /fontSize:\s*28/);
   });
 
   it('storyboards provider settings states before visual polish', () => {

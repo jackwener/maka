@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { Plus, Search, Trash2 } from '@maka/ui/icons';
 import { Button } from '../src/ui.js';
 
 const meta = {
@@ -11,14 +12,14 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 const colorSwatches = [
-  ['background', '--background'],
-  ['foreground', '--foreground'],
-  ['accent', '--accent'],
-  ['action', '--action'],
-  ['control', '--control'],
-  ['info', '--info'],
-  ['success', '--success'],
-  ['destructive', '--destructive'],
+  ['background', '--background', '底色'],
+  ['foreground', '--foreground', '正文、图标'],
+  ['accent', '--accent', '点缀：logo、live dot、focus ring'],
+  ['action', '--action', 'CTA 填充：主按钮、提交'],
+  ['control', '--control', '选中态：checkbox、switch、progress'],
+  ['info', '--info', '提示、警告'],
+  ['success', '--success', '成功、已连接'],
+  ['destructive', '--destructive', '错误、删除'],
 ] as const;
 
 const emphasisAliases = [
@@ -29,6 +30,17 @@ const emphasisAliases = [
   '--toast-accent',
 ] as const;
 
+const foregroundScale = [
+  ['foreground-2', '--foreground-2'],
+  ['foreground-5', '--foreground-5'],
+  ['foreground-10', '--foreground-10'],
+  ['foreground-20', '--foreground-20'],
+  ['foreground-40', '--foreground-40'],
+  ['foreground-60', '--foreground-60'],
+  ['foreground-80', '--foreground-80'],
+  ['foreground-95', '--foreground-95'],
+] as const;
+
 const radiusSamples = [
   ['control', '6px', '--radius-control', 'Buttons, inputs, compact chips', 96, 56],
   ['surface', '8px', '--radius-surface', 'Cards, popovers, code blocks', 112, 64],
@@ -36,30 +48,128 @@ const radiusSamples = [
   ['pill', '999px', '--radius-pill', 'Badges, dots, status pills', 144, 56],
 ] as const;
 
+function SwatchTile({ name, token, fill, usage }: { name: string; token: string; fill: string; usage: string }) {
+  const isBackground = token === '--background';
+  const isForeground = token === '--foreground';
+  const fillStyle = isBackground
+    ? {
+        background: `var(${token})`,
+        boxShadow: 'inset 0 0 0 1px var(--border-strong)',
+      }
+    : isForeground
+      ? {
+          background: `var(${token})`,
+          boxShadow: 'var(--shadow-minimal-flat)',
+        }
+      : { background: `var(${token})` };
+  return (
+    <div style={{ display: 'grid', gap: 6, minWidth: 0 }}>
+      <div
+        style={{
+          ...fillStyle,
+          borderRadius: 'var(--radius-surface)',
+          height: 56,
+          position: 'relative',
+        }}
+      >
+        <span
+          style={{
+            position: 'absolute',
+            left: 8,
+            bottom: 6,
+            fontSize: 11,
+            fontVariantNumeric: 'tabular-nums',
+            color: isForeground ? 'var(--background)' : 'var(--foreground)',
+            opacity: 0.7,
+          }}
+        >
+          Aa
+        </span>
+      </div>
+      <strong style={{ fontSize: 12, fontWeight: 600 }}>{name}</strong>
+      <code style={{ color: 'var(--foreground-60)', fontSize: 11, wordBreak: 'break-word' }}>{token}</code>
+      <span style={{ color: 'var(--foreground-50)', fontSize: 10, lineHeight: 1.3 }}>{usage}</span>
+    </div>
+  );
+}
+
+function ScaleTile({ name, token }: { name: string; token: string }) {
+  return (
+    <div style={{ display: 'grid', gap: 4, minWidth: 0 }}>
+      <div
+        style={{
+          background: `var(${token})`,
+          borderRadius: 'var(--radius-control)',
+          boxShadow: 'inset 0 0 0 1px var(--border)',
+          height: 32,
+        }}
+      />
+      <code style={{ color: 'var(--foreground-60)', fontSize: 10, wordBreak: 'break-word' }}>{name}</code>
+    </div>
+  );
+}
+
 export const Colors: Story = {
   render: () => (
-    <section style={{ display: 'grid', gap: 12, maxWidth: 760 }}>
-      <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Colors</h2>
-      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(132px, 1fr))' }}>
-        {colorSwatches.map(([name, token]) => (
-          <div key={token} style={{ display: 'grid', gap: 6, minWidth: 0 }}>
-            <div
-              style={{
-                background: `var(${token})`,
-                borderRadius: 'var(--radius-surface)',
-                boxShadow: 'var(--shadow-minimal-flat)',
-                height: 48,
-              }}
-            />
-            <strong style={{ fontSize: 12, fontWeight: 600 }}>{name}</strong>
-            <code style={{ color: 'var(--foreground-60)', fontSize: 11, wordBreak: 'break-word' }}>{token}</code>
-          </div>
-        ))}
+    <section style={{ display: 'grid', gap: 24, maxWidth: 820 }}>
+      <div style={{ display: 'grid', gap: 4 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Colors</h2>
+        <p style={{ color: 'var(--foreground-60)', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+          六色哲学：其余派生色都是 foreground 的 alpha 叠加或 solid 混合。
+        </p>
       </div>
-      <div style={{ color: 'var(--foreground-60)', display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 12 }}>
-        {emphasisAliases.map((token) => (
-          <code key={token} style={{ borderRadius: 'var(--radius-control)', background: 'var(--foreground-5)', padding: '2px 6px' }}>{token}</code>
-        ))}
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 600, margin: 0, color: 'var(--foreground-70)' }}>语义基色</h3>
+        <div
+          style={{
+            display: 'grid',
+            gap: 12,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(132px, 1fr))',
+          }}
+        >
+          {colorSwatches.map(([name, token, usage]) => (
+            <SwatchTile key={token} name={name} token={token} fill={token} usage={usage} />
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 600, margin: 0, color: 'var(--foreground-70)' }}>强调色 alias</h3>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {emphasisAliases.map((token) => (
+            <code
+              key={token}
+              style={{
+                borderRadius: 'var(--radius-control)',
+                background: 'var(--foreground-5)',
+                padding: '4px 8px',
+                fontSize: 11,
+                color: 'var(--foreground-80)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              {token}
+            </code>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 600, margin: 0, color: 'var(--foreground-70)' }}>
+          前景色阶 (foreground-N)
+        </h3>
+        <div
+          style={{
+            display: 'grid',
+            gap: 8,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(96px, 1fr))',
+          }}
+        >
+          {foregroundScale.map(([name, token]) => (
+            <ScaleTile key={token} name={name} token={token} />
+          ))}
+        </div>
       </div>
     </section>
   ),
@@ -91,13 +201,22 @@ export const Radius: Story = {
             <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
               <div
                 style={{
-                  background: 'var(--background-elevated)',
+                  background: 'var(--foreground)',
+                  color: 'var(--background)',
                   borderRadius: `var(${token})`,
-                  boxShadow: 'var(--shadow-minimal-flat)',
+                  boxShadow:
+                    'var(--shadow-medium), inset 0 0 0 1px oklch(from var(--foreground) l c h / 0.10)',
                   height,
                   width,
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontSize: 11,
+                  fontVariantNumeric: 'tabular-nums',
+                  opacity: 0.92,
                 }}
-              />
+              >
+                {value}
+              </div>
             </div>
           </div>
         ))}
@@ -108,12 +227,67 @@ export const Radius: Story = {
 
 export const PrimaryActions: Story = {
   render: () => (
-    <section style={{ display: 'grid', gap: 12, maxWidth: 760 }}>
-      <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Primary Actions</h2>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-        <Button>Action primary</Button>
-        <Button variant="secondary">Secondary</Button>
-        <Button variant="outline">Outline</Button>
+    <section style={{ display: 'grid', gap: 20, maxWidth: 760 }}>
+      <div style={{ display: 'grid', gap: 4 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>Primary Actions</h2>
+        <p style={{ color: 'var(--foreground-60)', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+          variant 落到 token 上的实际效果。
+        </p>
+      </div>
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 600, margin: 0, color: 'var(--foreground-70)' }}>
+          variant
+        </h3>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <Button>Action primary</Button>
+          <Button variant="secondary">Secondary</Button>
+          <Button variant="outline">Outline</Button>
+          <Button variant="ghost">Ghost</Button>
+          <Button variant="quiet">Quiet</Button>
+          <Button variant="destructive">Destructive</Button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 600, margin: 0, color: 'var(--foreground-70)' }}>
+          disabled
+        </h3>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <Button disabled>Action primary</Button>
+          <Button variant="secondary" disabled>
+            Secondary
+          </Button>
+          <Button variant="outline" disabled>
+            Outline
+          </Button>
+          <Button variant="destructive" disabled>
+            Destructive
+          </Button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 600, margin: 0, color: 'var(--foreground-70)' }}>
+          size + icon
+        </h3>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <Button size="sm">
+            <Plus /> Small
+          </Button>
+          <Button size="md">
+            <Search /> Medium
+          </Button>
+          <Button size="lg">
+            <Plus /> Large
+          </Button>
+          <Button size="icon" aria-label="添加">
+            <Plus />
+          </Button>
+          <Button size="icon-sm" variant="outline" aria-label="删除">
+            <Trash2 />
+          </Button>
+        </div>
       </div>
     </section>
   ),

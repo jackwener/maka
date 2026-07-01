@@ -105,8 +105,12 @@ describe('issue #406 design-system governance contract', () => {
       for (const match of source.matchAll(motionRe)) {
         const raw = match[0].trim();
         if (raw.includes('animation: none') || raw.includes('[animation:none]')) continue;
-        const animationName = match.slice(1).find(Boolean) ?? raw;
-        if ([...functionalMotion].some((allowed) => animationName.includes(allowed))) continue;
+        const captured = match.slice(1).find(Boolean) ?? raw;
+        // Extract the first identifier (the animation-name) from the captured
+        // string. CSS form: "maka-pulse 1.4s ease-in-out infinite".
+        // Tailwind arbitrary: "maka-pulse_1.4s_ease-in-out_infinite".
+        const animName = captured.replace(/[_\s].*$/, '').replace(/^@keyframes\s+/, '');
+        if (functionalMotion.has(animName)) continue;
         violations.push(`${name}: ${raw}`);
       }
     }
@@ -166,7 +170,7 @@ describe('issue #406 design-system governance contract', () => {
     assert.match(docs, /选中控件继续.*2\.46:1/);
   });
 
-  it('uses the single radius token vocabulary', async () => {
+  it('uses radius tokens for preview card surfaces', async () => {
     const tokens = await readFile(TOKENS_FILE, 'utf8');
     for (const token of ['--radius-control: 6px', '--radius-surface: 8px', '--radius-modal: 12px', '--radius-pill: 999px']) {
       assert.ok(tokens.includes(token), `${token} must be defined in maka-tokens.css`);

@@ -84,7 +84,7 @@
      stay neutral gray per the reference's restraint. */
   --accent: oklch(0.70 0.135 152);
   --accent-rgb: 92, 184, 112;
-  --action: oklch(0.52 0.135 152);
+  --action: oklch(0.46 0.135 152);
   --action-foreground: oklch(0.985 0.003 250);
   --control: oklch(0.52 0.135 152);
   --control-foreground: oklch(0.985 0.003 250);
@@ -323,7 +323,7 @@
 
   --accent: oklch(0.74 0.15 152);
   --accent-rgb: 140, 229, 161;
-  --action: oklch(0.52 0.135 152);
+  --action: oklch(0.46 0.135 152);
   --action-foreground: oklch(0.985 0.003 250);
   --control: oklch(0.52 0.135 152);
   --control-foreground: oklch(0.985 0.003 250);
