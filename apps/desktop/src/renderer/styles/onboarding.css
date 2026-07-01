@@ -489,7 +489,13 @@
    reset here, the ring re-composites into `box-shadow` on focus and
    renders as a second "framed" border nested inside the wrapper's own
    border. Mirrors the same fix already applied to `.maka-composer-textarea`
-   in tool-output.css. */
+   in tool-output.css.
+   `border`/`box-shadow` must be `!important`: the global
+   `:where(input, select, textarea):focus` rule in module-pages.css sets
+   an `!important` inset box-shadow on every focused field, and without
+   matching `!important` here it wins over this rule regardless of this
+   selector's specificity, repainting the exact nested-border bug this
+   file exists to fix — but only while the field is focused. */
 .maka-onboarding-quickchat-input {
   appearance: none;
   box-sizing: border-box;
@@ -501,8 +507,8 @@
   font-size: 15px;
   line-height: 1.5;
   outline: none;
-  border: none;
-  box-shadow: none;
+  border: none !important;
+  box-shadow: none !important;
   --tw-ring-shadow: 0 0 #0000 !important;
   --tw-ring-offset-shadow: 0 0 #0000 !important;
 }

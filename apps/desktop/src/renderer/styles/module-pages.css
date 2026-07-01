@@ -1240,15 +1240,15 @@
      bars. The fix zeroes every visual property the primitive can
      paint, so the inner `<input>` reads as a bare text field and
      the outer label is the only box.
-     Defensive addition (double-border textarea sweep): `border: 0` /
-     `box-shadow: none` here only wins today because the global
-     `:where(input, select, textarea):focus` rule below happens to
-     `!important`-override the primitive's `focus-visible:ring-2`
-     box-shadow too. If that global rule is ever scoped away, this
-     input's own `--tw-ring-shadow` / `--tw-ring-offset-shadow` would
-     re-surface the same double-box bug — see the composer/onboarding
-     textarea fixes for the pattern. Reset them here directly so this
-     rule doesn't depend on an unrelated global fallback. */
+     Correction (double-border textarea sweep, verified live via CDP):
+     `box-shadow: none` here does NOT actually win while the input is
+     focused — the global `:where(input, select, textarea):focus` rule
+     below sets its own `!important` inset box-shadow on every focused
+     field, and `!important` always beats a non-`!important` declaration
+     regardless of this selector's specificity. That repaints the exact
+     nested-box bug on focus. `border-radius`/`background` don't need
+     `!important` (nothing else sets them on focus), but `box-shadow`
+     and the ring-var reset do. */
   min-width: 0;
   width: 100%;
   height: 30px;
@@ -1256,7 +1256,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  box-shadow: none;
+  box-shadow: none !important;
   outline: none;
   padding: 0;
   font-size: 13px;

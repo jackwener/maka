@@ -158,7 +158,13 @@
    don't clear the base Textarea's `focus-visible:ring-2` custom
    properties (`--tw-ring-shadow` / `--tw-ring-offset-shadow`), which
    otherwise re-composite into `box-shadow` on focus and render as a
-   second "framed" border nested inside the composer's own border. */
+   second "framed" border nested inside the composer's own border.
+   `border`/`box-shadow` must be `!important`: the global
+   `:where(input, select, textarea):focus` rule in module-pages.css sets
+   an `!important` inset box-shadow on every focused field, and without
+   matching `!important` here it wins over this rule regardless of this
+   selector's specificity, repainting the exact nested-border bug this
+   file exists to fix — but only while the field is focused. */
 .composer .maka-composer-textarea {
   appearance: none;
   display: block;
@@ -168,8 +174,8 @@
   font-family: var(--font-default);
   font-size: 15px;
   line-height: 1.55;
-  border: none;
-  box-shadow: none;
+  border: none !important;
+  box-shadow: none !important;
   /* local: suppress tailwind ring shadow on this element */
   --tw-ring-shadow: 0 0 #0000 !important;
   --tw-ring-offset-shadow: 0 0 #0000 !important;
