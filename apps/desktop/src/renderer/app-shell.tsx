@@ -11,7 +11,6 @@ import type {
   PermissionMode,
   PlanReminder,
   QuickChatMode,
-  PermissionResponse,
   SessionEventStreamSnapshot,
   SessionSummary,
   SettingsSection,
@@ -81,10 +80,7 @@ import {
   SESSION_LIST_EXPANDED_MIN_WIDTH,
 } from './session-list-layout';
 import {
-  isNoRealConnectionError,
   modelSetupToastCopy,
-  noRealConnectionReasonFromError,
-  noRealConnectionSetupDescription,
 } from './model-connection-errors';
 import {
   buildDailyReviewRunModelOptions,
@@ -100,6 +96,7 @@ import { createAppShellProjectActions, type RendererAppInfo } from './app-shell-
 import { createAppShellSkillActions } from './app-shell-skill-actions';
 import { createAppShellSessionEventHandlers } from './app-shell-session-events';
 import { createAppShellVisualSmokeActions } from './app-shell-visual-smoke';
+import { createAppShellChatActions } from './app-shell-chat-actions';
 import { createAppShellImportActions } from './app-shell-import-actions';
 import { createAppShellSessionRowActions } from './app-shell-session-row-actions';
 import { createAppShellSessionSettingsActions } from './app-shell-session-settings-actions';
@@ -112,9 +109,6 @@ import {
   useAppShellRefSync,
   useSessionEventHealthPolling,
 } from './app-shell-effects';
-
-const USER_MESSAGE_VISIBLE_TIMEOUT_MS = 1_200;
-const USER_MESSAGE_VISIBLE_POLL_MS = 40;
 
 type ComposerImportOwner = {
   sessionId: string | undefined;
@@ -929,6 +923,31 @@ export function AppShell() {
   });
 
   const {
+    send,
+    respondToPermission,
+    refreshMessages,
+    retryMessages,
+  } = createAppShellChatActions({
+    activeIdRef,
+    addPendingSessionAction,
+    captureComposerImportOwner,
+    clearPendingSessionAction,
+    isNewChatSendSurfaceActive,
+    markSessionReadLocally,
+    messageRetryPendingRef,
+    refreshSessions,
+    setActiveId,
+    setMessageLoadErrorBySession,
+    setMessageRetryPendingBySession,
+    setMessages,
+    setNavSelection,
+    showModelSetupToast,
+    toastApi,
+    upsertSessionSummary,
+    validPendingNewChatModel,
+  });
+
+  const {
     importDroppedTextFilesIntoComposer,
     importDroppedTextFilesPrompt,
     importFolderOutlineIntoComposer,
@@ -1109,41 +1128,6 @@ export function AppShell() {
     if (!activeIdRef.current && next[0] && next[0].lastMessageAt) setActiveId(next[0].id);
   }
 
-  function optimisticUserMessage(turnId: string, text: string): StoredMessage {
-    return {
-      type: 'user',
-      id: `optimistic-user-${turnId}`,
-      turnId,
-      ts: Date.now(),
-      text,
-    };
-  }
-
-  function showOptimisticUserMessage(
-    sessionId: string,
-    turnId: string,
-    text: string,
-    options: { replaceCurrentMessages?: boolean } = {},
-  ): void {
-    if (activeIdRef.current !== sessionId) return;
-    setMessageLoadErrorBySession((current) => {
-      if (!current[sessionId]) return current;
-      const next = { ...current };
-      delete next[sessionId];
-      return next;
-    });
-    setMessages((current) => {
-      if (current.some((message) => message.type === 'user' && message.turnId === turnId)) return current;
-      const next = optimisticUserMessage(turnId, text);
-      return options.replaceCurrentMessages ? [next] : [...current, next];
-    });
-  }
-
-  function removeOptimisticUserMessage(sessionId: string, turnId: string): void {
-    if (activeIdRef.current !== sessionId) return;
-    setMessages((current) => current.filter((message) => message.id !== `optimistic-user-${turnId}`));
-  }
-
   async function refreshConnections() {
     try {
       const [next, nextDefault] = await Promise.all([
@@ -1180,139 +1164,6 @@ export function AppShell() {
       setMemoryActive(next.agentReadEnabled && next.status === 'ok' && next.content.trim().length > 0);
     } catch (error) {
       toastApi.error(failureTitle, generalizedErrorMessageChinese(error, '本地记忆状态暂时无法刷新，请稍后重试。'));
-    }
-  }
-
-  async function send(text: string): Promise<boolean> {
-    const initialSessionId = activeIdRef.current;
-    const newChatOwner = initialSessionId ? null : captureComposerImportOwner();
-    let optimisticSessionId: string | undefined;
-    let optimisticTurnId: string | undefined;
-    try {
-      const turnId = crypto.randomUUID();
-      if (!initialSessionId) {
-        const session = await window.maka.sessions.create({
-          permissionMode: 'ask',
-          name: text.slice(0, 42) || '新建对话',
-          ...(validPendingNewChatModel
-            ? { llmConnectionSlug: validPendingNewChatModel.llmConnectionSlug, model: validPendingNewChatModel.model }
-            : {}),
-        });
-        upsertSessionSummary(session);
-        optimisticSessionId = session.id;
-        optimisticTurnId = turnId;
-        if (newChatOwner && isNewChatSendSurfaceActive(newChatOwner)) {
-          setNavSelection({ section: 'sessions', filter: 'chats' });
-          setActiveId(session.id);
-          showOptimisticUserMessage(session.id, turnId, text, { replaceCurrentMessages: true });
-        }
-        await window.maka.sessions.send(session.id, { type: 'send', turnId, text });
-        if (activeIdRef.current === session.id) {
-          await refreshMessagesUntilTurn(session.id, turnId);
-        }
-        await refreshSessions();
-        return true;
-      }
-      const sessionId = initialSessionId;
-      optimisticSessionId = sessionId;
-      optimisticTurnId = turnId;
-      showOptimisticUserMessage(sessionId, turnId, text);
-      await window.maka.sessions.send(sessionId, { type: 'send', turnId, text });
-      await refreshMessagesUntilTurn(sessionId, turnId);
-      return true;
-    } catch (error) {
-      if (optimisticSessionId && optimisticTurnId) {
-        removeOptimisticUserMessage(optimisticSessionId, optimisticTurnId);
-      }
-      const feedbackSessionId = optimisticSessionId ?? initialSessionId;
-      const sendStillOwnsCurrentSurface = feedbackSessionId
-        ? activeIdRef.current === feedbackSessionId
-        : newChatOwner
-          ? isNewChatSendSurfaceActive(newChatOwner)
-          : activeIdRef.current === initialSessionId;
-      if (!sendStillOwnsCurrentSurface) return false;
-      if (isNoRealConnectionError(error)) {
-        const reason = noRealConnectionReasonFromError(error);
-        showModelSetupToast(noRealConnectionSetupDescription(reason), reason);
-      } else {
-        toastApi.error('发送失败', generalizedErrorMessageChinese(error, '消息暂时无法发送，请稍后重试。'));
-      }
-      return false;
-    }
-  }
-
-  async function respondToPermission(response: PermissionResponse) {
-    const sessionId = activeIdRef.current;
-    if (!sessionId) return;
-    try {
-      await window.maka.sessions.respondToPermission(sessionId, response);
-    } catch (error) {
-      // Same fire-and-forget call site as stop() — wrap so a failed
-      // permission response (main process busy / session dropped)
-      // surfaces instead of dying as UnhandledPromiseRejection.
-      if (activeIdRef.current === sessionId) toastApi.error('响应失败', generalizedErrorMessageChinese(error, '会话操作失败，请稍后重试。'));
-    }
-  }
-
-  async function refreshMessages(sessionId: string): Promise<boolean> {
-    try {
-      const next = await window.maka.sessions.readMessages(sessionId);
-      if (activeIdRef.current === sessionId) {
-        markSessionReadLocally(sessionId, next);
-        setMessages(next);
-        setMessageLoadErrorBySession((current) => {
-          if (!current[sessionId]) return current;
-          const updated = { ...current };
-          delete updated[sessionId];
-          return updated;
-        });
-      }
-      return true;
-    } catch (error) {
-      if (activeIdRef.current === sessionId) {
-        const message = generalizedErrorMessageChinese(error, '对话内容暂时无法刷新，请稍后重试。');
-        setMessageLoadErrorBySession((current) => ({ ...current, [sessionId]: message }));
-        toastApi.error('刷新对话失败', message);
-      }
-      return false;
-    }
-  }
-  async function retryMessages(sessionId: string) {
-    if (!addPendingSessionAction(sessionId, messageRetryPendingRef, setMessageRetryPendingBySession)) return;
-    try {
-      await refreshMessages(sessionId);
-    } finally {
-      clearPendingSessionAction(sessionId, messageRetryPendingRef, setMessageRetryPendingBySession);
-    }
-  }
-
-  async function refreshMessagesUntilTurn(sessionId: string, turnId: string): Promise<void> {
-    const deadline = Date.now() + USER_MESSAGE_VISIBLE_TIMEOUT_MS;
-    while (Date.now() <= deadline) {
-      // PR-FE-BUG-HUNT-4 (kenji bug-hunt 2026-06-24 LOW): bail if the
-      // user navigated away from the session this poll was started for.
-      // Previously the loop kept burning IPC bandwidth for the full
-      // 1200ms after a session switch (the setState was gated, but the
-      // readMessages call still fired every 40ms). Now we stop the
-      // polling cycle itself.
-      if (activeIdRef.current !== sessionId) return;
-      try {
-        const next = await window.maka.sessions.readMessages(sessionId);
-        if (activeIdRef.current !== sessionId) return;
-        const hasSentUserTurn = next.some((message) => message.type === 'user' && message.turnId === turnId);
-        if (hasSentUserTurn) {
-          markSessionReadLocally(sessionId, next);
-          setMessages(next);
-          return;
-        }
-      } catch {
-        // Keep the current visible messages while the bounded retry loop
-        // waits for the async send path to persist the first user message.
-      }
-      await new Promise((resolve) => window.setTimeout(resolve, USER_MESSAGE_VISIBLE_POLL_MS));
-    }
-    if (activeIdRef.current === sessionId) {
-      await refreshMessages(sessionId);
     }
   }
 
