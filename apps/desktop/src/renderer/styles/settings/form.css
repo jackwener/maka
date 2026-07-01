@@ -1,7 +1,7 @@
 
 .maka-permission-stale-note {
   margin: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 6px 10px;
   font-size: 11px;
   line-height: 1.4;
@@ -31,7 +31,7 @@
   align-items: center;
   width: fit-content;
   padding: 0 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0;
@@ -50,7 +50,7 @@
 
 .maka-permission-raw {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: var(--foreground-2);
 }
 
@@ -71,7 +71,7 @@
 .maka-permission-raw .maka-code {
   margin: 0;
   border: 0;
-  border-radius: 0 0 6px 6px;
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
   background: var(--foreground-2);
   max-height: 180px;
   overflow: auto;
@@ -125,7 +125,7 @@
      popup heavy"; the new single lift reads as "premium card sitting on a
      dimmed canvas". */
   border: 1px solid var(--card-border-color);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   background: var(--card-bg);
   box-shadow:
     var(--card-shadow),

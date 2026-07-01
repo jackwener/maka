@@ -37,7 +37,6 @@
      6px was geometrically present but optically invisible against a
      same-color shell. */
   --agents-content-area-gap: 4px;
-  --agents-content-area-radius: 12px;
   --settings-nav-row-selected-bg: var(--color-fill-secondary);
 }
 
@@ -88,7 +87,7 @@
      gradient-meets-flat seam read as a visible border line. The
      panel is a floating card — give it a left gap too. */
   margin: var(--agents-content-area-gap);
-  border-radius: var(--agents-content-area-radius);
+  border-radius: var(--radius-modal);
   background: var(--agents-content-area-bg);
   transition: margin-left 150ms ease-out;
 }
@@ -105,7 +104,7 @@
      change in `styles.css` `.maka-panel-detail.maka-floating-panel`. */
   margin: var(--agents-content-area-gap);
   border: 0;
-  border-radius: var(--agents-content-area-radius);
+  border-radius: var(--radius-modal);
   background: var(--agents-content-area-bg);
   box-shadow: none;
 }

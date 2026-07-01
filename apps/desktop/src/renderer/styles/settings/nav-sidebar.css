@@ -38,7 +38,7 @@
   gap: 12px;
   margin: 0 4px 4px;
   padding: 6px 12px;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--foreground-70);
   font-size: 14px;
@@ -132,7 +132,7 @@
   align-items: center;
   gap: 12px;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-control);
   background: transparent;
   box-shadow: none;
   color: var(--foreground-70);
@@ -166,7 +166,7 @@
   align-items: center;
   height: 18px;
   padding: 0 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-control);
   background: oklch(from var(--accent) l c h / 0.12);
   color: var(--accent);
   font-size: 10px;
@@ -260,7 +260,7 @@
   gap: 8px;
   padding: 8px 12px;
   border: 1px dashed oklch(from var(--info) l c h / 0.32);
-  border-radius: 10px;
+  border-radius: var(--radius-surface);
   background: oklch(from var(--info) l c h / 0.06);
   color: var(--foreground-80);
   font-size: 12.5px;
@@ -288,7 +288,7 @@
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   background: var(--foreground-3);
 }
 
@@ -297,7 +297,7 @@
   height: 36px;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
   background: oklch(from var(--accent) l c h / 0.08);
   color: var(--accent);
 }
@@ -390,7 +390,7 @@
   display: inline-flex;
   align-items: center;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: oklch(from var(--accent) l c h / 0.12);
   color: var(--accent);
   font-size: 11px;
@@ -445,7 +445,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   margin: var(--agents-content-area-gap) var(--agents-content-area-gap) var(--agents-content-area-gap) 0;
   border: 0;
-  border-radius: var(--agents-content-area-radius);
+  border-radius: var(--radius-modal);
   background: var(--agents-content-area-bg);
   box-shadow: none;
   overflow: hidden;
@@ -691,7 +691,7 @@
 .settingsField [role="switch"] {
   height: 26px;
   width: 46px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .settingsFormRow [role="switch"] > span,

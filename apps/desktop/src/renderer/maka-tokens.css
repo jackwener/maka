@@ -273,14 +273,13 @@
   --duration-emphasized: 180ms;
   --duration-large: 280ms;
 
-  /* === page-card recipe ===
-     Single source of truth for the lifted "page card" chrome used by every
-     top-level module page (Skills, Plan/Reminder, future Settings). Atlas
-     §4: the reference layout's signature recipe is `1px tertiary border +
-     6px radius + 0 1px 2px @ 4% lift` — every workbench-card, aux-panel,
-     and agents-chat-panel uses these three values. See
-     notes/reference-atlas.md §9 for the per-surface gap analysis. */
-  --card-radius: 6px;
+   /* === page-card recipe ===
+      Single source of truth for the lifted "page card" chrome used by every
+      top-level module page (Skills, Plan/Reminder, future Settings). Atlas
+      §4: the reference layout's signature recipe is `1px tertiary border +
+      6px radius + 0 1px 2px @ 4% lift` — every workbench-card, aux-panel,
+      and agents-chat-panel uses these three values. See
+      notes/reference-atlas.md §9 for the per-surface gap analysis. */
   --card-gap: 4px;
   --card-border-color: oklch(from var(--foreground) l c h / 0.08);
   --card-bg: var(--background);
@@ -696,7 +695,7 @@
   ::-webkit-scrollbar-track  { background: transparent; }
   ::-webkit-scrollbar-thumb  {
     background: transparent;
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     transition: background 120ms ease;
   }
   *:hover {
@@ -745,7 +744,7 @@
     font-weight: 600;
     line-height: 1;
     padding: 2px 6px;
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     background: var(--foreground-5);
     border: 1px solid var(--border-strong);
     box-shadow: inset 0 -1px 0 var(--border);
@@ -765,7 +764,7 @@
   /* Reveal scrollbar only on parent hover (use with .group) */
   .scrollbar-hover::-webkit-scrollbar       { width: 4px; }
   .scrollbar-hover::-webkit-scrollbar-track { background: transparent; }
-  .scrollbar-hover::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
+  .scrollbar-hover::-webkit-scrollbar-thumb { background: transparent; border-radius: var(--radius-control); }
   .group:hover .scrollbar-hover::-webkit-scrollbar-thumb { background: var(--border); }
 
   /* Shadow recipes — apply as standalone classes */
@@ -792,7 +791,7 @@
     color: var(--foreground-80);
     background: var(--foreground-5);
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
   }
   .pill[data-tone="accent"]      { background: oklch(from var(--accent) l c h / 0.08); color: var(--accent); border-color: oklch(from var(--accent) l c h / 0.15); }
   .pill[data-tone="info"]        { background: oklch(from var(--info) l c h / 0.10); color: var(--info-text); border-color: oklch(from var(--info) l c h / 0.20); }
@@ -973,7 +972,7 @@
     margin: 0 0 8px;
     padding: 8px 10px;
     border: 1px dashed oklch(from var(--accent) l c h / 0.25);
-    border-radius: 10px;
+    border-radius: var(--radius-surface);
     background: oklch(from var(--accent) l c h / 0.03);
     font-size: 12.5px;
     color: var(--foreground-70);
@@ -1057,7 +1056,7 @@
     height: 14px;
     margin: 0 8px 0 0;
     border: 1.5px solid var(--foreground-40);
-    border-radius: 4px;
+    border-radius: var(--radius-control);
     background: transparent;
     vertical-align: text-bottom;
     cursor: not-allowed; /* read-only — editing markdown isn't supported here */
@@ -1177,7 +1176,7 @@
      * around. */
     padding: 0 2px;
     margin: 0 -2px;
-    border-radius: 3px;
+    border-radius: var(--radius-control);
     transition: border-bottom-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
   }
   .maka-bubble-assistant a:hover {
@@ -1195,7 +1194,7 @@
     /* PR-UI-LAYOUT-28: inline code radius 4 → 5. Tiny bump but
      * pulls it slightly out of the "tight tag" feel into a calmer
      * pill rhythm that matches the rest of the warm-canvas chrome. */
-    border-radius: 5px;
+    border-radius: var(--radius-control);
     background: var(--foreground-5);
     border: 1px solid oklch(from var(--foreground) l c h / 0.03);
   }
@@ -1206,7 +1205,7 @@
   .maka-bubble-assistant .maka-code-block {
     margin: 0 0 14px;
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: var(--radius-surface);
     overflow: hidden;
     background: var(--foreground-3);
   }
@@ -1236,7 +1235,7 @@
      * smoother transition. Width/height stay 22 because the copy
      * icon sits inside the code-block header strip and growing it
      * would change the header height. */
-    border-radius: 7px;
+    border-radius: var(--radius-control);
     background: transparent;
     color: var(--foreground-50);
     transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease;
@@ -1327,7 +1326,7 @@
     padding: 8px 16px;
     border-left: 3px solid oklch(from var(--accent) l c h / 0.28);
     background: var(--foreground-3);
-    border-radius: 0 8px 8px 0;
+    border-radius: 0 var(--radius-surface) var(--radius-surface) 0;
     color: var(--foreground-70);
   }
   .maka-bubble-assistant table {
@@ -1340,7 +1339,7 @@
      * and a hairline outer border gives the table chrome a clean
      * edge against the warm panel. Without the border the rounded
      * corners would clip nothing visible. */
-    border-radius: 10px;
+    border-radius: var(--radius-surface);
     border: 1px solid var(--border);
   }
   .maka-bubble-assistant th,
@@ -1387,7 +1386,7 @@
     display: grid;
     place-items: center;
     border: 0;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: oklch(from var(--background) l c h / 0.88);
     color: var(--foreground-50);
     opacity: 0;
@@ -1539,7 +1538,7 @@
     box-shadow:
       0 0 0 1px oklch(from var(--foreground) l c h / 0.04),
       0 1px 3px oklch(from var(--foreground) l c h / 0.04);
-    border-radius: 12px;
+    border-radius: var(--radius-modal);
     background: var(--background-elevated);
     padding: 14px 16px;
     display: flex;
@@ -1704,7 +1703,7 @@
     font-size: 12.5px;
     background: var(--foreground-3);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-control);
     padding: 8px 10px;
     color: var(--foreground);
     overflow-x: auto;
@@ -1740,7 +1739,7 @@
   position: relative;
   overflow: hidden;
   background: var(--foreground-3);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
 }
 .maka-skeleton::after {
   content: '';
@@ -1757,7 +1756,7 @@
 }
 .maka-skeleton-line {
   height: 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 .maka-skeleton-line[data-size="lg"] { height: 16px; }
 .maka-skeleton-line[data-size="sm"] { height: 9px; }
@@ -1767,7 +1766,7 @@
    * card family (chips 10, cards 12, modals 16-18). Subtle but
    * keeps the loading state visually consistent with the actual
    * card it's standing in for. */
-  border-radius: 12px;
+  border-radius: var(--radius-modal);
 }
 .maka-skeleton-stack {
   display: grid;

@@ -159,16 +159,19 @@ background / foreground / accent (purple) / info (amber) / success (green) / des
 | Token | 值 | 用法 |
 |---|---|---|
 | `--radius` | 0rem | 默认；page、layout 容器 |
-| `--radius-control` / `--radius-button` | 6px | button / input / small chip / sidebar row |
-| `--radius-surface` | 8px | card / popover / code block |
-| `--radius-modal` | 12px | Settings / Confirm / Permission modal / composer |
-| `--radius-pill` | 999px | pill / badge / round dot |
+| `--radius-control` (`--radius-button`) | 6px | button / input / small chip / sidebar row / kbd / inline code |
+| `--radius-surface` | 8px | card / popover / code block / toast / notice / table |
+| `--radius-modal` | 12px | Settings / Confirm / Permission modal / composer / floating card |
+| `--radius-pill` | 999px | pill / badge / round dot / skeleton-line |
 | `smooth-corners` utility | superellipse（iOS 风） | 选用，浏览器支持自动 fallback |
 
-> 这是有意的反规范：Maka 整体 0px 直角 + 关键交互组件 6/8/10px + 大面板上限 12px。
+Tailwind alias：`--radius-sm`→control, `--radius-md`/`--radius-lg`→surface, `--radius-xl`→modal。
+
+> 这是有意的反规范：Maka 整体 0px 直角 + 关键交互组件 6/8/12px + 大面板上限 12px。
 > 新 PR 不要引入 "更柔和" 的 14/16/18/20px，那会破坏 sharp 视觉。
-> `radius-converge-contract.test.ts` 锁住这条规则：`border-radius` 不准 > 12px
-> （`999px` 圆头例外）。
+> `radius-converge-contract.test.ts` 锁住两条规则：(1) `border-radius` 不准 > 12px
+> （`999px` 圆头例外）；(2) 所有 `border-radius` 和 `rounded-[...]` 必须引用
+> `--radius-*` token，不准裸写 `Npx` 字面量（`0`/`50%`/`inherit` 例外）。
 
 ### 1.5 间距（Spacing）
 

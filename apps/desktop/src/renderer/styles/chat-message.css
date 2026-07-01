@@ -18,7 +18,7 @@
     display: inline-flex;
     align-items: center;
     min-height: 32px;
-    border-radius: 12px;
+    border-radius: var(--radius-modal);
     background: var(--foreground-3);
     color: var(--foreground-50);
     font-size: 12px;
@@ -44,7 +44,7 @@
     position: absolute;
     display: inline-grid;
     place-items: center;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     box-shadow: 0 6px 18px -14px oklch(from var(--foreground) l c h / 0.32);
   }
 

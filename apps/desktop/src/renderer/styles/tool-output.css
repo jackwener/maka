@@ -33,7 +33,7 @@
 
 [data-slot="message"][data-role="system"] pre {
   display: inline-flex;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: oklch(from var(--info) l c h / 0.08);
   color: var(--info-text);
   padding: 2px 7px;
@@ -85,7 +85,7 @@
      The composer reads as a hero card, but radius must still stay within
      the shared chrome vocabulary locked by radius-converge-contract. */
   border: 1px solid var(--card-border-color);
-  border-radius: 12px;
+  border-radius: var(--radius-modal);
   padding: 10px 12px 8px;
   background: var(--card-bg);
   box-shadow:
@@ -222,7 +222,7 @@
   align-items: center;
   gap: 4px;
   border: 1px solid var(--color-border-tertiary);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 0 9px;
   background: oklch(from var(--background) l c h / 0.82);
   color: var(--foreground-60);
@@ -277,7 +277,7 @@
 .maka-composer-mode-menu {
   min-width: 280px;
   padding: 4px;
-  border-radius: 8px;
+  border-radius: var(--radius-surface);
 }
 .maka-composer-mode-menu [role="menuitem"] {
   display: grid;
@@ -285,7 +285,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
 }
 .maka-composer-mode-menu-item {
   display: flex;
@@ -352,7 +352,7 @@
 .maka-composer-model-status {
   width: 6px;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--destructive);
   flex: 0 0 auto;
 }
@@ -364,7 +364,7 @@
   width: 26px;
   height: 26px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--foreground-60);
   transition:
@@ -377,7 +377,7 @@
   width: 26px;
   height: 26px;
   border: 1px solid var(--foreground-20);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
 }
 

@@ -105,7 +105,7 @@ describe('chat preview-surface migration contract (#332 PR4)', () => {
     // Anti-drift: the literalize vehicle stays arbitrary-value (immune to a later
     // scale/token re-tuning silently shifting pixels). Pin distinctive literals and
     // ban the semantic-scale forms they would be swapped for.
-    for (const literal of ['rounded-[8px]', 'text-[11.5px]', 'max-h-[180px]']) {
+    for (const literal of ['rounded-[var(--radius-surface)]', 'text-[11.5px]', 'max-h-[180px]']) {
       assert.ok(block.includes(literal), `previewVariants must keep the literal "${literal}"`);
     }
     for (const scale of ['rounded-lg', 'rounded-md', 'text-sm', 'text-xs']) {

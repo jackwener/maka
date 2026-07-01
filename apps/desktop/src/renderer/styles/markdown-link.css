@@ -20,7 +20,7 @@
   .maka-markdown-link {
     text-underline-offset: 2px;
     text-decoration-thickness: 1px;
-    border-radius: 2px;
+    border-radius: var(--radius-control);
   }
 
   .maka-markdown-link-internal {
