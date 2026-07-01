@@ -17,6 +17,7 @@ import {
   resolveSkillOpenPath,
 } from '../skills.js';
 import { readRendererShellCombinedSource } from './renderer-shell-source-helpers.js';
+import { extractFunctionBlock } from './function-block-helpers.js';
 
 describe('skills ingestion', () => {
   it('lists SKILL.md metadata without granting declared tools', async () => {
@@ -331,7 +332,7 @@ name: Writer
     const emptyStateSource = await readFile(join(repoRoot, 'packages/ui/src/empty-state.tsx'), 'utf8');
     const renderer = await readRendererShellCombinedSource();
     const chatView = chatViewSource.match(/export function ChatView\([\s\S]*?if \(props\.mode === 'automations'\)/)?.[0] ?? '';
-    const skillsModuleMain = ui.match(/export function SkillsModuleMain\([\s\S]*$/)?.[0] ?? '';
+    const skillsModuleMain = extractFunctionBlock(ui, 'SkillsModuleMain');
     const skillPanel = ui.match(/function SkillLibraryPanel[\s\S]*?function SkillsModuleMain/)?.[0] ?? '';
     const emptyState = emptyStateSource;
 
