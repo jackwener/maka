@@ -9,6 +9,7 @@ const sourcePaths = [
   'app.tsx',
   'app-shell-quick-chat-actions.ts',
   'app-shell-layout-actions.ts',
+  'app-shell-daily-review-actions.ts',
   'app-shell-turn-actions.ts',
   'app-shell.tsx',
   'app-shell-plan-actions.ts',

@@ -6,7 +6,6 @@ import type {
   DailyReviewArchiveSummary,
   DailyReviewConfig,
   DailyReviewMode,
-  DailyReviewSummary,
   LlmConnection,
   PermissionMode,
   PlanReminder,
@@ -84,7 +83,6 @@ import {
   buildDailyReviewRunModelOptions,
   DAILY_REVIEW_CONFIG_MODEL_VALUE,
   dailyReviewActionErrorMessage,
-  dailyReviewExportDefaultName,
 } from './daily-review-actions';
 import { buildChatModelChoices, chatModelChoiceLabel, normalizeActiveChatModel } from './chat-model-selection';
 import { basenameFromPath } from './app-shell-copy';
@@ -98,6 +96,7 @@ import { createAppShellChatActions } from './app-shell-chat-actions';
 import { createAppShellTurnActions } from './app-shell-turn-actions';
 import { createAppShellLayoutActions } from './app-shell-layout-actions';
 import { createAppShellQuickChatActions } from './app-shell-quick-chat-actions';
+import { createAppShellDailyReviewActions } from './app-shell-daily-review-actions';
 import { createAppShellImportActions } from './app-shell-import-actions';
 import { createAppShellSessionRowActions } from './app-shell-session-row-actions';
 import { createAppShellSessionSettingsActions } from './app-shell-session-settings-actions';
@@ -335,37 +334,7 @@ export function AppShell() {
     }),
     [connections],
   );
-  async function saveDailyReviewMarkdown(input: {
-    markdown: string;
-    label: string;
-    summary: DailyReviewSummary;
-  }, options: { shouldShowFeedback?: () => boolean } = {}) {
-    const shouldShowFeedback = options.shouldShowFeedback ?? (() => true);
-    try {
-      const result = await window.maka.dailyReview.saveMarkdownToFile({
-        markdown: input.markdown,
-        defaultName: dailyReviewExportDefaultName(input.label),
-      });
-      if (result.ok) {
-        if (shouldShowFeedback()) {
-          toastApi.success(
-            `已保存${input.label}回顾`,
-            `${input.summary.totals.sessionCount} 个对话 · ${input.summary.totals.requestCount} 个请求`,
-          );
-        }
-      } else if (result.reason === 'canceled') {
-        // User dismissed the dialog — no toast.
-      } else if (result.reason === 'invalid_input') {
-        if (shouldShowFeedback()) toastApi.error('保存失败', '导出内容无效');
-      } else {
-        if (shouldShowFeedback()) toastApi.error('保存失败', '无法写入选择的位置');
-      }
-    } catch (err) {
-      if (shouldShowFeedback()) {
-        toastApi.error('保存失败', dailyReviewActionErrorMessage(err, '保存每日回顾失败，请稍后重试。'));
-      }
-    }
-  }
+  const { saveDailyReviewMarkdown } = createAppShellDailyReviewActions({ toastApi });
   const activePermission = activePermissionFor(permissionBySession, activeId);
   const activeSession = sessions.find((session) => session.id === activeId);
   const activeConnection = activeSession
