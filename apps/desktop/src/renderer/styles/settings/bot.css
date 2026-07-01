@@ -40,7 +40,7 @@
 .settingsBotList em {
   font-size: 10px;
   font-style: normal;
-  color: var(--foreground-55);
+  color: var(--foreground-50);
 }
 
 .settingsBotList em[data-tone="info"] { color: var(--accent); }
@@ -62,7 +62,7 @@
   opacity: 1;
 }
 .settingsBotList button[data-support="planned"] em {
-  border: 1px solid var(--foreground-15);
+  border: 1px solid var(--foreground-10);
   border-radius: 999px;
   padding: 0 6px;
   color: var(--foreground-50);
@@ -181,7 +181,7 @@
 
   .settingsBotHero small,
   .settingsHelpText {
-    color: var(--foreground-55);
+    color: var(--foreground-50);
     font-size: 12.5px;
     line-height: 1.5;
   }
@@ -256,7 +256,7 @@
 
   .settingsBotStatusGrid dt {
     margin-bottom: 4px;
-    color: var(--foreground-45);
+    color: var(--foreground-40);
     font-size: 11px;
   }
 

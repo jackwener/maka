@@ -142,7 +142,7 @@
   margin: 8px 0 0;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--foreground-55);
+  color: var(--foreground-50);
 }
 
 /* --- compact stepper (numbered nodes + connectors) --- */
@@ -622,7 +622,7 @@
   border: 1px solid oklch(from var(--foreground) l c h / 0.08);
   border-radius: 999px;
   background: oklch(from var(--background-elevated, var(--background)) l c h / 0.78);
-  color: var(--foreground-75);
+  color: var(--foreground-70);
   height: auto;
   min-height: 38px;
   padding: 9px 18px;
@@ -844,7 +844,7 @@
 }
 .maka-list-group-count {
   font-variant-numeric: tabular-nums;
-  color: var(--foreground-35);
+  color: var(--foreground-30);
   font-size: 11px;
   font-weight: 500;
 }
@@ -911,7 +911,7 @@
 
 .maka-empty-state-body {
   max-width: 30ch;
-  color: var(--foreground-45);
+  color: var(--foreground-40);
   font-size: 12px;
   line-height: 1.4;
   text-wrap: pretty;
@@ -928,7 +928,7 @@
   background: transparent !important;
   box-shadow: none !important;
   padding: 0 !important;
-  color: var(--foreground-45);
+  color: var(--foreground-40);
 }
 
 .maka-session-list .maka-session-empty-state .maka-empty-state-media {
@@ -936,7 +936,7 @@
 }
 
 .maka-session-list .maka-session-empty-state .maka-empty-state-title {
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   font-size: 12px;
   font-weight: 600;
 }

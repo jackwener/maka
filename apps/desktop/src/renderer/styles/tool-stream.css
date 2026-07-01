@@ -443,7 +443,7 @@
     padding: 2px 6px;
     border: 1px solid var(--foreground-10);
     border-radius: 6px;
-    background: var(--foreground-4);
+    background: var(--foreground-5);
     color: var(--foreground-60);
     font-size: 11px;
     line-height: 1.4;
@@ -678,7 +678,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--foreground-65);
+    color: var(--foreground-60);
     padding: 0 4px 2px;
   }
 
@@ -763,7 +763,7 @@
   gap: 7px;
   width: auto;
   text-align: left;
-  color: var(--foreground-75);
+  color: var(--foreground-70);
   box-shadow: 0 1px 2px oklch(from var(--foreground) l c h / 0.03);
 }
 

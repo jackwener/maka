@@ -11,7 +11,7 @@
   --color-text-base: var(--foreground);
   --color-text: var(--foreground);
   --color-text-secondary: var(--foreground-70);
-  --color-text-tertiary: var(--foreground-55);
+  --color-text-tertiary: var(--foreground-50);
   --color-text-quaternary: var(--foreground-40);
   --color-text-on-primary: #fff;
   --color-border: var(--border);

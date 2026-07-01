@@ -115,7 +115,7 @@ test('lineage-badge merge drops the UiButton base shell so the retired badge pix
     'px-[5px]',
     'py-[1px]',
     'rounded-[999px]',
-    'text-[color:var(--foreground-48)]',
+    'text-[color:var(--foreground-50)]',
     'text-[9px]',
   ]) {
     assert.ok(merged.includes(win), `lineage pixel "${win}" must survive the merge`);

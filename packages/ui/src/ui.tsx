@@ -10,7 +10,6 @@ import { Switch as BaseSwitch } from '@base-ui/react/switch';
 import { Tabs as BaseTabs } from '@base-ui/react/tabs';
 import { Toggle as BaseToggle } from '@base-ui/react/toggle';
 import { ToggleGroup as BaseToggleGroup } from '@base-ui/react/toggle-group';
-import { Tooltip as BaseTooltip } from '@base-ui/react/tooltip';
 import { Select as BaseSelect } from '@base-ui/react/select';
 import { Separator as BaseSeparator } from '@base-ui/react/separator';
 import { Check, ChevronDown, X } from './icons.js';
@@ -65,7 +64,7 @@ export const buttonVariants = cva(
   },
 );
 
-export interface ButtonProps
+interface ButtonProps
   extends Omit<React.ComponentPropsWithoutRef<typeof BaseButton>, 'className'>,
     VariantProps<typeof buttonVariants> {
   className?: string;
@@ -270,20 +269,6 @@ export const TabsPanel = forwardRef<HTMLDivElement, React.ComponentPropsWithoutR
   ref,
 ) {
   return <BaseTabs.Panel ref={ref} className={cn('focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', className)} {...props} />;
-});
-
-export const TooltipTrigger = BaseTooltip.Trigger;
-export const TooltipPopup = forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<typeof BaseTooltip.Popup>>(function TooltipPopup(
-  { className, ...props },
-  ref,
-) {
-  return (
-    <BaseTooltip.Popup
-      ref={ref}
-      className={cn('z-[var(--z-overlay)] rounded-md border border-border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-maka-panel', className)}
-      {...props}
-    />
-  );
 });
 
 export const SelectRoot = BaseSelect.Root;
@@ -499,94 +484,6 @@ export const Progress = forwardRef<
         <BaseProgress.Indicator className="block h-full origin-left bg-primary transition-transform" />
       </BaseProgress.Track>
     </BaseProgress.Root>
-  );
-});
-
-// =============================================================
-// Skeleton — animated loading placeholder
-// =============================================================
-
-export const Skeleton = forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(function Skeleton({ className, ...props }, ref) {
-  return (
-    <div
-      ref={ref}
-      className={cn('animate-pulse rounded-md bg-muted', className)}
-      {...props}
-    />
-  );
-});
-
-// =============================================================
-// Sheet — Dialog variant that slides from the side.
-// Built on Base UI Dialog so it inherits a11y + focus trap.
-// =============================================================
-
-export const SheetTrigger = BaseDialog.Trigger;
-export const SheetClose = BaseDialog.Close;
-export const SheetPortal = BaseDialog.Portal;
-export const SheetTitle = BaseDialog.Title;
-export const SheetDescription = BaseDialog.Description;
-
-export const SheetBackdrop = forwardRef<
-  HTMLDivElement,
-  React.ComponentPropsWithoutRef<typeof BaseDialog.Backdrop>
->(function SheetBackdrop({ className, ...props }, ref) {
-  return (
-    <BaseDialog.Backdrop
-      ref={ref}
-      className={cn('fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm', className)}
-      {...props}
-    />
-  );
-});
-
-type SheetSide = 'right' | 'left' | 'top' | 'bottom';
-const SHEET_SIDE_CLASSES: Record<SheetSide, string> = {
-  right: 'inset-y-0 right-0 h-full w-[min(420px,90vw)] border-l',
-  left: 'inset-y-0 left-0 h-full w-[min(420px,90vw)] border-r',
-  top: 'inset-x-0 top-0 w-full max-h-[85dvh] border-b',
-  bottom: 'inset-x-0 bottom-0 w-full max-h-[85dvh] border-t',
-};
-
-export const SheetPopup = forwardRef<
-  HTMLDivElement,
-  React.ComponentPropsWithoutRef<typeof BaseDialog.Popup> & { side?: SheetSide }
->(function SheetPopup({ className, side = 'right', ...props }, ref) {
-  return (
-    <BaseDialog.Popup
-      ref={ref}
-      className={cn(
-        'fixed z-50 flex flex-col gap-3 overflow-hidden border-border bg-popover p-5 text-popover-foreground shadow-maka-panel',
-        SHEET_SIDE_CLASSES[side],
-        className,
-      )}
-      {...props}
-    />
-  );
-});
-
-export const SheetContent = forwardRef<
-  HTMLDivElement,
-  React.ComponentPropsWithoutRef<typeof SheetPopup> & { showClose?: boolean }
->(function SheetContent({ className, children, showClose = true, side = 'right', ...props }, ref) {
-  return (
-    <SheetPortal>
-      <SheetBackdrop />
-      <SheetPopup ref={ref} side={side} className={className} {...props}>
-        {showClose && (
-          <SheetClose
-            className={cn(buttonVariants({ variant: 'quiet', size: 'icon-sm' }), 'absolute right-3 top-3')}
-            aria-label="关闭"
-          >
-            <X aria-hidden="true" />
-          </SheetClose>
-        )}
-        {children}
-      </SheetPopup>
-    </SheetPortal>
   );
 });
 

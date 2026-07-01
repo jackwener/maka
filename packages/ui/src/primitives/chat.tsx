@@ -189,7 +189,7 @@ const markerVariants = cva("", {
         // the 4/3 line-height (9px font × 4/3 = 12px) that `size="sm"`'s `h-8` /
         // `text-xs` used to supply implicitly on `main`, so geometry lives in
         // the marker shell.
-        "inline-flex items-center h-8 gap-[3px] px-[5px] py-[1px] rounded-[999px] [border:0] bg-[oklch(from_var(--foreground)_l_c_h_/_0.05)] text-[color:var(--foreground-48)] text-[9px] leading-[12px] [transition:background_150ms_var(--ease-out-strong),color_150ms_var(--ease-out-strong)]"
+        "inline-flex items-center h-8 gap-[3px] px-[5px] py-[1px] rounded-[999px] [border:0] bg-[oklch(from_var(--foreground)_l_c_h_/_0.05)] text-[color:var(--foreground-50)] text-[9px] leading-[12px] [transition:background_150ms_var(--ease-out-strong),color_150ms_var(--ease-out-strong)]"
         + " hover:bg-[oklch(from_var(--foreground)_l_c_h_/_0.08)] hover:text-[color:var(--foreground)]"
         + " focus-visible:[outline:2px_solid_var(--accent)] focus-visible:[outline-offset:2px]"
         + " data-[direction=forward]:bg-[oklch(from_var(--info)_l_c_h_/_0.06)] data-[direction=forward]:text-[oklch(from_var(--info-text)_calc(l_-_0.06)_c_h)]"
