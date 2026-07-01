@@ -20,9 +20,9 @@ import { resolve } from 'node:path';
 import { readRendererContractCss } from './contract-css-helpers.js';
 import { readProviderSettingsCombinedSource } from './provider-contract-source-helpers.js';
 import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
+import { readMainProcessCombinedSource } from './main-process-contract-source-helpers.js';
 
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
-const MAIN_SOURCE = resolve(REPO_ROOT, 'apps', 'desktop', 'src', 'main', 'main.ts');
 const PRELOAD_SOURCE = resolve(REPO_ROOT, 'apps', 'desktop', 'src', 'preload', 'preload.ts');
 
 describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MOVE-0)', () => {
@@ -119,7 +119,7 @@ describe('Model OAuth catalog contract (PR-MODEL-OAUTH-ALL-0 + PR-CLAUDE-CARD-MO
 
   it('provider detail actions localize and sanitize model-test / model-fetch failures', async () => {
     const providers = await readProviderSettingsCombinedSource();
-    const main = await readFile(MAIN_SOURCE, 'utf8');
+    const main = await readMainProcessCombinedSource();
     const detail = providers.match(/function ConnectionDetail[\s\S]*?function ModelTable/)?.[0] ?? '';
     const addForm = providers.match(/function AddProviderForm[\s\S]*?function nextSlug/)?.[0] ?? '';
 

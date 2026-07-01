@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 import { join, resolve } from 'node:path';
 import { readSettingsCombinedSource } from './settings-contract-source-helpers.js';
+import { readMainProcessCombinedSource } from './main-process-contract-source-helpers.js';
 
 const REPO_ROOT = resolve(process.cwd(), '..', '..');
-const MAIN_SOURCE = join(REPO_ROOT, 'apps', 'desktop', 'src', 'main', 'main.ts');
 const PRELOAD_SOURCE = join(REPO_ROOT, 'apps', 'desktop', 'src', 'preload', 'preload.ts');
 const GLOBAL_DTS = join(REPO_ROOT, 'apps', 'desktop', 'src', 'global.d.ts');
 
@@ -113,7 +113,7 @@ describe('General settings configurable contract', () => {
   });
 
   it('exposes a default-model IPC that validates the model against chat-selectable catalog entries', async () => {
-    const main = await readFile(MAIN_SOURCE, 'utf8');
+    const main = await readMainProcessCombinedSource();
     const preload = await readFile(PRELOAD_SOURCE, 'utf8');
     const globalDts = await readFile(GLOBAL_DTS, 'utf8');
 

@@ -8,12 +8,10 @@ import {
   generalizedErrorMessageChinese,
   redactSecrets,
   buildHealthSnapshot,
-  buildConnectionModelCatalogEntries,
   healthSignalFromCapability,
   healthSignalFromConnection,
   healthSignalFromConnectionRuntime,
   isPermissionMode,
-  normalizeConnectionBaseUrl,
   DEEP_RESEARCH_SESSION_LABEL,
   botDisplayLabel,
   humanizeBotStatusReason,
@@ -24,7 +22,6 @@ import type {
   BotProvider,
   BotReadinessState,
   ConnectionEvent,
-  CreateConnectionInput,
   CreateSessionInput,
   DailyReviewConfig,
   DailyReviewMode,
@@ -37,7 +34,6 @@ import type {
   StoredMessage,
   SettingsTestResult,
   UpdateAppSettingsResult,
-  UpdateConnectionInput,
   UpdateAppSettingsInput,
   UsageRange,
 } from '@maka/core';
@@ -94,7 +90,6 @@ import {
   buildSubagentProjectionTools,
   buildSubagentSpawnTool,
   buildSubagentToolGroup,
-  fetchProviderModels,
   getAIModel,
   buildProviderOptions,
   recordLlmCall,
@@ -104,7 +99,6 @@ import {
   getWechatBridgeQrCode,
   testBotChannel as testRuntimeBotChannel,
   setActiveProxy,
-  testConnection,
 } from '@maka/runtime';
 import type {
   ToolAvailabilityConfig,
@@ -115,10 +109,7 @@ import type {
 } from '@maka/runtime';
 import { testProxyConnection } from '@maka/runtime/network/proxy-test';
 import { fetchWeChatQrcode, pollWeChatQrcodeStatus } from './wechat-scan-login.js';
-import {
-  PROVIDER_DEFAULTS,
-  type LlmConnection,
-} from '@maka/core/llm-connections';
+import type { LlmConnection } from '@maka/core/llm-connections';
 import { createAgentRunStore, createArtifactStore, createConnectionStore, createPlanReminderStore, createRuntimeEventStore, createSessionStore, createSettingsStore, createTelemetryRepo, resolveArtifactPath } from '@maka/storage';
 import {
   ensureSessionCanSendOrRebind,
@@ -130,7 +121,6 @@ import {
 import { createFileCredentialStore, migrateLegacyCredentials } from './credential-store.js';
 import { bindOnboardingDeps, createOnboardingService } from './onboarding-service.js';
 import { handleQuickChatStart as runQuickChatStart, type QuickChatResult } from './quick-chat.js';
-import { connectionTestStatusPatch } from './connection-test-status.js';
 import { probeOfficeCli } from './officecli-probe.js';
 import { resolveOpenPath, type OpenPathResult } from './open-path-guard.js';
 import { resolveProjectGitInfo, resolveProjectRoot } from './project-context.js';
@@ -202,6 +192,7 @@ import {
 import { registerMemoryIpc } from './memory-ipc-main.js';
 import { registerSubscriptionIpc } from './subscription-ipc-main.js';
 import { registerBrowserIpc } from './browser-ipc-main.js';
+import { registerConnectionsIpc } from './connections-ipc-main.js';
 
 const buildInfo = resolveBuildInfo(app.isPackaged, app.getAppPath());
 
@@ -291,92 +282,6 @@ const cursorSubscription = new CursorSubscriptionService({
 const antigravitySubscription = new AntigravitySubscriptionService({
   userDataDir: app.getPath('userData'),
 });
-
-const IPC_CONNECTION_SLUG_MAX_LENGTH = 64;
-const IPC_CONNECTION_SECRET_MAX_LENGTH = 4096;
-const IPC_CONTROL_CHARACTER_PATTERN = /[\u0000-\u001F\u007F]/;
-const IPC_CONNECTION_SLUG_PATTERN = /^[A-Za-z0-9._-]+$/;
-
-function hasTraversalLookingSlugSegment(value: string): boolean {
-  return value.split('.').some((segment) => segment.length === 0);
-}
-
-function normalizeConnectionSlugForIpc(value: unknown, label: string): string {
-  if (typeof value !== 'string') {
-    throw new Error(`${label} must be a string`);
-  }
-  if (value.length === 0) {
-    throw new Error(`${label} is required`);
-  }
-  if (value.length > IPC_CONNECTION_SLUG_MAX_LENGTH) {
-    throw new Error(`${label} must be ${IPC_CONNECTION_SLUG_MAX_LENGTH} characters or fewer`);
-  }
-  if (!IPC_CONNECTION_SLUG_PATTERN.test(value) || IPC_CONTROL_CHARACTER_PATTERN.test(value)) {
-    throw new Error(`${label} contains invalid characters`);
-  }
-  if (hasTraversalLookingSlugSegment(value)) {
-    throw new Error(`${label} contains invalid path traversal segments`);
-  }
-  return value;
-}
-
-function normalizeConnectionApiKeyForIpc(value: unknown, label: string): string {
-  if (typeof value !== 'string') {
-    throw new Error(`${label} must be a string`);
-  }
-  if (value.length > IPC_CONNECTION_SECRET_MAX_LENGTH) {
-    throw new Error(`${label} must be ${IPC_CONNECTION_SECRET_MAX_LENGTH} characters or fewer`);
-  }
-  if (IPC_CONTROL_CHARACTER_PATTERN.test(value)) {
-    throw new Error(`${label} contains invalid characters`);
-  }
-  return value;
-}
-
-function normalizeCreateConnectionInput(input: CreateConnectionInput): CreateConnectionInput {
-  const apiKey = input.apiKey === undefined
-    ? undefined
-    : normalizeConnectionApiKeyForIpc(input.apiKey, 'apiKey');
-  const slug = normalizeConnectionSlugForIpc(input.slug, 'connection slug');
-  const normalizedInput = { ...input, slug, ...(apiKey !== undefined ? { apiKey } : {}) };
-  const defaults = PROVIDER_DEFAULTS[normalizedInput.providerType];
-  if (defaults.authKind === 'oauth_token') {
-    return { ...normalizedInput, baseUrl: defaults.baseUrl };
-  }
-  if (normalizedInput.baseUrl === undefined) return normalizedInput;
-  const result = normalizeConnectionBaseUrl(normalizedInput.baseUrl);
-  if (!result.ok) {
-    throw new Error(result.error);
-  }
-  return { ...normalizedInput, baseUrl: result.value };
-}
-
-function normalizeConnectionPatchSecretsForIpc(patch: UpdateConnectionInput): UpdateConnectionInput {
-  if (!Object.prototype.hasOwnProperty.call(patch, 'apiKey')) return patch;
-  if (patch.apiKey === undefined) return patch;
-  return {
-    ...patch,
-    apiKey: normalizeConnectionApiKeyForIpc(patch.apiKey, 'apiKey'),
-  };
-}
-
-async function normalizeUpdateConnectionInput(
-  slug: string,
-  patch: UpdateConnectionInput,
-): Promise<UpdateConnectionInput> {
-  const normalizedPatch = normalizeConnectionPatchSecretsForIpc(patch);
-  const existing = await connectionStore.get(slug);
-  const providerType = existing?.providerType;
-  if (providerType && PROVIDER_DEFAULTS[providerType].authKind === 'oauth_token') {
-    return { ...normalizedPatch, baseUrl: PROVIDER_DEFAULTS[providerType].baseUrl };
-  }
-  if (normalizedPatch.baseUrl === undefined) return normalizedPatch;
-  const result = normalizeConnectionBaseUrl(normalizedPatch.baseUrl);
-  if (!result.ok) {
-    throw new Error(result.error);
-  }
-  return { ...normalizedPatch, baseUrl: result.value };
-}
 
 const planReminderStore = createPlanReminderStore(workspaceRoot);
 
@@ -1493,153 +1398,12 @@ function registerIpc(): void {
 
   registerBrowserIpc({ mainWindowController });
 
-  ipcMain.handle('connections:list', async () => {
-    await syncOAuthModelConnections();
-    return connectionStore.list();
-  });
-  ipcMain.handle('connections:getDefault', () => connectionStore.getDefault());
-  ipcMain.handle('connections:setDefault', async (_event, slug: string | null) => {
-    const normalizedSlug = slug === null ? null : normalizeConnectionSlugForIpc(slug, 'connection slug');
-    if (normalizedSlug && !(await connectionStore.get(normalizedSlug))) {
-      throw new Error(`No such connection: ${normalizedSlug}`);
-    }
-    await connectionStore.setDefault(normalizedSlug);
-    emitConnectionListChanged();
-  });
-  ipcMain.handle('connections:setDefaultModel', async (_event, input: { slug: string; model: string } | null) => {
-    if (input === null) {
-      await connectionStore.setDefault(null);
-      emitConnectionListChanged();
-      return;
-    }
-    if (!input || typeof input !== 'object' || typeof input.slug !== 'string' || typeof input.model !== 'string') {
-      throw new Error('Default model input must include slug and model');
-    }
-    const slug = normalizeConnectionSlugForIpc(input.slug, 'connection slug');
-    const model = input.model.trim();
-    if (!model) throw new Error('Default model must not be empty');
-    const connection = await connectionStore.get(slug);
-    if (!connection) throw new Error(`No such connection: ${slug}`);
-    if (!connection.enabled) throw new Error(`Connection is disabled: ${slug}`);
-    const selectable = buildConnectionModelCatalogEntries({ connection })
-      .some((entry) => entry.id === model && entry.canUseAsChatDefault);
-    if (!selectable) {
-      throw new Error(`Model is not available for chat default: ${model}`);
-    }
-    if (connection.defaultModel !== model) {
-      await connectionStore.update(slug, { defaultModel: model });
-    }
-    await connectionStore.setDefault(slug);
-    emitConnectionListChanged();
-  });
-  ipcMain.handle('connections:create', async (_event, input: CreateConnectionInput) => {
-    // PR-UI-IPC-1 (@kenji msg 35260e29 + 8755ffb3 + 6b638e08):
-    // baseUrl is a credentials-exfiltration boundary. Normalize
-    // BEFORE the store ever sees the input — `javascript:` /
-    // `file:///etc/passwd` / garbage MUST NOT persist, AND raw
-    // whitespace-padded strings MUST NOT slip past as overrides.
-    // Localhost and private-network URLs are intentionally allowed
-    // (Ollama, LM Studio, vLLM). See `normalizeConnectionBaseUrl`
-    // JSDoc.
-    //
-    // Construct a NEW `normalizedInput` rather than mutating
-    // `input` — avoids any chance of later handler logic or
-    // reference aliasing seeing the raw renderer payload.
-    //
-    // OAuth subscription connections are stricter than API-key
-    // connections: their access token is provider-bound, so the
-    // renderer must never be able to redirect it to a custom baseUrl.
-    const normalizedInput = normalizeCreateConnectionInput(input);
-    const connection = await connectionStore.create(normalizedInput);
-    if (normalizedInput.apiKey) {
-      await credentialStore.setSecret(connection.slug, 'api_key', normalizedInput.apiKey);
-    }
-    emitConnectionListChanged();
-    return connection;
-  });
-  ipcMain.handle('connections:update', async (_event, slug: string, patch: UpdateConnectionInput) => {
-    // PR-UI-IPC-1 same boundary on update. `patch.baseUrl ===
-    // undefined` means "don't touch" — skip validation entirely and
-    // don't include the key in the normalized patch.
-    //
-    // EXPLICIT CLEAR INTENT: when the user types whitespace into
-    // the baseUrl form field, the renderer sends a string (often
-    // `''` or `'   '`). After normalize, that becomes `''`, which
-    // the store's existing
-    // `patch.baseUrl !== undefined ? patch.baseUrl || undefined : current.baseUrl`
-    // clears as an explicit override removal. Preserve that —
-    // don't convert to `undefined` (which would silently swallow
-    // the clear intent as "don't touch"). @kenji msg 6b638e08.
-    //
-    // Same OAuth-boundary rule as create: if the current/new provider
-    // uses an OAuth token, force the canonical provider endpoint and
-    // ignore renderer-provided baseUrl text entirely.
-    slug = normalizeConnectionSlugForIpc(slug, 'connection slug');
-    const normalizedPatch = await normalizeUpdateConnectionInput(slug, patch);
-    const connection = await connectionStore.update(slug, normalizedPatch);
-    if (normalizedPatch.apiKey !== undefined) {
-      if (normalizedPatch.apiKey) await credentialStore.setSecret(slug, 'api_key', normalizedPatch.apiKey);
-      else await credentialStore.deleteSecret(slug, 'api_key');
-    }
-    emitConnectionListChanged();
-    return connection;
-  });
-  ipcMain.handle('connections:delete', async (_event, slug: string) => {
-    slug = normalizeConnectionSlugForIpc(slug, 'connection slug');
-    await connectionStore.delete(slug);
-    await credentialStore.deleteSecret(slug);
-    emitConnectionListChanged();
-  });
-  ipcMain.handle('connections:test', async (_event, slug: string, opts?: { model?: string }) => {
-    slug = normalizeConnectionSlugForIpc(slug, 'connection slug');
-    const connection = await connectionStore.get(slug);
-    if (!connection) return { ok: false, errorMessage: `找不到模型连接：${slug}` };
-    const apiKey = await resolveConnectionSecret(slug);
-    if (PROVIDER_DEFAULTS[connection.providerType].authKind !== 'none' && !apiKey) {
-      return {
-        ok: false,
-        errorMessage: PROVIDER_DEFAULTS[connection.providerType].authKind === 'oauth_token'
-          ? '这个 OAuth 模型连接还没有登录'
-          : '这个模型连接还没有保存 API key',
-        errorClass: 'auth',
-      };
-    }
-    const result = await testConnection(connection, apiKey ?? '', opts?.model);
-    await connectionStore.update(slug, connectionTestStatusPatch(result));
-    emitConnectionListChanged();
-    return result;
-  });
-  ipcMain.handle('connections:fetchModels', async (_event, slug: string) => {
-    slug = normalizeConnectionSlugForIpc(slug, 'connection slug');
-    const connection = await connectionStore.get(slug);
-    if (!connection) throw new Error(`找不到模型连接：${slug}`);
-    const apiKey = await resolveConnectionSecret(slug);
-    if (PROVIDER_DEFAULTS[connection.providerType].authKind !== 'none' && !apiKey) {
-      throw new Error(PROVIDER_DEFAULTS[connection.providerType].authKind === 'oauth_token'
-        ? '这个 OAuth 模型连接还没有登录'
-        : '这个模型连接还没有保存 API key');
-    }
-    try {
-      const fetchedAt = Date.now();
-      const models = await fetchProviderModels(connection, apiKey ?? '');
-      await connectionStore.update(slug, {
-        models,
-        modelSource: 'fetched',
-        modelsFetchedAt: fetchedAt,
-      });
-      emitConnectionListChanged();
-      return {
-        models,
-        source: 'fetched',
-        fetchedAt,
-      };
-    } catch (error) {
-      throw new Error(generalizedErrorMessageChinese(error, '拉取模型列表失败'));
-    }
-  });
-  ipcMain.handle('connections:hasSecret', async (_event, slug: string) => {
-    slug = normalizeConnectionSlugForIpc(slug, 'connection slug');
-    return Boolean(await resolveConnectionSecret(slug));
+  registerConnectionsIpc({
+    connectionStore,
+    credentialStore,
+    syncOAuthModelConnections,
+    resolveConnectionSecret,
+    emitConnectionListChanged,
   });
 
   // PR110b: Onboarding snapshot + milestone IPCs. Renderer polls via

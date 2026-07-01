@@ -31,7 +31,6 @@ const SERVICE_SOURCE = resolve(
   'oauth',
   'claude-subscription-service.ts',
 );
-const MAIN_SOURCE = resolve(REPO_ROOT, 'apps', 'desktop', 'src', 'main', 'main.ts');
 const SETTINGS_SOURCE = resolve(
   REPO_ROOT,
   'apps',
@@ -357,7 +356,7 @@ describe('Claude OAuth model connection bridge', () => {
   });
 
   it('model connection IPC does not accept custom baseUrl overrides for OAuth-token providers', async () => {
-    const src = await readFile(MAIN_SOURCE, 'utf8');
+    const src = await readMainProcessCombinedSource();
     assert.match(
       src,
       /function normalizeCreateConnectionInput\(input:\s*CreateConnectionInput\):\s*CreateConnectionInput[\s\S]*defaults\.authKind === 'oauth_token'[\s\S]*baseUrl:\s*defaults\.baseUrl/,
@@ -375,7 +374,7 @@ describe('Claude OAuth model connection bridge', () => {
     );
     assert.match(
       src,
-      /const normalizedPatch = await normalizeUpdateConnectionInput\(slug,\s*patch\)/,
+      /const normalizedPatch = await normalizeUpdateConnectionInput\(deps,\s*slug,\s*patch\)/,
       'connections:update must use the provider-aware baseUrl normalizer',
     );
   });
