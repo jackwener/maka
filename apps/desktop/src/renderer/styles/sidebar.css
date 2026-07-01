@@ -96,7 +96,7 @@
 
 .maka-shell-topbar-rail {
   position: absolute;
-  z-index: 12;
+  z-index: var(--z-panel-action);
   top: var(--maka-sidebar-topbar-offset-y);
   left: var(--maka-sidebar-topbar-offset-x);
   min-height: 34px;
