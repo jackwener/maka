@@ -189,7 +189,7 @@
   grid-column: 2;
   grid-row: 1;
   justify-self: end;
-  color: var(--foreground-45);
+  color: var(--foreground-40);
   font-size: 14px;
   letter-spacing: 1px;
   line-height: 20px;
@@ -259,7 +259,7 @@
 }
 
 .maka-plan-template-note {
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -286,7 +286,7 @@
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--foreground-2);
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
@@ -433,7 +433,7 @@
 }
 
 .maka-capability-audit-metrics dt {
-  color: var(--foreground-45);
+  color: var(--foreground-40);
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0;
@@ -478,7 +478,7 @@
   padding: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--foreground-45);
+  color: var(--foreground-40);
   font-size: 13px;
   font-weight: 600;
 }
@@ -1369,7 +1369,7 @@
 .maka-skill-featured-banner p {
   max-width: 540px;
   margin: 10px 0 0;
-  color: var(--foreground-65);
+  color: var(--foreground-60);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -1413,7 +1413,7 @@
 }
 
 .maka-skill-featured-art small {
-  color: var(--foreground-45);
+  color: var(--foreground-40);
   font-size: 8px;
   font-weight: 600;
   line-height: 1.1;
@@ -1473,7 +1473,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   font-size: 13px;
   font-weight: 500;
   padding: 0 1px;
@@ -1503,7 +1503,7 @@
   justify-content: center;
   border-radius: 999px;
   background: oklch(from var(--foreground) l c h / 0.06);
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   font-size: 11px;
   font-weight: 650;
   padding: 0 5px;
@@ -1541,7 +1541,7 @@
 }
 
 .maka-skill-section-row small {
-  color: var(--foreground-45);
+  color: var(--foreground-40);
   font-size: 11px;
   font-weight: 600;
 }
@@ -1591,7 +1591,7 @@
 
 .maka-skill-market-card small,
 .maka-skill-market-card-foot span {
-  color: var(--foreground-45);
+  color: var(--foreground-40);
   font-size: 11px;
   font-weight: 600;
 }
@@ -1618,7 +1618,7 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--background);
-  color: var(--foreground-65);
+  color: var(--foreground-60);
   box-shadow: 0 1px 2px oklch(from var(--foreground) l c h / 0.05);
 }
 
@@ -1635,7 +1635,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--background);
-  color: var(--foreground-45);
+  color: var(--foreground-40);
   cursor: not-allowed;
   font-size: 12px;
   font-weight: 650;
@@ -1652,7 +1652,7 @@
 }
 
 .maka-skill-section-label {
-  color: var(--foreground-65);
+  color: var(--foreground-60);
   font-size: 9.5px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -1725,7 +1725,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--foreground-45);
+  color: var(--foreground-40);
   font-size: 9px;
   line-height: 1.35;
 }
@@ -1808,7 +1808,7 @@
   border: 1px solid var(--foreground-8);
   background: var(--background);
   box-shadow: 0 1px 2px oklch(from var(--foreground) l c h / 0.05);
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   transition: background-color var(--duration-base) var(--ease-out-strong), color var(--duration-base) var(--ease-out-strong);
 }
 
@@ -1870,7 +1870,7 @@
   padding: 2px 8px;
   border-radius: 999px;
   background: oklch(from var(--foreground) l c h / 0.05);
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
   font-size: 10px;
   letter-spacing: -0.01em;
@@ -1883,7 +1883,7 @@
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--background);
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   font-size: 11px;
   font-weight: 600;
   text-align: center;

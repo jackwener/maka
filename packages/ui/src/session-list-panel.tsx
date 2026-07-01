@@ -65,7 +65,7 @@ type NavRowVariants = VariantProps<typeof navRowVariants>;
 
 const settingsButtonClass =
   'w-full min-w-0 gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 ' +
-  'text-left text-sm font-medium text-[var(--foreground-65)] ' +
+  'text-left text-sm font-medium text-[var(--foreground-60)] ' +
   'transition-[background-color,color] duration-[var(--duration-base)] ease-[var(--ease-out-strong)] ' +
   'hover:bg-foreground/6 hover:text-foreground';
 
@@ -76,8 +76,8 @@ const rowActionVariants = cva(
     'transition-[background-color,color,box-shadow] duration-[var(--duration-quick)] ease-[var(--ease-out-strong)]',
     'hover:bg-foreground/5 hover:text-foreground',
     'focus-visible:outline-none focus-visible:bg-foreground/5 focus-visible:text-foreground focus-visible:ring-[3px] focus-visible:ring-accent/14',
-    'disabled:cursor-default disabled:bg-transparent disabled:text-[var(--foreground-45)] disabled:shadow-none',
-    'disabled:hover:bg-transparent disabled:hover:text-[var(--foreground-45)]',
+    'disabled:cursor-default disabled:bg-transparent disabled:text-[var(--foreground-40)] disabled:shadow-none',
+    'disabled:hover:bg-transparent disabled:hover:text-[var(--foreground-40)]',
     'data-[active=true]:text-accent',
     'data-[pending=true]:cursor-progress data-[pending=true]:bg-foreground/5 data-[pending=true]:text-foreground data-[pending=true]:opacity-78',
   ],

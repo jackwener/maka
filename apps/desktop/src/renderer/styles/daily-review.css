@@ -56,7 +56,7 @@
     margin: 0;
     font-size: 11px;
     line-height: 1.5;
-    color: var(--foreground-55);
+    color: var(--foreground-50);
   }
 
   .maka-daily-review-info-hint strong {
@@ -111,7 +111,7 @@
 
   .maka-daily-review-archive-count {
     font-size: 11px;
-    color: var(--foreground-45);
+    color: var(--foreground-40);
     font-variant-numeric: tabular-nums;
   }
 
@@ -230,7 +230,7 @@
     flex: none;
     border: 1px solid var(--foreground-10);
     border-radius: 999px;
-    color: var(--foreground-55);
+    color: var(--foreground-50);
     font-size: 11px;
     line-height: 1;
     padding: 4px 7px;
@@ -267,7 +267,7 @@
 
   .maka-daily-review-archive-section h5 {
     margin: 0;
-    color: var(--foreground-55);
+    color: var(--foreground-50);
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0;

@@ -219,7 +219,7 @@
 .maka-composer-status-slot {
   min-width: 0;
   flex: 1 1 auto;
-  color: var(--foreground-42);
+  color: var(--foreground-40);
   font-size: 10px;
   text-align: center;
 }
@@ -234,7 +234,7 @@
   border-radius: 999px;
   padding: 0 9px;
   background: oklch(from var(--background) l c h / 0.82);
-  color: var(--foreground-62);
+  color: var(--foreground-60);
   font-size: 10.5px;
   font-weight: 500;
   white-space: nowrap;
@@ -309,7 +309,7 @@
 }
 .maka-composer-mode-menu-hint {
   font-size: 11px;
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   line-height: 1.4;
   white-space: normal;
 }
@@ -331,7 +331,7 @@
   padding: 0 9px;
   border-color: var(--color-border-tertiary);
   background: var(--background);
-  color: var(--foreground-65);
+  color: var(--foreground-60);
 }
 
 .maka-composer-right-controls .maka-model-switcher-trigger:hover:not(:disabled):not([data-disabled]) {
@@ -422,6 +422,6 @@
 .maka-composer-tool-button.maka-composer-mic-button:disabled {
   border: 0;
   background: transparent;
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   opacity: 1;
 }

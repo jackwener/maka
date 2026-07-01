@@ -70,7 +70,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   font: inherit;
   font-size: 11px;
   line-height: 1.25;
@@ -102,7 +102,7 @@
   min-width: 0;
   max-width: 180px;
   overflow: hidden;
-  color: var(--foreground-45);
+  color: var(--foreground-40);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -278,7 +278,7 @@
 }
 
 .maka-permission-age {
-  color: var(--foreground-55);
+  color: var(--foreground-50);
   font-size: 11px;
   white-space: nowrap;
 }

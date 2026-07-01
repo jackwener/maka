@@ -314,7 +314,7 @@
   .settingsRow small {
     display: block;
     margin-top: 4px;
-    color: var(--foreground-55);
+    color: var(--foreground-50);
     font-size: 12px;
     line-height: 1.4;
   }

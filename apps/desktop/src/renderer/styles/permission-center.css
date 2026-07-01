@@ -435,7 +435,7 @@
     padding: 1px 6px;
     border-radius: 999px;
     background: oklch(from var(--foreground) l c h / 0.05);
-    color: var(--foreground-55);
+    color: var(--foreground-50);
     font-size: 0.68rem;
     font-weight: 600;
     letter-spacing: 0.04em;

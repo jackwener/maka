@@ -241,7 +241,7 @@
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  color: var(--foreground-65);
+  color: var(--foreground-60);
 }
 
 .maka-workspace-icon-action:hover {
@@ -845,8 +845,8 @@
   background: linear-gradient(
     to right,
     transparent 0%,
-    var(--foreground-4) 24%,
-    var(--foreground-4) 100%
+    var(--foreground-5) 24%,
+    var(--foreground-5) 100%
   );
 }
 
