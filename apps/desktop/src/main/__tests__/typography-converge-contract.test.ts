@@ -39,6 +39,11 @@ function extractFontSizeValue(decl: string): string {
   return decl.replace(/^font-size:\s*/i, '').replace(/;$/, '').trim();
 }
 
+/** Bare px/rem inside `font:` shorthand, e.g. `font: 12px/1.4 var(--font-sans)`.
+ *  Catches the shorthand bypass that `font-size:` scanning misses. */
+const FONT_SHORTHAND_PX_RE = /\bfont:\s*[^;}\n]*\d+(?:\.\d+)?px\b/gi;
+const FONT_SHORTHAND_REM_RE = /\bfont:\s*[^;}\n]*\d+(?:\.\d+)?rem\b/gi;
+
 // --- CSS scanning -----------------------------------------------------------
 
 function findCssOffenders(css: string, label: string): string[] {
@@ -67,6 +72,13 @@ function findCssOffenders(css: string, label: string): string[] {
 
     // Everything else is a violation
     offenders.push(`${label}: ${raw}`);
+  }
+
+  // Catch `font:` shorthand with bare px/rem size — bypasses font-size scanning
+  for (const re of [FONT_SHORTHAND_PX_RE, FONT_SHORTHAND_REM_RE]) {
+    for (const m of stripped.matchAll(re)) {
+      offenders.push(`${label}: ${m[0].trim()}`);
+    }
   }
 
   return offenders;
@@ -128,5 +140,15 @@ describe('typography whitelist negative cases', () => {
     assert.ok(findCssOffenders('font-size: 12px', 'test').length > 0, 'bare px must fail');
     assert.ok(findCssOffenders('font-size: 0.75rem', 'test').length > 0, 'bare rem must fail');
     assert.ok(findCssOffenders('font-size: 12.5px', 'test').length > 0, 'half-pixel px must fail');
+  });
+
+  it('rejects bare px/rem inside font: shorthand', () => {
+    assert.ok(findCssOffenders('font: 12px/1.4 var(--font-sans)', 'test').length > 0, 'shorthand px must fail');
+    assert.ok(findCssOffenders('font: 0.875rem sans-serif', 'test').length > 0, 'shorthand rem must fail');
+  });
+
+  it('accepts font: inherit and font: initial', () => {
+    assert.deepEqual(findCssOffenders('font: inherit', 'test'), []);
+    assert.deepEqual(findCssOffenders('font: initial', 'test'), []);
   });
 });
