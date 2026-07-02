@@ -37,7 +37,7 @@
 .enabledProviderTrigger:hover { background: var(--hover); }
 
 .enabledProviderName {
-  font-size: 13.5px;
+  font-size: var(--font-size-ui);
   font-weight: 620;
   letter-spacing: -0.002em;
   min-width: 0;
@@ -71,7 +71,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--font-size-ui);
   white-space: nowrap;
   color: var(--foreground-50);
 }
@@ -123,7 +123,7 @@
 }
 
 .enabledDefaultTag {
-  font-size: 11px;
+  font-size: var(--font-size-caption);
   font-weight: 650;
   color: var(--nav-active);
   background: oklch(from var(--nav-active) l c h / 0.14);
@@ -176,7 +176,7 @@
 }
 
 .catalogPillTabs strong {
-  font-size: 12px;
+  font-size: var(--font-size-ui);
   font-weight: 700;
 }
 
@@ -273,7 +273,7 @@
   background: transparent;
   color: var(--link);
   padding: 0 14px;
-  font-size: 12px;
+  font-size: var(--font-size-ui);
   font-weight: 700;
 }
 
@@ -371,7 +371,7 @@
   border-radius: var(--radius-control);
   background: transparent;
   color: var(--text);
-  font-size: 15px;
+  font-size: var(--font-size-base);
   line-height: 1;
 }
 
@@ -393,7 +393,7 @@
   border-radius: var(--radius-control);
   background: var(--surface, var(--background));
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--font-size-ui);
 }
 
 .maka-browser-strip {
@@ -472,7 +472,7 @@
 }
 
 .maka-artifact-pane-title {
-  font-size: 11px;
+  font-size: var(--font-size-caption);
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
@@ -480,7 +480,7 @@
 }
 
 .maka-artifact-pane-count {
-  font-size: 10px;
+  font-size: var(--font-size-caption);
   padding: 0 5px;
   border-radius: var(--radius-pill);
   background: oklch(from var(--foreground) l c h / 0.05);
@@ -499,7 +499,7 @@
   border-radius: var(--radius-surface);
   background: oklch(from var(--warning) l c h / 0.08);
   color: var(--foreground);
-  font-size: 12px;
+  font-size: var(--font-size-ui);
 }
 
 .maka-artifact-list-error svg {
@@ -509,7 +509,7 @@
 .maka-artifact-list-error strong {
   display: block;
   margin-bottom: 2px;
-  font-size: 12px;
+  font-size: var(--font-size-ui);
   font-weight: 600;
 }
 
@@ -529,7 +529,7 @@
   border-radius: var(--radius-surface);
   background: var(--background);
   color: var(--foreground);
-  font-size: 12px;
+  font-size: var(--font-size-ui);
 }
 
 .maka-artifact-error-retry:hover {
@@ -591,7 +591,7 @@
   background: transparent;
   color: var(--foreground);
   text-align: left;
-  font-size: 11px;
+  font-size: var(--font-size-caption);
   transition:
     background 140ms var(--ease-out-strong),
     border-color 140ms var(--ease-out-strong),
@@ -643,7 +643,7 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 1px;
-  font-size: 10px;
+  font-size: var(--font-size-caption);
   color: oklch(from var(--foreground) l c h / 0.62);
   font-variant-numeric: tabular-nums;
 }
@@ -670,24 +670,24 @@
   align-items: center;
   justify-content: center;
   color: oklch(from var(--foreground) l c h / 0.5);
-  font-size: 11px;
+  font-size: var(--font-size-caption);
 }
 
 .maka-artifact-preview-empty {
-  font-size: 11px;
+  font-size: var(--font-size-caption);
 }
 
 .maka-artifact-preview-file {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 11px;
+  font-size: var(--font-size-caption);
   line-height: 1.45;
 }
 
 .maka-artifact-preview-diff {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--font-size-caption);
 }
 
 .maka-artifact-preview-html {
@@ -708,7 +708,7 @@
 }
 
 .maka-artifact-preview-external-links-bar {
-  font-size: 10px;
+  font-size: var(--font-size-caption);
   padding: 4px 6px;
   border-radius: var(--radius-control);
   background: oklch(from var(--info) l c h / 0.10);
@@ -753,14 +753,14 @@
 }
 
 .maka-artifact-preview-unsupported-title {
-  font-size: 0.95rem;
+  font-size: var(--font-size-ui);
   font-weight: 600;
   color: var(--foreground);
 }
 
 .maka-artifact-preview-unsupported-body {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--font-size-ui);
   line-height: 1.55;
   color: var(--foreground-70);
 }
@@ -771,7 +771,7 @@
   gap: 4px 16px;
   margin: 0;
   padding: 0;
-  font-size: 0.8rem;
+  font-size: var(--font-size-ui);
   color: var(--foreground-70);
 }
 .maka-artifact-preview-unsupported-meta > div {
@@ -806,7 +806,7 @@
 
 .maka-artifact-preview-pdf-fallback {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--font-size-caption);
   color: oklch(from var(--foreground) l c h / 0.6);
 }
 
@@ -814,7 +814,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--font-size-ui);
   color: oklch(from var(--foreground) l c h / 0.65);
 }
 
@@ -831,7 +831,7 @@
   padding: 10px 12px;
   border-radius: var(--radius-surface);
   border: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--font-size-ui);
 }
 
 .maka-artifact-preview-fail[data-tone="destructive"] {
@@ -852,7 +852,7 @@
 
 .maka-artifact-preview-fail-body {
   margin: 0;
-  font-size: 11.5px;
+  font-size: var(--font-size-caption);
   line-height: 1.55;
 }
 
@@ -903,7 +903,7 @@
   color: var(--foreground);
   border-radius: var(--radius-control);
   padding: 4px 8px;
-  font-size: 11.5px;
+  font-size: var(--font-size-caption);
 }
 
 .maka-artifact-toolbar-button:hover {
@@ -1011,7 +1011,7 @@
   border: 1px solid oklch(from var(--info) l c h / 0.20);
   background: oklch(from var(--info) l c h / 0.06);
   color: var(--info-text);
-  font-size: 11px;
+  font-size: var(--font-size-caption);
   line-height: 1.4;
   transition: background var(--duration-base) var(--ease-out-strong), color var(--duration-base) var(--ease-out-strong), border-color var(--duration-base) var(--ease-out-strong);
   align-self: flex-start;
