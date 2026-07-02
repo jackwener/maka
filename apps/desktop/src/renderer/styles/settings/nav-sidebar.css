@@ -731,10 +731,9 @@
   display: block;
   margin-top: 6px;
   color: var(--foreground-50);
-  /* PR-SETTINGS-MOTION-TYPO-TOKENS-0 (round 15/15): 13 → 14 to clear
-     the 14px legibility floor cited by baseline-ui + UIDB + Impeccable
-     `/typeset`. Hint is the most-read body text on the page. */
-  font-size: var(--font-size-ui);
+  /* Hint is the most-read body text on the page; use the base scale so
+     it clears the 14px legibility floor. */
+  font-size: var(--font-size-base);
   line-height: 1.5;
 }
 

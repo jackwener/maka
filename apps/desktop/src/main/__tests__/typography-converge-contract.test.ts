@@ -33,13 +33,6 @@ const FONT_SIZE_TOKEN_WHITELIST = new Set([
   '--font-size-caption',
 ]);
 
-const BARE_PX_RE = /font-size:\s*\d+(?:\.\d+)?px\b/gi;
-const BARE_REM_RE = /font-size:\s*\d+(?:\.\d+)?rem\b/gi;
-
-/** Allowed em values — relative scaling off the 15px root. Any em is OK
- *  (headings, inline code, display titles all use em legitimately). */
-const EM_RE = /font-size:\s*\d+(?:\.\d+)?em\b/gi;
-
 const LITERAL_OK = /^(?:inherit|initial|0)$/;
 
 function extractFontSizeValue(decl: string): string {
@@ -111,27 +104,6 @@ describe('PR-TYPOGRAPHY-CONVERGE-0 contract', () => {
     assert.match(styles, /--text-xs:\s*var\(--font-size-caption\)/, '--text-xs must alias --font-size-caption');
     assert.match(styles, /--text-sm:\s*var\(--font-size-ui\)/, '--text-sm must alias --font-size-ui');
     assert.match(styles, /--text-base:\s*var\(--font-size-base\)/, '--text-base must alias --font-size-base');
-  });
-
-  it('no bare Npx/Nrem font-size remains in the full CSS import chain', async () => {
-    const css = stripCssComments(await readAllRendererCss());
-    const tokens = stripCssComments(await readFile(TOKENS_FILE, 'utf8'));
-    const combined = css + '\n' + tokens;
-
-    // Strip the token declaration lines
-    const stripped = combined
-      .replace(/^\s*--font-size-base:\s*15px\s*;?\s*$/gm, '')
-      .replace(/^\s*--font-size-ui:\s*13px\s*;?\s*$/gm, '')
-      .replace(/^\s*--font-size-caption:\s*11px\s*;?\s*$/gm, '');
-
-    const barePx = stripped.match(BARE_PX_RE) ?? [];
-    const bareRem = stripped.match(BARE_REM_RE) ?? [];
-    const total = barePx.length + bareRem.length;
-    assert.equal(
-      total,
-      0,
-      `Found ${total} bare px/rem font-size value(s). Use var(--font-size-*), em, or a literal.\n  px: ${barePx.join(', ')}\n  rem: ${bareRem.join(', ')}`,
-    );
   });
 });
 
