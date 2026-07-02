@@ -223,9 +223,8 @@
      Identical visual stacking, but referenceable + contract-locked. */
   z-index: var(--z-panel-action);
   /* Same baseline; 17px correction = 12px half-icon + 5px detail-panel
-     inset. Tokenized in maka-tokens.css (--maka-workspace-top-actions-*)
-     so .maka-chat-status-cluster (module-pages.css) can anchor off the
-     same geometry instead of duplicating it. */
+     inset. Tokenized in maka-tokens.css so the chat status row can
+     share the toolbar's right edge without duplicating the value. */
   top: var(--maka-workspace-top-actions-top);
   right: var(--maka-workspace-top-actions-right);
   display: inline-flex;

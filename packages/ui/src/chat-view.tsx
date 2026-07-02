@@ -473,10 +473,9 @@ export function ChatView(props: {
             chips only. */}
       </header>
       {(props.sessionStatusBadge || props.connectionAlert || props.eventStreamAlert) && (
-        /* Anchored below the top-right workspace toolbar (see
-           .maka-chat-status-cluster) rather than inline in
-           .maka-chat-header — keeps the badges from overlapping the
-           toolbar's icon buttons when more than one is showing. */
+        /* In normal flow below the header (see .maka-chat-status-cluster)
+           so wrapped multi-badge rows reserve space before banners and
+           messages. */
         <div className="maka-chat-status-cluster">
           {props.sessionStatusBadge && <SessionStatusBadge badge={props.sessionStatusBadge} />}
           {props.connectionAlert && <ChatHeaderAlertBadge alert={props.connectionAlert} />}
