@@ -23,7 +23,13 @@ const PHOSPHOR_ICONS: IconEntry[] = Object.entries(Icons)
     const dn = (value as { displayName?: string }).displayName;
     return typeof dn === 'string' && dn.startsWith('MakaIcon(');
   })
-  .map(([name, value]) => ({ name, Comp: value as LucideIcon }))
+  .reduce<IconEntry[]>((acc, [name, value]) => {
+    const dn = (value as { displayName?: string }).displayName;
+    if (!acc.some((e) => (e.Comp as { displayName?: string }).displayName === dn)) {
+      acc.push({ name, Comp: value as LucideIcon });
+    }
+    return acc;
+  }, [])
   .sort((a, b) => a.name.localeCompare(b.name));
 
 const BOT_BRAND_ICONS = Object.keys(MAKA_BOT_ICON_BODIES).sort();

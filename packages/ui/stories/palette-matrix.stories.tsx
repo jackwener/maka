@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 import { THEME_PALETTES } from '../../../packages/core/src/settings.js';
 
 const meta = {
@@ -11,18 +11,23 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-function useIsDark() {
-  const [isDark, setIsDark] = useState(
-    () => typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
-  );
-  useEffect(() => {
-    const el = document.documentElement;
-    const sync = () => setIsDark(el.classList.contains('dark'));
-    const observer = new MutationObserver(sync);
-    observer.observe(el, { attributes: true, attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-  return isDark;
+function subscribe(callback: () => void): () => void {
+  const el = document.documentElement;
+  const observer = new MutationObserver(callback);
+  observer.observe(el, { attributes: true, attributeFilter: ['class'] });
+  return () => observer.disconnect();
+}
+
+function getSnapshot(): boolean {
+  return document.documentElement.classList.contains('dark');
+}
+
+function getServerSnapshot(): boolean {
+  return false;
+}
+
+function useIsDark(): boolean {
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
 
 const paletteTokens = [
@@ -55,7 +60,7 @@ export const AllPalettes: Story = {
           {THEME_PALETTES.map((palette) => (
             <div
               key={palette}
-              data-maka-theme={palette === 'default' ? 'default' : palette}
+              data-maka-theme={palette}
               className={isDark ? 'dark' : undefined}
               style={{
                 display: 'grid',
