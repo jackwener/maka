@@ -349,6 +349,7 @@ describe('radius token governance (#406 gap 4)', () => {
       '.maka-plan-shell': '--radius-surface',
       '.maka-plan-card': '--radius-surface',
       '.maka-plan-template-strip[data-layout="cards"] .maka-plan-template-card': '--radius-surface',
+      '.maka-skill-library': '--radius-surface',
       '.maka-module-main .maka-daily-review-panel': '--radius-surface',
       '.maka-daily-review-info': '--radius-surface',
       '.maka-daily-review-archive-body': '--radius-surface',
