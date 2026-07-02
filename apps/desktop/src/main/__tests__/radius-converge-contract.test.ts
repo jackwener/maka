@@ -5,7 +5,7 @@
  *   - control  6px  — button / input / chip / kbd / inline code / tab trigger / nav row
  *   - surface  8px  — card / popover / menu popup / alert / toolbar / tab list / select popup
  *   - modal   12px — Settings / Confirm / Permission modal / floating card
- *   - pill    999px — switch / checkbox / radio / progress / badge dot
+ *   - pill    999px — pill / badge / round dot / switch / checkbox / radio / progress
  *
  * Tailwind alias map (styles.css):
  *   rounded-sm → --radius-control (6px)
@@ -15,14 +15,15 @@
  *   rounded-full → --radius-pill (999px)
  *
  * Contract rules:
- *   1. CSS `border-radius` (shorthand + longhand) must reference a whitelisted
- *      `--radius-*` token, or be 0 / 50% / inherit / initial. No bare Npx.
- *   2. TSX `rounded-[...]` and directional `rounded-{t|tr|tl|b|br|bl|l|r}-[...]`
+ *   1. CSS `border-radius` (shorthand + physical + logical longhand) must
+ *      reference a whitelisted `--radius-*` token, or be 0 / 50% / inherit / initial.
+ *   2. TSX `rounded-[...]` and directional `rounded-{t|tr|tl|b|br|bl|l|r|s|e|ss|se|es|ee}-[...]`
  *      must likewise reference a whitelisted token.
- *   3. `rounded-2xl` / `rounded-3xl` (≥16px) are banned.
- *   4. Shared control components (Button, Input, Toggle, Select item, Tab trigger)
- *      must use `rounded-sm` (control 6px), not `rounded-md`/`rounded-lg` (surface 8px).
- *   5. Token values are pinned: control=6px, surface=8px, modal=12px, pill=999px.
+ *   3. `calc(var(--radius-*))` may only *shrink* (subtract Npx); `+Npx` is banned.
+ *   4. `rounded-2xl` / `rounded-3xl` (≥16px) are banned.
+ *   5. Control components must use `rounded-sm`; surface components `rounded-md`;
+ *      Badge must use `rounded-[var(--radius-pill)]`.
+ *   6. Token values are pinned: control=6px, surface=8px, modal=12px, pill=999px.
  */
 
 import { strict as assert } from 'node:assert';
@@ -45,29 +46,34 @@ const RADIUS_TOKEN_WHITELIST = new Set([
   '--radius-xl', // tailwind alias → modal
 ]);
 
-/** Extract the inner token name from `var(--radius-foo)` or return null. */
 function extractRadiusToken(expr: string): string | null {
   const m = expr.match(/^var\((--radius-[\w-]+)\)$/);
   return m ? m[1] : null;
 }
 
-/** True if the expression is a bare `var(--radius-foo)` pointing to a whitelisted token. */
 function isWhitelistedVar(expr: string): boolean {
   const tok = extractRadiusToken(expr);
   return tok !== null && RADIUS_TOKEN_WHITELIST.has(tok);
 }
 
-/** True if the expression is a `calc(...)` that contains at least one whitelisted token. */
+/**
+ * calc() must contain at least one whitelisted token, every --radius-*
+ * reference must be whitelisted, and the expression may only *shrink*
+ * (subtract). `+ Npx` / `* N` that could enlarge past the token tier is banned.
+ */
 function isWhitelistedCalc(expr: string): boolean {
   if (!/^calc\(.*\)$/.test(expr)) return false;
-  // Every var(--radius-*) inside the calc must be whitelisted.
   const refs = [...expr.matchAll(/var\((--radius-[\w-]+)\)/g)].map((m) => m[1]);
-  return refs.length > 0 && refs.every((r) => RADIUS_TOKEN_WHITELIST.has(r));
+  if (refs.length === 0) return false;
+  if (!refs.every((r) => RADIUS_TOKEN_WHITELIST.has(r))) return false;
+  // Only allow subtraction (inner-ring shrink). Addition can break the 12px cap.
+  if (/\+\s*\d/.test(expr)) return false;
+  if (/\*\s*[2-9]/.test(expr)) return false; // multiplier > 1
+  return true;
 }
 
 const LITERAL_OK = /^(?:0+(?:px|%)?|50%|inherit|initial)$/;
 
-/** Check one corner of a shorthand value (after stripping !important). */
 function isAllowedCorner(corner: string): boolean {
   if (LITERAL_OK.test(corner)) return true;
   return isWhitelistedVar(corner) || isWhitelistedCalc(corner);
@@ -76,7 +82,7 @@ function isAllowedCorner(corner: string): boolean {
 // --- CSS scanning (single entry: readAllRendererCss unfolds all imports) -----
 
 const RADIUS_DECL_RE = /border-radius:\s*([^;}\n]+)\s*[;}]/g;
-const RADIUS_LONGHAND_RE = /border-(?:top-left|top-right|bottom-left|bottom-right)-radius:\s*([^;}\n]+)\s*[;}]/g;
+const RADIUS_LONGHAND_RE = /border-(?:top-left|top-right|bottom-left|bottom-right|start-start|start-end|end-start|end-end)-radius:\s*([^;}\n]+)\s*[;}]/g;
 
 function findCssOffenders(css: string, label: string): string[] {
   const stripped = stripCssComments(css);
@@ -94,7 +100,7 @@ function findCssOffenders(css: string, label: string): string[] {
 
 // --- TSX/TS scanning --------------------------------------------------------
 
-const ROUNDED_RE = /rounded-(?:\[(?<arb>[^\]]+)\]|(?<tw>2xl|3xl)\b|(?:t|tr|tl|b|br|bl|l|r)-\[(?<dir>[^\]]+)\])/g;
+const ROUNDED_RE = /rounded-(?:\[(?<arb>[^\]]+)\]|(?<tw>2xl|3xl)\b|(?:t|tr|tl|b|br|bl|l|r|s|e|ss|se|es|ee)-\[(?<dir>[^\]]+)\])/g;
 
 async function collectTsxOffenders(): Promise<string[]> {
   const offenders: string[] = [];
@@ -130,51 +136,70 @@ async function collectTsxOffenders(): Promise<string[]> {
   return offenders;
 }
 
-// --- control vs surface class contract -------------------------------------
+// --- component → expected radius tier contract ------------------------------
 
-/**
- * Shared control components must use rounded-sm (control 6px), not
- * rounded-md/rounded-lg (surface 8px). We match each component's definition
- * block by name, then check for surface-class usage inside it.
- */
-interface ControlCheck {
+type Tier = 'control' | 'surface' | 'pill';
+
+interface ComponentRadiusCheck {
   file: string;
-  /** Variable or function name that identifies the component block. */
   name: string;
+  tier: Tier;
 }
 
-const CONTROL_COMPONENTS: ControlCheck[] = [
-  { file: 'packages/ui/src/ui.tsx', name: 'buttonVariants' },
-  { file: 'packages/ui/src/ui.tsx', name: 'badgeVariants' },
-  { file: 'packages/ui/src/ui.tsx', name: 'inputClasses' },
-  { file: 'packages/ui/src/ui.tsx', name: 'SelectItem' },
-  { file: 'packages/ui/src/ui.tsx', name: 'Toggle' },
-  { file: 'packages/ui/src/ui.tsx', name: 'TabsTrigger' },
-  { file: 'packages/ui/src/primitives/input.tsx', name: 'InputPrimitive' },
-  { file: 'packages/ui/src/primitives/textarea.tsx', name: 'TextareaPrimitive' },
-  { file: 'packages/ui/src/primitives/input-group.tsx', name: 'InputGroup' },
-  { file: 'packages/ui/src/session-list-panel.tsx', name: 'navRowVariants' },
-  { file: 'packages/ui/src/session-list-panel.tsx', name: 'settingsButtonClass' },
-  { file: 'packages/ui/src/session-list-panel.tsx', name: 'rowActionVariants' },
+/** The expected radius class for each tier. */
+const TIER_CLASS: Record<Tier, string[]> = {
+  control: ['rounded-sm'],
+  surface: ['rounded-md'],
+  pill: ['rounded-[var(--radius-pill)]', 'rounded-full'],
+};
+
+/** Classes that belong to a *different* tier — must not appear. */
+const ALL_TIER_CLASSES = ['rounded-sm', 'rounded-md', 'rounded-lg', 'rounded-xl', 'rounded-full', 'rounded-[var(--radius-pill)]', 'rounded-[var(--radius-control)]', 'rounded-[var(--radius-surface)]', 'rounded-[var(--radius-modal)]'];
+
+function classesForOtherTiers(tier: Tier): string[] {
+  return ALL_TIER_CLASSES.filter((c) => !TIER_CLASS[tier].includes(c));
+}
+
+const COMPONENT_RADIUS: ComponentRadiusCheck[] = [
+  { file: 'packages/ui/src/ui.tsx', name: 'buttonVariants', tier: 'control' },
+  { file: 'packages/ui/src/ui.tsx', name: 'inputClasses', tier: 'control' },
+  { file: 'packages/ui/src/ui.tsx', name: 'SelectItem', tier: 'control' },
+  { file: 'packages/ui/src/ui.tsx', name: 'Toggle', tier: 'control' },
+  { file: 'packages/ui/src/ui.tsx', name: 'TabsTrigger', tier: 'control' },
+  { file: 'packages/ui/src/ui.tsx', name: 'badgeVariants', tier: 'pill' },
+  { file: 'packages/ui/src/ui.tsx', name: 'TabsList', tier: 'surface' },
+  { file: 'packages/ui/src/ui.tsx', name: 'SelectPopup', tier: 'surface' },
+  { file: 'packages/ui/src/ui.tsx', name: 'ToggleGroup', tier: 'surface' },
+  { file: 'packages/ui/src/primitives/input.tsx', name: 'InputPrimitive', tier: 'control' },
+  { file: 'packages/ui/src/primitives/input-group.tsx', name: 'InputGroup', tier: 'control' },
+  { file: 'packages/ui/src/primitives/badge.tsx', name: 'badgeVariants', tier: 'pill' },
+  { file: 'packages/ui/src/primitives/item.tsx', name: 'itemVariants', tier: 'surface' },
+  { file: 'packages/ui/src/primitives/menu.tsx', name: 'MenuPopup', tier: 'surface' },
+  { file: 'packages/ui/src/primitives/alert.tsx', name: 'alertVariants', tier: 'surface' },
+  { file: 'packages/ui/src/primitives/toolbar.tsx', name: 'Toolbar', tier: 'surface' },
+  { file: 'packages/ui/src/session-list-panel.tsx', name: 'navRowVariants', tier: 'control' },
+  { file: 'packages/ui/src/session-list-panel.tsx', name: 'settingsButtonClass', tier: 'control' },
+  { file: 'packages/ui/src/session-list-panel.tsx', name: 'rowActionVariants', tier: 'control' },
 ];
 
-/**
- * Extract a component's definition block from source: from the name to the
- * end of its cva()/forwardRef() call or className assignment. We grab a
- * generous slice (up to next `export` or 40 lines) and check inside it.
- */
-function findSurfaceClassOnControls(src: string, check: ControlCheck): string[] {
+function checkComponentTier(src: string, check: ComponentRadiusCheck): string[] {
   const offenders: string[] = [];
-  // Match from the name to the next `export` statement (end of block).
-  // Use word boundary to avoid matching substrings (e.g. Toggle matching ToggleGroup).
   const re = new RegExp(
     `(?:const\\s+${check.name}\\s*=|export\\s+const\\s+${check.name}\\s*=|function\\s+${check.name}\\b)[\\s\\S]*?(?=\\nexport\\s|$)`,
     'g',
   );
+  const expected = TIER_CLASS[check.tier];
+  const forbidden = classesForOtherTiers(check.tier);
   for (const m of src.matchAll(re)) {
     const block = m[0];
-    if (/\brounded-(?:md|lg)\b/.test(block)) {
-      offenders.push(`${check.file}: ${check.name} uses rounded-md/rounded-lg (surface 8px), should be rounded-sm (control 6px)`);
+    const hasExpected = expected.some((c) => block.includes(c));
+    if (!hasExpected) {
+      offenders.push(`${check.file}: ${check.name} must use ${expected.join(' or ')} (${check.tier}), found none`);
+    }
+    for (const bad of forbidden) {
+      if (block.includes(bad)) {
+        offenders.push(`${check.file}: ${check.name} must not use ${bad} (wrong tier for ${check.tier})`);
+      }
     }
   }
   return offenders;
@@ -198,24 +223,24 @@ async function parseRadiusTokenValues(): Promise<Map<string, string>> {
 // === tests ==================================================================
 
 describe('radius token governance (#406 gap 4)', () => {
-  it('CSS uses only whitelisted --radius-* tokens (no bare Npx, no longhand, no private tokens)', async () => {
+  it('CSS uses only whitelisted --radius-* tokens (no bare Npx, no longhand, no logical, no private tokens)', async () => {
     const css = await readAllRendererCss();
     const offenders = findCssOffenders(css, 'renderer CSS');
     assert.deepEqual(offenders, [], `Offenders:\n  ${offenders.join('\n  ')}`);
   });
 
-  it('TSX uses no hardcoded rounded-[Npx], no directional rounded-*-[Npx], no rounded-2xl/3xl', async () => {
+  it('TSX uses no hardcoded rounded-[Npx], no directional/logical rounded-*-[Npx], no rounded-2xl/3xl', async () => {
     const offenders = await collectTsxOffenders();
     assert.deepEqual(offenders, [], `Offenders:\n  ${offenders.join('\n  ')}`);
   });
 
-  it('control components use rounded-sm, not rounded-md/rounded-lg', async () => {
+  it('components use the correct radius tier (control/surface/pill)', async () => {
     const offenders: string[] = [];
-    for (const check of CONTROL_COMPONENTS) {
+    for (const check of COMPONENT_RADIUS) {
       const src = await readFile(resolve(REPO_ROOT, check.file), 'utf8');
-      offenders.push(...findSurfaceClassOnControls(src, check));
+      offenders.push(...checkComponentTier(src, check));
     }
-    assert.deepEqual(offenders, [], `Control components must use rounded-sm (6px), not rounded-md/rounded-lg (8px):\n  ${offenders.join('\n  ')}`);
+    assert.deepEqual(offenders, [], `Component tier violations:\n  ${offenders.join('\n  ')}`);
   });
 
   it('radius token values are pinned to 6/8/12/999px', async () => {
@@ -253,5 +278,12 @@ describe('radius whitelist negative cases', () => {
     assert.equal(isWhitelistedCalc('calc(var(--radius-private) + 1px)'), false, 'private token in calc must fail');
     assert.equal(isWhitelistedCalc('calc(var(--radius-modla) - 1px)'), false, 'typo in calc must fail');
     assert.equal(isWhitelistedCalc('calc(var(--radius-control) - 1px)'), true, 'valid token in calc must pass');
+  });
+
+  it('rejects calc() that enlarges past the token tier', () => {
+    assert.equal(isWhitelistedCalc('calc(var(--radius-modal) + 20px)'), false, 'addition must fail');
+    assert.equal(isWhitelistedCalc('calc(var(--radius-surface) + 8px)'), false, 'addition must fail');
+    assert.equal(isWhitelistedCalc('calc(var(--radius-modal) - 1px)'), true, 'subtraction must pass');
+    assert.equal(isWhitelistedCalc('calc(var(--radius-xl) - 1px)'), true, 'subtraction with alias must pass');
   });
 });

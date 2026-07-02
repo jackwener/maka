@@ -84,7 +84,7 @@ export const Button = forwardRef<HTMLElement, ButtonProps>(function Button(
 });
 
 export const badgeVariants = cva(
-  'inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-xs font-medium tabular-nums',
+  'inline-flex items-center gap-1 rounded-[var(--radius-pill)] border px-2 py-0.5 text-xs font-medium tabular-nums',
   {
     variants: {
       variant: {
