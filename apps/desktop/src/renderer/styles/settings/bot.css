@@ -13,7 +13,7 @@
   align-items: center;
   gap: 10px;
   border: 0;
-  border-radius: var(--radius-modal);
+  border-radius: var(--radius-surface);
   background: transparent;
   color: var(--foreground-70);
   padding: 7px 10px;
@@ -145,7 +145,7 @@
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: start;
     gap: 14px;
-    border-radius: var(--radius-modal);
+    border-radius: var(--radius-surface);
     background: color-mix(in srgb, var(--bot-brand-color, var(--accent)) 7%, var(--background));
     border: 1px solid color-mix(in srgb, var(--bot-brand-color, var(--accent)) 14%, transparent);
     padding: 16px 18px;
@@ -243,7 +243,7 @@
   .settingsBotStatusGrid div {
     min-height: 52px;
     border: 1px solid var(--border);
-    border-radius: var(--radius-modal);
+    border-radius: var(--radius-surface);
     background: var(--foreground-3);
     padding: 10px 12px;
   }
@@ -425,7 +425,7 @@
   display: grid;
   gap: 0;
   border: 1px solid oklch(from var(--foreground) l c h / 0.08);
-  border-radius: var(--radius-modal);
+  border-radius: var(--radius-surface);
   overflow: hidden;
 }
 

@@ -509,7 +509,7 @@
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
   border: 1px solid var(--border);
-  border-radius: var(--radius-surface);
+  border-radius: var(--radius-modal);
   box-shadow:
     0 1px 2px oklch(from var(--foreground) l c h / 0.05),
     0 18px 48px oklch(from var(--foreground) l c h / 0.12),

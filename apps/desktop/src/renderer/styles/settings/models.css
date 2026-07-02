@@ -235,7 +235,7 @@
   height: 44px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-modal); /* 27.3% — anchor ratio */
+  border-radius: var(--radius-surface); /* 27.3% — anchor ratio */
   background: var(--foreground-5);
   color: var(--foreground);
   box-shadow: inset 0 0 0 1px oklch(from var(--foreground) l c h / 0.06);
@@ -390,7 +390,7 @@
   height: 26px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-modal);
+  border-radius: var(--radius-control);
   background: var(--surface, var(--background));
   color: var(--text);
   font-size: 12px;
@@ -960,7 +960,7 @@
  * stays hand-written here alongside the other model-catalog-preview turn
  * chrome. */
 .maka-turn[data-search-highlight="true"] {
-  border-radius: var(--radius-modal);
+  border-radius: var(--radius-surface);
   outline: 1px solid oklch(from var(--accent) l c h / 0.34);
   outline-offset: 6px;
   background: oklch(from var(--accent) l c h / 0.045);

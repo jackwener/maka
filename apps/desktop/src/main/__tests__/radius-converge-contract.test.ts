@@ -99,7 +99,7 @@ function findCssOffenders(css: string, label: string): string[] {
 
 // --- TSX/TS scanning --------------------------------------------------------
 
-const ROUNDED_RE = /rounded-(?:\[(?<arb>[^\]]+)\]|\((?<paren>[^)]+)\)|(?<tw>[2-9]xl)\b|(?:t|tr|tl|b|br|bl|l|r|s|e|ss|se|es|ee)-\[(?<dir>[^\]]+)\]|(?:t|tr|tl|b|br|bl|l|r|s|e|ss|se|es|ee)-\((?<dirpar>[^)]+)\))/g;
+const ROUNDED_RE = /rounded-(?:\[(?<arb>[^\]]+)\]|\((?<paren>[^)]+)\)|(?<tw>[2-9]xl)\b|(?:t|tr|tl|b|br|bl|l|r|s|e|ss|se|es|ee)-(?:\[(?<dir>[^\]]+)\]|\((?<dirpar>[^)]+)\)|(?<dirtw>[2-9]xl)\b))/g;
 
 async function collectTsxOffenders(): Promise<string[]> {
   const offenders: string[] = [];
@@ -116,9 +116,10 @@ async function collectTsxOffenders(): Promise<string[]> {
       const src = await readFile(full, 'utf8');
       const label = full.replace(REPO_ROOT + '/', '');
       for (const m of src.matchAll(ROUNDED_RE)) {
-        const groups = m.groups as { arb?: string; paren?: string; tw?: string; dir?: string; dirpar?: string } | undefined;
-        if (groups?.tw) {
-          offenders.push(`${label}: rounded-${groups.tw} (≥16px, exceeds 12px cap)`);
+        const groups = m.groups as { arb?: string; paren?: string; tw?: string; dir?: string; dirpar?: string; dirtw?: string } | undefined;
+        if (groups?.tw || groups?.dirtw) {
+          const tw = groups.tw ?? groups.dirtw!;
+          offenders.push(`${label}: rounded-${tw} (≥16px, exceeds 12px cap)`);
           continue;
         }
         const val = (groups?.arb ?? groups?.dir ?? groups?.paren ?? groups?.dirpar ?? '').trim();
@@ -126,8 +127,6 @@ async function collectTsxOffenders(): Promise<string[]> {
         if (isWhitelistedVar(val) || isWhitelistedCalc(val)) continue;
         // menu.tsx checkbox-thumb morph animation — dynamic, not a static tier
         if (/^var\(--thumb-size\)\/calc\(var\(--thumb-size\)\*1\.10\)$/.test(val)) continue;
-        // rounded-(--thumb-size) is a dynamic thumb-size ref, not a --radius-* token
-        if (/^--thumb-size$/.test(val)) continue;
         offenders.push(`${label}: rounded-[${val}]`);
       }
     }
@@ -272,20 +271,50 @@ describe('radius token governance (#406 gap 4)', () => {
   it('CSS class selectors use the correct radius tier', async () => {
     const css = await readAllRendererCss();
     const stripped = stripCssComments(css);
-    const checks: Record<string, RegExp> = {
-      '.maka-code': /\.maka-code\s*\{[^}]*border-radius:\s*var\(--radius-surface\)/,
-      '.maka-skeleton-card': /\.maka-skeleton-card\s*\{[^}]*border-radius:\s*var\(--radius-surface\)/,
-      '.maka-composer-inner': /\.maka-composer-inner\s*\{[^}]*border-radius:\s*var\(--radius-modal\)/,
-      '.settingsPermissionRefresh': /\.settingsPermissionRefresh\s*\{[^}]*border-radius:\s*var\(--radius-control\)/,
-      '.settingsCapabilityGuidanceActions code': /\.settingsCapabilityGuidanceActions\s+code\s*\{[^}]*border-radius:\s*var\(--radius-surface\)/,
+    // Each entry: selector → expected tier token.
+    // Covers every selector that was found wrong in the full audit (round 6)
+    // plus previously-fixed high-value entries.
+    const SELECTOR_TIER: Record<string, string> = {
+      '.maka-code': '--radius-surface',
+      '.maka-skeleton-card': '--radius-surface',
+      '.maka-composer-inner': '--radius-modal',
+      '.settingsPermissionRefresh': '--radius-control',
+      '.settingsCapabilityGuidanceActions code': '--radius-surface',
+      '.settingsModal': '--radius-modal',
+      '.maka-palette-modal': '--radius-modal',
+      '.settingsPermissionIntro': '--radius-surface',
+      '.settingsPermissionError': '--radius-surface',
+      '.settingsCapabilityRow': '--radius-surface',
+      '.settingsOsPermissionList': '--radius-surface',
+      '.settingsHealthIntro': '--radius-surface',
+      '.settingsHealthError': '--radius-surface',
+      '.settingsBotHero': '--radius-surface',
+      '.settingsRows': '--radius-surface',
+      '.settingsNotice': '--radius-surface',
+      '.settingsAboutLogo': '--radius-surface',
+      '.settingsAboutPrivacy': '--radius-surface',
+      '.settingsWechatQrClose': '--radius-control',
+      '.settingsWechatQrFrame': '--radius-surface',
+      '.settingsWechatQrState': '--radius-surface',
+      '.providerUnavailableNotice': '--radius-surface',
+      '.enabledEmptyChip': '--radius-control',
+      '.maka-firstrun-list': '--radius-surface',
+      '.maka-onboarding-quickchat-submit': '--radius-control',
+      '.maka-first-run-checklist': '--radius-surface',
+      '.providerLogo': '--radius-surface',
+      '.maka-browser-address': '--radius-control',
     };
     const offenders: string[] = [];
-    for (const [sel, re] of Object.entries(checks)) {
+    for (const [sel, token] of Object.entries(SELECTOR_TIER)) {
+      // Match selector block containing the expected token
+      const re = new RegExp(
+        sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + `\\s*\\{[^}]*border-radius:\\s*var\\(${token}\\)`,
+      );
       if (!re.test(stripped)) {
-        offenders.push(`${sel} must use the correct --radius-* tier`);
+        offenders.push(`${sel} must use border-radius: var(${token})`);
       }
     }
-    assert.deepEqual(offenders, [], `Selector violations:\n  ${offenders.join('\n  ')}`);
+    assert.deepEqual(offenders, [], `Selector tier violations:\n  ${offenders.join('\n  ')}`);
   });
 
   it('radius token values are pinned to 6/8/12/999px', async () => {
@@ -352,20 +381,20 @@ describe('radius whitelist negative cases', () => {
     assert.equal(isWhitelistedCalc('calc(var(--radius-sm) - 1.5px)'), true, 'fractional subtraction must pass');
   });
 
-  it('TSX scanner catches rounded-(--private-radius) and rounded-4xl', async () => {
-    // These are synthetic inline tests — verify the regex catches them.
-    // We test the ROUNDED_RE directly against known-bad strings.
+  it('TSX scanner catches rounded-(--private-radius), rounded-4xl, and directional scale classes', async () => {
     const badCases = [
       'rounded-(--private-radius)',
       'rounded-se-(--private-radius)',
       'rounded-4xl',
       'rounded-9xl',
+      'rounded-s-2xl',
+      'rounded-t-3xl',
+      'rounded-se-4xl',
     ];
     for (const bad of badCases) {
       const m = [...bad.matchAll(ROUNDED_RE)];
       assert.ok(m.length > 0, `${bad} must be caught by ROUNDED_RE`);
     }
-    // Good cases must not produce offenders (tested via the functions).
     assert.equal(isWhitelistedVar('var(--radius-pill)'), true, 'valid pill token must pass');
   });
 });

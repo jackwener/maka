@@ -20,7 +20,7 @@
     gap: 20px;
     padding: 16px;
     border: 1px solid var(--border);
-    border-radius: var(--radius-modal);
+    border-radius: var(--radius-surface);
     background: var(--foreground-3);
   }
   .settingsPermissionIntro h3 {
@@ -78,7 +78,7 @@
     padding: 16px;
     border: 1px solid oklch(from var(--destructive) l c h / 0.30);
     background: oklch(from var(--destructive) l c h / 0.08);
-    border-radius: var(--radius-modal);
+    border-radius: var(--radius-surface);
     color: var(--destructive-text);
   }
   .settingsPermissionError strong {
@@ -118,7 +118,7 @@
 
   .settingsCapabilityRow {
     border: 1px solid var(--border);
-    border-radius: var(--radius-modal);
+    border-radius: var(--radius-surface);
     background: var(--background);
     padding: 14px 16px;
     display: flex;
@@ -349,7 +349,7 @@
     display: flex;
     flex-direction: column;
     border: 1px solid var(--border);
-    border-radius: var(--radius-modal);
+    border-radius: var(--radius-surface);
     background: var(--background);
     overflow: hidden;
   }

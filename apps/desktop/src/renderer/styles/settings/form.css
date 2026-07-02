@@ -117,15 +117,8 @@
   min-width: min(760px, calc(100vw - 64px));
   min-height: 520px;
   overflow: hidden;
-  /* Chrome derived from --card-* tokens (atlas §4 + Phase 2A recipe). The
-     dialog edge is now a tight 8px reference-aligned radius with a single
-     1px hairline border, a Doppelrand inner highlight and a soft 4% lift —
-     the same recipe used by every other page card, scaled to a bigger
-     surface. The previous double 28px / 8px black shadows read as "modal
-     popup heavy"; the new single lift reads as "premium card sitting on a
-     dimmed canvas". */
   border: 1px solid var(--card-border-color);
-  border-radius: var(--radius-surface);
+  border-radius: var(--radius-modal);
   background: var(--card-bg);
   box-shadow:
     var(--card-shadow),

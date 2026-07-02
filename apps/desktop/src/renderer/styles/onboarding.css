@@ -177,7 +177,7 @@
 /* --- provider list panel (scrolls vertically as the list grows) --- */
 .maka-firstrun-list {
   border: 1px solid var(--border);
-  border-radius: var(--radius-modal);
+  border-radius: var(--radius-surface);
   overflow: hidden;
   background: var(--background-elevated);
 }
@@ -507,7 +507,7 @@
   min-height: 40px;
   min-width: 40px;
   padding: 0;
-  border-radius: var(--radius-modal);
+  border-radius: var(--radius-control);
   background: var(--accent);
   color: var(--accent-foreground, oklch(0.985 0.003 250));
   box-shadow:

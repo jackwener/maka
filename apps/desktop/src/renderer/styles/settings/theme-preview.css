@@ -45,7 +45,7 @@
 }
 
 .settingsNotice {
-  border-radius: var(--radius-modal);
+  border-radius: var(--radius-surface);
   background: oklch(from var(--info) l c h / 0.10);
   color: var(--info-text);
   padding: 11px 12px;
@@ -90,7 +90,7 @@
   height: 48px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius-modal);
+  border-radius: var(--radius-surface);
   background: oklch(from var(--accent) l c h / 0.10);
   color: var(--accent);
 }
@@ -141,7 +141,7 @@
   gap: 8px;
   padding: 14px 16px;
   border: 1px solid oklch(from var(--success) l c h / 0.24);
-  border-radius: var(--radius-modal);
+  border-radius: var(--radius-surface);
   background: oklch(from var(--success) l c h / 0.04);
 }
 
@@ -615,7 +615,7 @@
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: var(--radius-surface);
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--foreground-50);
 }
@@ -644,7 +644,7 @@
   display: grid;
   place-items: center;
   border: 1px solid color-mix(in srgb, #07C160 20%, var(--border));
-  border-radius: var(--radius-modal);
+  border-radius: var(--radius-surface);
   background: white;
   padding: 12px;
 }
@@ -664,7 +664,7 @@
   align-content: center;
   gap: 10px;
   border: 1px dashed var(--border);
-  border-radius: var(--radius-modal);
+  border-radius: var(--radius-surface);
   background: var(--foreground-3);
   color: var(--foreground-60);
   padding: 18px;
