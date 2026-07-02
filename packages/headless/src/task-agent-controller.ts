@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import type {
-  AgentRunStore,
-  RuntimeEvent,
-  RuntimeEventStore,
-  SessionBlockedReason,
-  SessionHeader,
-  SessionStatus,
-  StoredMessage,
+import {
+  isTerminalRuntimeEvent,
+  type AgentRunStore,
+  type RuntimeEvent,
+  type RuntimeEventStore,
+  type SessionBlockedReason,
+  type SessionHeader,
+  type SessionStatus,
+  type StoredMessage,
 } from '@maka/core';
 import {
   AgentRun,
@@ -333,6 +334,7 @@ export async function runTaskOnce(
         header,
         instruction,
         ...(deps.priorRuntimeContext ? { priorRuntimeContext: deps.priorRuntimeContext } : {}),
+        requireTerminalRuntimeEventWrite: Boolean(runtimeEventStore),
         now,
         newId,
       });
@@ -839,6 +841,7 @@ interface RunRuntimeAttemptInput {
   header: SessionHeader;
   instruction: string;
   priorRuntimeContext?: readonly RuntimeEvent[];
+  requireTerminalRuntimeEventWrite: boolean;
   now: () => number;
   newId: () => string;
 }
@@ -857,8 +860,19 @@ async function runRuntimeAttempt(input: RunRuntimeAttemptInput): Promise<Invocat
     backend: begin.backend,
     drainAfterTerminal: true,
     onSessionEvent: async (sessionEvent, runtimeEvent) => {
+      if (isTerminalRuntimeEvent(runtimeEvent)) {
+        if (!isPermissionHandoffTerminal(runtimeEvent)) {
+          await input.run.recordRuntimeEvents([runtimeEvent], {
+            requireTerminalWrite: input.requireTerminalRuntimeEventWrite,
+          });
+        }
+        await input.run.recordSessionEvent(sessionEvent);
+        return;
+      }
       await input.run.recordSessionEvent(sessionEvent);
-      await input.run.recordRuntimeEvents([runtimeEvent]);
+      if (!isNonTerminalErrorRuntimeEvent(runtimeEvent)) {
+        await input.run.recordRuntimeEvents([runtimeEvent]);
+      }
     },
     onError: async (error) => {
       await input.run.recordFailure(error);
@@ -1311,6 +1325,14 @@ function appendTaskEvent(store: TaskRunStore, taskRunId: string, event: TaskEven
 
 function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values)];
+}
+
+function isPermissionHandoffTerminal(event: { actions?: { stateDelta?: Record<string, unknown> } }): boolean {
+  return event.actions?.stateDelta?.stopReason === 'permission_handoff';
+}
+
+function isNonTerminalErrorRuntimeEvent(event: RuntimeEvent): boolean {
+  return event.content?.kind === 'error' && !isTerminalRuntimeEvent(event);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
