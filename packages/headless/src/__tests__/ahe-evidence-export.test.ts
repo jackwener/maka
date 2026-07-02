@@ -197,7 +197,31 @@ describe('AHE evidence export', () => {
       });
       const projection = projectTaskRun([
         { type: 'task_run_created', id: 'e1', taskRunId: 'run-official', ts: 1, taskId: 'task-1', configId: 'cfg-1' },
-        officialVerifierEvent('run-official', false),
+        {
+          type: 'heavy_task_self_check_recorded',
+          id: 'self-check-event',
+          taskRunId: 'run-official',
+          ts: 2,
+          selfCheck: acceptedHeavySelfCheck('run-official', true),
+        },
+        {
+          type: 'verifier_result_recorded',
+          id: 'verifier-run-official',
+          taskRunId: 'run-official',
+          ts: 3,
+          result: {
+            id: 'verifier-run-official',
+            taskRunId: 'run-official',
+            ts: 3,
+            kind: 'terminal_bench',
+            passed: false,
+            exitCode: 1,
+            score: 0,
+            maxScore: 1,
+            stdout: 'AssertionError: expected move e2e4 but got e2g4\n',
+            authority: { source: 'official_harbor_verifier', authoritative: true },
+          },
+        },
         officialScoreEvent('run-official', false),
         { type: 'task_run_completed', id: 'e4', taskRunId: 'run-official', ts: 4, finishedAt: 4 },
       ], 'run-official');
@@ -236,8 +260,16 @@ describe('AHE evidence export', () => {
       assert.match(traceIndexJson, /traces\/run-official\/result.md/);
       assert.match(traceIndexJson, /traces\/run-official\/events.jsonl/);
       assert.match(traceIndexJson, /traces\/run-official\/messages.json/);
+      assert.match(traceIndexJson, /traces\/run-official\/failure-digest.json/);
       assert.match(await readFile(join(out, 'traces', 'run-official', 'task-run.json'), 'utf8'), /maka.task_run_export.v1/);
       assert.match(await readFile(join(out, 'traces', 'run-official', 'events.jsonl'), 'utf8'), /task_run_created/);
+      const failureDigest = JSON.parse(await readFile(join(out, 'traces', 'run-official', 'failure-digest.json'), 'utf8'));
+      assert.equal(failureDigest.schemaVersion, 'maka.ahe.failure_digest.v1');
+      assert.equal(failureDigest.status, 'official_fail');
+      assert.equal(failureDigest.selfCheck.divergence, 'self_check_pass_official_fail');
+      assert.equal(failureDigest.selfCheck.heavyTaskSelfChecks[0].status, 'pass');
+      assert.match(failureDigest.officialHarbor.verifier.stdoutExcerpt, /expected move e2e4/);
+      assert.equal(failureDigest.debugRefs.messages.ref, 'traces/run-official/messages.json');
       const messages = JSON.parse(await readFile(join(out, 'traces', 'run-official', 'messages.json'), 'utf8'));
       assert.equal(messages.trace_id, 'run-official');
       assert.equal(messages.messages[0].role, 'system');

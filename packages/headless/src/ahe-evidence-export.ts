@@ -85,7 +85,87 @@ export interface WriteMakaAheEvidenceExportResult extends MakaAheRunEvidence {
     harnessResultsJson: string;
     traceIndexJson: string;
     traceDirs: Record<string, string>;
+    failureDigests: Record<string, string>;
   };
+}
+
+export interface MakaAheFailureDigest {
+  schemaVersion: 'maka.ahe.failure_digest.v1';
+  taskRunId: string;
+  taskId: string;
+  exportedAt: string;
+  status: MakaAheResultStatus;
+  scoreAuthority: MakaAheScoreAuthority;
+  score?: number;
+  failureTaxonomy: string[];
+  warnings: string[];
+  officialHarbor: {
+    imported: boolean;
+    verifier?: CompactVerifierResult;
+    score?: CompactScoreResult;
+    sourceRef?: MakaAheArtifactRef;
+  };
+  selfCheck: {
+    divergence: 'self_check_pass_official_fail' | 'self_check_fail_official_pass' | 'aligned' | 'no_self_check' | 'unscored';
+    heavyTaskSelfChecks: TaskRunProjection['heavyTaskSelfChecks'];
+    legacySelfChecks: TaskRunProjection['selfChecks'];
+  };
+  finalState: {
+    taskRun: TaskRunExport['taskRun'];
+    workspace: TaskRunExport['workspace'];
+    artifacts: Array<{
+      kind: string;
+      ref: string;
+      label?: string;
+      authority?: string;
+      hash?: string;
+      metadata?: Record<string, unknown>;
+    }>;
+    progress?: TaskRunExport['progress'];
+    recentEvidence: Array<{
+      kind: string;
+      ts: number;
+      source?: Record<string, unknown>;
+      tool?: Record<string, unknown>;
+      artifact?: Record<string, unknown>;
+      check?: Record<string, unknown>;
+    }>;
+  };
+  debugRefs: {
+    taskRun: MakaAheArtifactRef;
+    messages: MakaAheArtifactRef;
+    transcript: MakaAheArtifactRef;
+    runtimeEventsJsonl?: MakaAheArtifactRef;
+    officialHarborResult?: MakaAheArtifactRef;
+  };
+}
+
+interface CompactVerifierResult {
+  id: string;
+  kind: string;
+  passed: boolean;
+  exitCode?: number | null;
+  score?: number;
+  maxScore?: number;
+  errorClass?: string;
+  error?: string;
+  stdoutExcerpt?: string;
+  stderrExcerpt?: string;
+  authority?: VerifierResult['authority'];
+  details?: Record<string, unknown>;
+}
+
+interface CompactScoreResult {
+  id: string;
+  passed: boolean;
+  scored: boolean;
+  eligible: boolean;
+  score?: number;
+  maxScore?: number;
+  taxonomy: AutonomousResultTaxonomy;
+  errorClass?: string;
+  excludedReason?: string;
+  authority?: ScoreResult['authority'];
 }
 
 export async function readMakaAheHarborOfficialResult(
@@ -242,6 +322,7 @@ export async function writeMakaAheEvidenceExport(
     harnessResultsJson: join(outDir, 'harness-results.json'),
     traceIndexJson: join(outDir, 'trace-index.json'),
     traceDirs: {},
+    failureDigests: {},
   };
 
   await writeStableJson(files.targetSnapshotJson, options.snapshot);
@@ -257,10 +338,21 @@ export async function writeMakaAheEvidenceExport(
     });
     const exported = taskRunExportFromProjection(projection, { exportedAt: options.exportedAt });
     const official = officialResultFor(options.officialResults, projection.taskRunId);
+    const effectiveExport = official ? taskRunExportWithOfficialOverlay(exported, official) : exported;
     const sessionMessages = sessionMessagesFor(options.sessionMessages, projection.taskRunId);
     await writeStableJson(join(traceDir, 'messages.json'), aheAgentRunMessages(projection, exported, official, sessionMessages));
     if (official) {
       await writeStableJson(join(traceDir, 'official-harbor-result.json'), official);
+    }
+    const failureDigest = failureDigestFromProjection(projection, effectiveExport, {
+      official,
+      exportedAt: options.exportedAt,
+      includeEvents: options.includeEvents,
+    });
+    if (failureDigest) {
+      const failureDigestPath = join(traceDir, 'failure-digest.json');
+      files.failureDigests[projection.taskRunId] = failureDigestPath;
+      await writeStableJson(failureDigestPath, failureDigest);
     }
   }
 
@@ -303,6 +395,12 @@ function traceIndexEntryFromProjection(
       mediaType: 'application/json',
       description: 'Harbor post-exit official verifier result imported for AHE scoring',
     }] : []),
+    ...(shouldWriteFailureDigest(projection, exported) ? [{
+      kind: 'file' as const,
+      ref: `${ids.taskRunRef}/failure-digest.json`,
+      mediaType: 'application/json',
+      description: 'AHE failure digest with official verifier excerpts, self-check blocks, and final artifact state',
+    }] : []),
     ...exported.artifacts.items.map(artifactRefFromTaskRunArtifact),
   ];
   return {
@@ -321,6 +419,61 @@ function traceIndexEntryFromProjection(
     transcript: { kind: 'file', ref: `${ids.taskRunRef}/result.md`, mediaType: 'text/markdown' },
     toolResults: projection.artifacts.filter((artifact) => artifact.kind === 'runtime_trace').map(artifactRefFromTaskRunArtifact),
     artifacts,
+  };
+}
+
+function shouldWriteFailureDigest(
+  projection: TaskRunProjection,
+  exported: TaskRunExport,
+): boolean {
+  const authority = scoreAuthority(exported.score, exported.verifier, projection);
+  return resultStatus(exported, projection, authority) !== 'official_pass';
+}
+
+function failureDigestFromProjection(
+  projection: TaskRunProjection,
+  exported: TaskRunExport,
+  options: { official?: MakaAheOfficialResultOverlay; exportedAt?: string; includeEvents?: boolean },
+): MakaAheFailureDigest | undefined {
+  const authority = scoreAuthority(exported.score, exported.verifier, projection);
+  const status = resultStatus(exported, projection, authority);
+  if (status === 'official_pass') return undefined;
+  const taskRunRef = `traces/${safePathSegment(projection.taskRunId)}`;
+  return {
+    schemaVersion: 'maka.ahe.failure_digest.v1',
+    taskRunId: projection.taskRunId,
+    taskId: projection.taskId,
+    exportedAt: options.exportedAt ?? new Date().toISOString(),
+    status,
+    scoreAuthority: authority,
+    ...(normalizedScore(exported.score, exported.verifier) !== undefined ? { score: normalizedScore(exported.score, exported.verifier) } : {}),
+    failureTaxonomy: failureTaxonomy(exported),
+    warnings: resultWarnings(exported, projection, status, authority),
+    officialHarbor: {
+      imported: Boolean(options.official),
+      ...(exported.verifier ? { verifier: compactVerifierResult(exported.verifier) } : {}),
+      ...(exported.score ? { score: compactScoreResult(exported.score) } : {}),
+      ...(options.official?.sourceRef ? { sourceRef: options.official.sourceRef } : {}),
+    },
+    selfCheck: {
+      divergence: selfCheckDivergence(projection, exported),
+      heavyTaskSelfChecks: projection.heavyTaskSelfChecks,
+      legacySelfChecks: projection.selfChecks,
+    },
+    finalState: {
+      taskRun: exported.taskRun,
+      workspace: exported.workspace,
+      artifacts: exported.artifacts.items.map(compactArtifact),
+      ...(exported.progress ? { progress: exported.progress } : {}),
+      recentEvidence: projection.heavyTaskEvidence.slice(-20).map(compactHeavyTaskEvidence),
+    },
+    debugRefs: {
+      taskRun: { kind: 'file', ref: `${taskRunRef}/task-run.json`, mediaType: 'application/json' },
+      messages: { kind: 'file', ref: `${taskRunRef}/messages.json`, mediaType: 'application/json' },
+      transcript: { kind: 'file', ref: `${taskRunRef}/result.md`, mediaType: 'text/markdown' },
+      ...(options.includeEvents ? { runtimeEventsJsonl: { kind: 'file', ref: `${taskRunRef}/events.jsonl`, mediaType: 'application/jsonl' } } : {}),
+      ...(options.official ? { officialHarborResult: { kind: 'file', ref: `${taskRunRef}/official-harbor-result.json`, mediaType: 'application/json' } } : {}),
+    },
   };
 }
 
@@ -428,6 +581,93 @@ function resultWarnings(
     warnings.push('self-check evidence is advisory and was exported as non-official evidence');
   }
   return uniqueStrings(warnings);
+}
+
+function selfCheckDivergence(
+  projection: TaskRunProjection,
+  exported: TaskRunExport,
+): MakaAheFailureDigest['selfCheck']['divergence'] {
+  const latest = projection.latestHeavyTaskSelfCheck;
+  const officialPassed = exported.score?.authority?.source === 'official_harbor_verifier'
+    || exported.verifier?.authority?.source === 'official_harbor_verifier'
+    ? exported.score?.passed ?? exported.verifier?.passed
+    : undefined;
+  if (!latest && projection.selfChecks.length === 0) return 'no_self_check';
+  if (officialPassed === undefined) return 'unscored';
+  if (latest?.status === 'pass' && officialPassed === false) return 'self_check_pass_official_fail';
+  if (latest?.status === 'fail' && officialPassed === true) return 'self_check_fail_official_pass';
+  return 'aligned';
+}
+
+function compactVerifierResult(verifier: VerifierResult): CompactVerifierResult {
+  return {
+    id: verifier.id,
+    kind: verifier.kind,
+    passed: verifier.passed,
+    ...(verifier.exitCode !== undefined ? { exitCode: verifier.exitCode } : {}),
+    ...(verifier.score !== undefined ? { score: verifier.score } : {}),
+    ...(verifier.maxScore !== undefined ? { maxScore: verifier.maxScore } : {}),
+    ...(verifier.errorClass ? { errorClass: verifier.errorClass } : {}),
+    ...(verifier.error ? { error: truncateText(verifier.error, 4000) } : {}),
+    ...(verifier.stdout ? { stdoutExcerpt: truncateText(verifier.stdout, 20000, 'tail') } : {}),
+    ...(verifier.stderr ? { stderrExcerpt: truncateText(verifier.stderr, 12000, 'tail') } : {}),
+    ...(verifier.authority ? { authority: verifier.authority } : {}),
+    ...(recordValue(verifier.details) ? { details: verifier.details as Record<string, unknown> } : {}),
+  };
+}
+
+function compactScoreResult(score: ScoreResult): CompactScoreResult {
+  return {
+    id: score.id,
+    passed: score.passed,
+    scored: score.scored ?? false,
+    eligible: score.eligible ?? false,
+    ...(score.score !== undefined ? { score: score.score } : {}),
+    ...(score.maxScore !== undefined ? { maxScore: score.maxScore } : {}),
+    taxonomy: score.taxonomy,
+    ...(score.errorClass ? { errorClass: score.errorClass } : {}),
+    ...(score.excludedReason ? { excludedReason: score.excludedReason } : {}),
+    ...(score.authority ? { authority: score.authority } : {}),
+  };
+}
+
+function compactArtifact(artifact: TaskRunArtifact): MakaAheFailureDigest['finalState']['artifacts'][number] {
+  return {
+    kind: artifact.kind,
+    ref: artifact.artifactRef ?? artifact.path ?? artifact.workspacePath ?? artifact.artifactId,
+    ...(artifact.label ? { label: artifact.label } : {}),
+    ...(artifact.authority ? { authority: artifact.authority.source } : {}),
+    ...(artifact.hash ? { hash: artifact.hash } : {}),
+    ...(recordValue(artifact.metadata) ? { metadata: artifact.metadata as Record<string, unknown> } : {}),
+  };
+}
+
+function compactHeavyTaskEvidence(
+  evidence: TaskRunProjection['heavyTaskEvidence'][number],
+): MakaAheFailureDigest['finalState']['recentEvidence'][number] {
+  return {
+    kind: evidence.kind,
+    ts: evidence.ts,
+    source: compactRecord(evidence.source),
+    ...(evidence.tool ? { tool: compactRecord({
+      name: evidence.tool.name,
+      inputSummary: evidence.tool.inputSummary,
+      exitCode: evidence.tool.exitCode,
+      timedOut: evidence.tool.timedOut,
+      ok: evidence.tool.ok,
+      outputs: evidence.tool.outputs,
+      diff: evidence.tool.diff,
+    }) } : {}),
+    ...(evidence.artifact ? { artifact: compactRecord(evidence.artifact) } : {}),
+    ...(evidence.check ? { check: compactRecord(evidence.check) } : {}),
+  };
+}
+
+function compactRecord(value: unknown): Record<string, unknown> {
+  if (!recordValue(value)) return {};
+  return JSON.parse(JSON.stringify(value, (_key, inner) => (
+    typeof inner === 'string' ? truncateText(inner, 4000) : inner
+  ))) as Record<string, unknown>;
 }
 
 function verifierRef(verifier: VerifierResult, taskRunRef: string, officialResultRef: string | undefined): MakaAheArtifactRef {
@@ -672,6 +912,13 @@ function stringField(record: Record<string, unknown>, key: string): string | und
   return undefined;
 }
 
+function truncateText(text: string, maxChars: number, mode: 'head' | 'tail' = 'head'): string {
+  if (text.length <= maxChars) return text;
+  const marker = `\n...[truncated ${text.length - maxChars} chars]`;
+  if (mode === 'tail') return `${marker}\n${text.slice(-maxChars)}`;
+  return `${text.slice(0, maxChars)}${marker}`;
+}
+
 async function readOptionalJson(path: string): Promise<unknown> {
   try {
     return JSON.parse(await readFile(path, 'utf8'));
@@ -740,4 +987,8 @@ async function writeStableJson(path: string, value: unknown): Promise<void> {
 
 function uniqueStrings(values: readonly (string | undefined)[]): string[] {
   return [...new Set(values.filter((value): value is string => typeof value === 'string' && value.length > 0))];
+}
+
+function recordValue(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
