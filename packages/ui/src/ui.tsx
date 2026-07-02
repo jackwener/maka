@@ -26,7 +26,7 @@ export { cn } from './utils.js';
 // the consumer's className brings height, padding, font.
 export const buttonVariants = cva(
   [
-    'inline-flex shrink-0 items-center justify-center gap-2 rounded-md font-medium',
+    'inline-flex shrink-0 items-center justify-center gap-2 rounded-sm font-medium',
     'transition-[background,border-color,box-shadow,transform,opacity] duration-150 ease-[var(--ease-maka)]',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
     'active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45',
@@ -43,9 +43,9 @@ export const buttonVariants = cva(
         quiet: 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
       },
       size: {
-        sm: 'h-8 rounded-md px-2.5 text-xs',
+        sm: 'h-8 rounded-sm px-2.5 text-xs',
         md: 'h-9 px-3 text-sm',
-        lg: 'h-10 rounded-lg px-4 text-sm',
+        lg: 'h-10 rounded-sm px-4 text-sm',
         icon: 'h-9 w-9 px-0 text-sm',
         'icon-sm': 'h-8 w-8 px-0 text-sm',
         // Bare layout variant. Consumer's className must set
@@ -84,7 +84,7 @@ export const Button = forwardRef<HTMLElement, ButtonProps>(function Button(
 });
 
 export const badgeVariants = cva(
-  'inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium tabular-nums',
+  'inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-xs font-medium tabular-nums',
   {
     variants: {
       variant: {
@@ -111,7 +111,7 @@ export function Badge({ className, variant, ...props }: BadgeProps) {
 }
 
 const inputClasses = [
-  'flex min-h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm',
+  'flex min-h-9 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm',
   'placeholder:text-muted-foreground/70',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
   'disabled:cursor-not-allowed disabled:opacity-50',
@@ -245,7 +245,7 @@ export const TabsList = forwardRef<HTMLDivElement, React.ComponentPropsWithoutRe
   { className, ...props },
   ref,
 ) {
-  return <BaseTabs.List ref={ref} className={cn('inline-flex items-center rounded-lg bg-muted p-1', className)} {...props} />;
+  return <BaseTabs.List ref={ref} className={cn('inline-flex items-center rounded-md bg-muted p-1', className)} {...props} />;
 });
 
 export const TabsTrigger = forwardRef<HTMLButtonElement, React.ComponentPropsWithoutRef<typeof BaseTabs.Tab>>(function TabsTrigger(
@@ -256,7 +256,7 @@ export const TabsTrigger = forwardRef<HTMLButtonElement, React.ComponentPropsWit
     <BaseTabs.Tab
       ref={ref}
       className={cn(
-        'inline-flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium text-muted-foreground transition-colors data-[selected]:bg-background data-[selected]:text-foreground data-[selected]:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'inline-flex h-8 items-center justify-center rounded-sm px-3 text-sm font-medium text-muted-foreground transition-colors data-[selected]:bg-background data-[selected]:text-foreground data-[selected]:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className,
       )}
       {...props}
@@ -310,7 +310,7 @@ export const SelectPopup = forwardRef<HTMLDivElement, React.ComponentPropsWithou
   // read as "can't select". Pin the popup to `--z-overlay` (300)
   // so it always floats above the modal it was triggered from
   // (WAWQAQ msg `d3ea9a33` 2026-06-26).
-  return <BaseSelect.Popup ref={ref} className={cn('z-[var(--z-overlay)] min-w-40 rounded-lg bg-popover p-1 text-popover-foreground shadow-maka-panel', className)} {...props} />;
+  return <BaseSelect.Popup ref={ref} className={cn('z-[var(--z-overlay)] min-w-40 rounded-md bg-popover p-1 text-popover-foreground shadow-maka-panel', className)} {...props} />;
 });
 export const SelectGroup = forwardRef<HTMLDivElement, React.ComponentPropsWithoutRef<typeof BaseSelect.Group>>(function SelectGroup(
   { className, ...props },
@@ -338,7 +338,7 @@ export const SelectItem = forwardRef<HTMLDivElement, React.ComponentPropsWithout
   return (
     <BaseSelect.Item
       ref={ref}
-      className={cn('grid cursor-default grid-cols-[1rem_1fr] items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted data-[selected]:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50', className)}
+      className={cn('grid cursor-default grid-cols-[1rem_1fr] items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-muted data-[selected]:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50', className)}
       {...props}
     >
       <span className="flex h-4 w-4 items-center justify-center" aria-hidden="true">
@@ -409,7 +409,7 @@ export const Toggle = forwardRef<
     <BaseToggle
       ref={ref}
       className={cn(
-        'inline-flex h-8 items-center justify-center rounded-md bg-transparent px-2.5 text-sm font-medium text-foreground transition-colors',
+        'inline-flex h-8 items-center justify-center rounded-sm bg-transparent px-2.5 text-sm font-medium text-foreground transition-colors',
         'hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'data-[pressed]:bg-muted data-[pressed]:text-foreground',
         'data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
@@ -427,7 +427,7 @@ export const ToggleGroup = forwardRef<
   return (
     <BaseToggleGroup
       ref={ref}
-      className={cn('inline-flex items-center gap-1 rounded-lg bg-muted p-1', className)}
+      className={cn('inline-flex items-center gap-1 rounded-md bg-muted p-1', className)}
       {...props}
     />
   );

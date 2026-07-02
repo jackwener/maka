@@ -37,7 +37,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 const navRowVariants = cva(
   [
-    'min-h-[30px] gap-2 rounded-md border-0 bg-transparent px-1.5 py-[3px]',
+    'min-h-[30px] gap-2 rounded-sm border-0 bg-transparent px-1.5 py-[3px]',
     'text-left text-sm leading-[1.43] text-[var(--foreground-80)]',
     'transition-[background-color,color] duration-[var(--duration-base)] ease-[var(--ease-out-strong)]',
     'hover:bg-foreground/6 hover:text-foreground',
@@ -64,14 +64,14 @@ const navRowVariants = cva(
 type NavRowVariants = VariantProps<typeof navRowVariants>;
 
 const settingsButtonClass =
-  'w-full min-w-0 gap-2 rounded-md border-0 bg-transparent px-2 py-1.5 ' +
+  'w-full min-w-0 gap-2 rounded-sm border-0 bg-transparent px-2 py-1.5 ' +
   'text-left text-sm font-medium text-[var(--foreground-60)] ' +
   'transition-[background-color,color] duration-[var(--duration-base)] ease-[var(--ease-out-strong)] ' +
   'hover:bg-foreground/6 hover:text-foreground';
 
 const rowActionVariants = cva(
   [
-    'grid h-[26px] w-[26px] place-items-center rounded-md border-0 bg-transparent',
+    'grid h-[26px] w-[26px] place-items-center rounded-sm border-0 bg-transparent',
     'text-[var(--foreground-60)]',
     'transition-[background-color,color,box-shadow] duration-[var(--duration-quick)] ease-[var(--ease-out-strong)]',
     'hover:bg-foreground/5 hover:text-foreground',
