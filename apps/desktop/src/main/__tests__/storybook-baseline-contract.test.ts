@@ -182,6 +182,19 @@ describe('Storybook baseline contract', () => {
     }
   });
 
+  it('tracks every icon export in the Design System Icons story', () => {
+    const storyPath = join(REPO_ROOT, 'packages', 'ui', 'stories', 'icons.stories.tsx');
+    assert.ok(existsSync(storyPath), 'Design System must include an Icons story');
+
+    const story = readFileSync(storyPath, 'utf8');
+    assert.match(story, /title:\s*['"]Design System\/Icons['"]/);
+    assert.match(story, /import\s+\*\s+as\s+Icons\s+from\s+['"]\.\.\/src\/icons\.js['"]/);
+    assert.match(story, /MakaIcon\(/, 'Icons story must filter makeIcon products by displayName');
+    assert.match(story, /MAKA_BOT_ICON_BODIES/);
+    assert.match(story, /Object\.keys\(MAKA_BOT_ICON_BODIES\)/);
+    assert.match(story, /maka-bot:/);
+  });
+
   it('splits design token examples into focused stories', () => {
     const story = readFileSync(join(REPO_ROOT, 'packages', 'ui', 'stories', 'design-tokens.stories.tsx'), 'utf8');
 
