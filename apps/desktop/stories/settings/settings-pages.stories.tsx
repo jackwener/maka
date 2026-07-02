@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { Decorator, Meta, StoryObj } from '@storybook/react-vite';
 import { ToastProvider } from '@maka/ui';
 import type {
   LlmConnection,
@@ -13,6 +13,8 @@ import type {
 import { createDefaultSettings, DEFAULT_DAILY_REVIEW_CONFIG } from '@maka/core';
 import { SettingsSurface } from '../../src/renderer/settings/settings-surface';
 import type { ConnectionsBridge } from '../../src/renderer/settings/ProvidersPanel';
+
+const STORY_PLATFORM = 'darwin' as const;
 
 const meta = {
   title: 'Product/Settings/Pages',
@@ -109,87 +111,98 @@ const usageStats: UsageStats = {
   pricing: [{ provider: 'zai-coding-plan', model: 'glm-4.7', inputPerMTokUsd: 0, outputPerMTokUsd: 0 }],
 };
 
-function installSettingsFixtures() {
-  const target = window as unknown as { maka?: Record<string, unknown> };
-  target.maka = {
-    ...(target.maka ?? {}),
-    settings: {
-      get: async () => createDefaultSettings(),
-      update: async (patch: Parameters<typeof window.maka.settings.update>[0]): Promise<UpdateAppSettingsResult> => {
-        const merged = { ...createDefaultSettings(), ...patch };
-        return { settings: merged };
-      },
-      usageStats: async (): Promise<UsageStats> => usageStats,
-      bots: {
-        listStatuses: async () => ({}),
-        subscribeStatusChanges: () => () => undefined,
-      },
+const makaBridge = {
+  settings: {
+    get: async () => createDefaultSettings(),
+    update: async (patch: Parameters<typeof window.maka.settings.update>[0]): Promise<UpdateAppSettingsResult> => {
+      const merged = { ...createDefaultSettings(), ...patch };
+      return { settings: merged };
     },
-    connections: connectionsBridge,
-    app: {
-      info: async () => ({
-        platform: process.platform,
-        osRelease: '23.4.0',
-        arch: 'arm64',
-        buildMode: 'dev',
-        buildCommit: 'a63ae4d',
-        appVersion: '0.9.0-dev',
-        electronVersion: '33.2.0',
-        nodeVersion: '20.18.0',
-        chromeVersion: '130.0.6723.59',
-      }),
-    },
-    health: {
-      getSnapshot: async () => ({
-        checkedAt: NOW,
-        signals: [],
-        summary: { ok: 0, info: 0, warning: 0, error: 0, unknown: 0 },
-      }),
-    },
-    gateway: {
-      status: async () => ({
-        enabled: false,
-        running: false,
-        host: '127.0.0.1',
-        port: 0,
-        baseUrl: null,
-        tokenConfigured: false,
-        activeEventStreams: 0,
-      }),
+    usageStats: async (): Promise<UsageStats> => usageStats,
+    bots: {
+      listStatuses: async () => ({}),
       subscribeStatusChanges: () => () => undefined,
     },
-    permissions: {
-      getSnapshot: async () => ({
-        checkedAt: NOW,
-        platform: process.platform,
-        permissions: {},
-      }),
-      openSystemSettings: async () => ({ ok: true }),
-      requestAccess: async () => ({ ok: true }),
-    },
-    capabilities: {
-      getSnapshot: async () => ({
-        checkedAt: NOW,
-        capabilities: [],
-      }),
-    },
-    dailyReview: {
-      getConfig: async () => DEFAULT_DAILY_REVIEW_CONFIG,
-      setConfig: async (patch: Record<string, unknown>) => ({
-        ...DEFAULT_DAILY_REVIEW_CONFIG,
-        ...patch,
-      }),
-      runOnce: async () => ({ ok: true }),
-    },
-  };
-}
+  },
+  connections: connectionsBridge,
+  app: {
+    info: async () => ({
+      platform: STORY_PLATFORM,
+      osRelease: '23.4.0',
+      arch: 'arm64',
+      buildMode: 'dev',
+      buildCommit: 'a63ae4d',
+      appVersion: '0.9.0-dev',
+      electronVersion: '33.2.0',
+      nodeVersion: '20.18.0',
+      chromeVersion: '130.0.6723.59',
+    }),
+  },
+  health: {
+    getSnapshot: async () => ({
+      checkedAt: NOW,
+      signals: [],
+      summary: { ok: 0, info: 0, warning: 0, error: 0, unknown: 0 },
+    }),
+  },
+  gateway: {
+    status: async () => ({
+      enabled: false,
+      running: false,
+      host: '127.0.0.1',
+      port: 0,
+      baseUrl: null,
+      tokenConfigured: false,
+      activeEventStreams: 0,
+    }),
+    subscribeStatusChanges: () => () => undefined,
+  },
+  permissions: {
+    getSnapshot: async () => ({
+      checkedAt: NOW,
+      platform: STORY_PLATFORM,
+      permissions: {},
+    }),
+    openSystemSettings: async () => ({ ok: true }),
+    requestAccess: async () => ({ ok: true }),
+  },
+  capabilities: {
+    getSnapshot: async () => ({
+      checkedAt: NOW,
+      capabilities: [],
+    }),
+  },
+  dailyReview: {
+    getConfig: async () => DEFAULT_DAILY_REVIEW_CONFIG,
+    setConfig: async (patch: Record<string, unknown>) => ({
+      ...DEFAULT_DAILY_REVIEW_CONFIG,
+      ...patch,
+    }),
+    runOnce: async () => ({ ok: true }),
+  },
+} satisfies Record<string, unknown>;
+
+const withSettingsBridge: Decorator = (Story) => {
+  const target = window as unknown as { maka?: Record<string, unknown> };
+  const previous = target.maka;
+  target.maka = makaBridge;
+  // Restore after the story unmounts. useEffect runs after children mount,
+  // but assignment above happens synchronously during render, before any
+  // child effect fires — so child IPC reads see the bridge.
+  useEffect(() => {
+    return () => {
+      if (previous === undefined) {
+        delete target.maka;
+      } else {
+        target.maka = previous;
+      }
+    };
+  }, []);
+  return <Story />;
+};
 
 function SettingsStory(props: { section: SettingsSection }) {
   const initialFocusRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    installSettingsFixtures();
-  }, []);
 
   return (
     <ToastProvider>
@@ -220,18 +233,63 @@ function SettingsStory(props: { section: SettingsSection }) {
   );
 }
 
-export const Models: Story = { render: () => <SettingsStory section="models" /> };
-export const General: Story = { render: () => <SettingsStory section="general" /> };
-export const Appearance: Story = { render: () => <SettingsStory section="appearance" /> };
-export const Account: Story = { render: () => <SettingsStory section="account" /> };
-export const Usage: Story = { render: () => <SettingsStory section="usage" /> };
-export const Memory: Story = { render: () => <SettingsStory section="memory" /> };
-export const WebSearch: Story = { render: () => <SettingsStory section="search" /> };
-export const Voice: Story = { render: () => <SettingsStory section="voice" /> };
-export const OpenGateway: Story = { render: () => <SettingsStory section="open-gateway" /> };
-export const BotChat: Story = { render: () => <SettingsStory section="bot-chat" /> };
-export const DailyReview: Story = { render: () => <SettingsStory section="daily-review" /> };
-export const Data: Story = { render: () => <SettingsStory section="data" /> };
-export const PermissionCenter: Story = { render: () => <SettingsStory section="permissions" /> };
-export const HealthCenter: Story = { render: () => <SettingsStory section="health" /> };
-export const About: Story = { render: () => <SettingsStory section="about" /> };
+export const Models: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="models" />,
+};
+export const General: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="general" />,
+};
+export const Appearance: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="appearance" />,
+};
+export const Account: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="account" />,
+};
+export const Usage: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="usage" />,
+};
+export const Memory: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="memory" />,
+};
+export const WebSearch: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="search" />,
+};
+export const Voice: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="voice" />,
+};
+export const OpenGateway: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="open-gateway" />,
+};
+export const BotChat: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="bot-chat" />,
+};
+export const DailyReview: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="daily-review" />,
+};
+export const Data: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="data" />,
+};
+export const PermissionCenter: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="permissions" />,
+};
+export const HealthCenter: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="health" />,
+};
+export const About: Story = {
+  decorators: [withSettingsBridge],
+  render: () => <SettingsStory section="about" />,
+};

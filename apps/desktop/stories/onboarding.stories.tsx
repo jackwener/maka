@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { Decorator, Meta, StoryObj } from '@storybook/react-vite';
 import { ToastProvider } from '@maka/ui';
 import type { LlmConnection, OnboardingState, PlanReminder, ProviderType, SettingsSection } from '@maka/core';
 import { createDefaultSettings } from '@maka/core';
@@ -158,12 +158,10 @@ interface ChecklistFixture {
   failAll?: boolean;
 }
 
-function installChecklistFixtures(fixture: ChecklistFixture) {
-  const target = window as unknown as { maka?: Record<string, unknown> };
+function makeChecklistBridge(fixture: ChecklistFixture) {
   const base = createDefaultSettings();
   const settings = fixture.settings ?? base;
-  target.maka = {
-    ...(target.maka ?? {}),
+  return {
     settings: {
       get: async () => {
         if (fixture.failAll) throw new Error('设置暂时不可用');
@@ -182,14 +180,28 @@ function installChecklistFixtures(fixture: ChecklistFixture) {
         return { detectedCount: fixture.workspaceInstructionCount ?? 0 };
       },
     },
+  } satisfies Record<string, unknown>;
+}
+
+function withChecklistBridge(fixture: ChecklistFixture): Decorator {
+  return (Story) => {
+    const target = window as unknown as { maka?: Record<string, unknown> };
+    const previous = target.maka;
+    target.maka = makeChecklistBridge(fixture);
+    useEffect(() => {
+      return () => {
+        if (previous === undefined) {
+          delete target.maka;
+        } else {
+          target.maka = previous;
+        }
+      };
+    }, []);
+    return <Story />;
   };
 }
 
-function ChecklistStory(props: { fixture: ChecklistFixture }) {
-  useEffect(() => {
-    installChecklistFixtures(props.fixture);
-  }, [props.fixture]);
-
+function ChecklistStory() {
   return (
     <ToastProvider>
       <DetailPane>
@@ -204,38 +216,39 @@ function ChecklistStory(props: { fixture: ChecklistFixture }) {
 }
 
 export const ChecklistAllTodo: Story = {
-  render: () => <ChecklistStory fixture={{}} />,
+  decorators: [withChecklistBridge({})],
+  render: () => <ChecklistStory />,
 };
 
+const checklistSomeDoneFixture: ChecklistFixture = (() => {
+  const settings = createDefaultSettings();
+  settings.personalization.displayName = '小马';
+  settings.webSearch.enabled = true;
+  settings.webSearch.providers.tavily.apiKey = 'tvly-storybook';
+  settings.localMemory.enabled = true;
+  settings.localMemory.agentReadEnabled = true;
+  const plan: PlanReminder = {
+    id: 'plan-1',
+    title: '每周回顾',
+    note: '',
+    schedule: { kind: 'recurring', startAt: Date.now(), recurrence: 'weekly' },
+    delivery: { channel: 'local' },
+    status: 'scheduled',
+    enabled: true,
+    createdAt: Date.now() - 86_400_000,
+    updatedAt: Date.now() - 86_400_000,
+    runs: [],
+    runCount: 0,
+  };
+  return { settings, plans: [plan], workspaceInstructionCount: 2 };
+})();
+
 export const ChecklistSomeDone: Story = {
-  render: () => {
-    const settings = createDefaultSettings();
-    settings.personalization.displayName = '小马';
-    settings.webSearch.enabled = true;
-    settings.webSearch.providers.tavily.apiKey = 'tvly-storybook';
-    settings.localMemory.enabled = true;
-    settings.localMemory.agentReadEnabled = true;
-    const plan: PlanReminder = {
-      id: 'plan-1',
-      title: '每周回顾',
-      note: '',
-      schedule: { kind: 'recurring', startAt: Date.now(), recurrence: 'weekly' },
-      delivery: { channel: 'local' },
-      status: 'scheduled',
-      enabled: true,
-      createdAt: Date.now() - 86_400_000,
-      updatedAt: Date.now() - 86_400_000,
-      runs: [],
-      runCount: 0,
-    };
-    return (
-      <ChecklistStory
-        fixture={{ settings, plans: [plan], workspaceInstructionCount: 2 }}
-      />
-    );
-  },
+  decorators: [withChecklistBridge(checklistSomeDoneFixture)],
+  render: () => <ChecklistStory />,
 };
 
 export const ChecklistLoadFailed: Story = {
-  render: () => <ChecklistStory fixture={{ failAll: true }} />,
+  decorators: [withChecklistBridge({ failAll: true })],
+  render: () => <ChecklistStory />,
 };
