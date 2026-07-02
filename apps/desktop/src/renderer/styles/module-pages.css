@@ -1326,9 +1326,13 @@
   padding: 26px 34px;
 }
 
+/* The banner's light-blue gradient background is theme-independent, so
+   its copy must be too: with var(--foreground) the title rendered as
+   near-white on the pale gradient in dark mode (unreadable ghost text).
+   Pin the copy to fixed inks that match the 200-224 hue background. */
 .maka-skill-featured-banner h3 {
   margin: 0;
-  color: var(--foreground);
+  color: oklch(0.26 0.025 224);
   font-size: 18px;
   font-weight: 600;
   line-height: 1.25;
@@ -1337,7 +1341,7 @@
 .maka-skill-featured-banner p {
   max-width: 540px;
   margin: 10px 0 0;
-  color: var(--foreground-60);
+  color: oklch(0.42 0.02 220);
   font-size: 13px;
   line-height: 1.45;
 }
@@ -1362,26 +1366,27 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  border: 1px solid oklch(from var(--foreground) l c h / 0.07);
+  /* Fixed inks: these floating cards stay white in both themes (they
+     sit on the theme-independent banner), so their border/copy must
+     not follow --foreground or they wash out in dark mode. */
+  border: 1px solid oklch(0.2 0.01 224 / 0.09);
   border-radius: var(--radius-control);
-  background:
-    linear-gradient(180deg, oklch(100% 0 0), oklch(98.2% 0.006 96)),
-    var(--background);
-  color: var(--foreground-60);
+  background: linear-gradient(180deg, oklch(100% 0 0), oklch(98.2% 0.006 96));
+  color: oklch(0.44 0.015 220);
   box-shadow:
-    0 12px 24px -20px oklch(from var(--foreground) l c h / 0.32),
-    0 1px 2px oklch(from var(--foreground) l c h / 0.06);
+    0 12px 24px -20px oklch(0.2 0.02 224 / 0.4),
+    0 1px 2px oklch(0.2 0.02 224 / 0.08);
 }
 
 .maka-skill-featured-art strong {
-  color: var(--foreground-70);
+  color: oklch(0.34 0.02 224);
   font-size: 10px;
   font-weight: 650;
   line-height: 1.1;
 }
 
 .maka-skill-featured-art small {
-  color: var(--foreground-40);
+  color: oklch(0.55 0.015 220);
   font-size: 8px;
   font-weight: 600;
   line-height: 1.1;
