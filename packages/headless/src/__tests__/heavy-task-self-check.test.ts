@@ -48,6 +48,14 @@ describe('heavy-task semantic self-check tools', () => {
         metadata: { inspected: 'public docs' },
       }],
       executionHygiene: {
+        sandbox: {
+          root: '/tmp/maka-self-check/run-1',
+          strategy: 'copied_inputs',
+          inputPaths: ['/app/polyglot/main.py.c'],
+          commandCwd: '/tmp/maka-self-check/run-1',
+          outputPolicy: 'scratch_only',
+          publicReason: 'public inputs were copied into the sandbox and generated outputs stayed there',
+        },
         scratchUsed: true,
         scratchPath: '/tmp/maka-self-check-1',
         cleanupPerformed: true,
@@ -70,6 +78,7 @@ describe('heavy-task semantic self-check tools', () => {
     assert.equal(result.selfCheck.status, 'pass');
     assert.equal(result.selfCheck.guard.status, 'accepted');
     assert.equal(result.selfCheck.source.toolCallId, 'tool-1');
+    assert.equal(result.selfCheck.executionHygiene?.sandbox?.root, '/tmp/maka-self-check/run-1');
     assert.equal(result.selfCheck.executionHygiene?.scratchUsed, true);
     assert.equal(result.selfCheck.executionHygiene?.workspaceSideEffects, 'none');
     assert.equal(result.selfCheck.executionHygiene?.workspaceGuard?.checked, true);
@@ -99,6 +108,8 @@ describe('heavy-task semantic self-check tools', () => {
       { publicReason: 'public check', commandEvidence: [{ command: 'npm test' }], executionHygiene: { remainingSideEffectPaths: ['official-verifier-output.json'] } },
       { publicReason: 'public check', commandEvidence: [{ command: 'npm test' }], executionHygiene: { workspaceGuard: { checked: true, addedPaths: ['hidden/tests/leak.log'] } } },
       { publicReason: 'public check', commandEvidence: [{ command: 'npm test' }], executionHygiene: { workspaceGuard: { beforeListingCommand: 'find official-verifier-output.json' } } },
+      { publicReason: 'public check', commandEvidence: [{ command: 'npm test' }], executionHygiene: { sandbox: { root: 'hidden/tests/sandbox' } } },
+      { publicReason: 'public check', commandEvidence: [{ command: 'npm test' }], executionHygiene: { sandbox: { root: '/tmp/maka-self-check', inputPaths: ['official-verifier-output.json'] } } },
     ];
 
     for (const input of privateInputs) {
@@ -184,6 +195,7 @@ describe('heavy-task semantic self-check tools', () => {
 
     assert.match(rendered ?? '', /Heavy-task semantic self-check state/);
     assert.match(rendered ?? '', /Latest advisory status: pass/);
+    assert.match(rendered ?? '', /Self-check sandbox/);
     assert.match(rendered ?? '', /Self-check execution hygiene/);
     assert.match(rendered ?? '', /workspace guard/);
     assert.match(rendered ?? '', /self_check_submit/);
@@ -205,6 +217,12 @@ export function acceptedSelfCheck(
     commandEvidence: [{ command: 'npm test', exitCode: 0, outputExcerpt: 'public tests passed' }],
     artifactEvidence: [{ path: 'build-output.log', kind: 'log', exists: true }],
     executionHygiene: {
+      sandbox: {
+        root: '/tmp/maka-self-check',
+        strategy: 'scratch_dir',
+        commandCwd: '/tmp/maka-self-check',
+        outputPolicy: 'scratch_only',
+      },
       scratchUsed: true,
       scratchPath: '/tmp/maka-self-check',
       cleanupPerformed: true,

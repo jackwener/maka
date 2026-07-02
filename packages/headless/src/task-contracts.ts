@@ -356,6 +356,14 @@ export interface HeavyTaskArtifactEvidence {
 }
 
 export interface HeavyTaskSelfCheckExecutionHygiene {
+  sandbox?: {
+    root: string;
+    strategy?: 'scratch_dir' | 'copied_inputs' | 'read_only_deliverable_refs';
+    inputPaths?: string[];
+    commandCwd?: string;
+    outputPolicy?: 'scratch_only' | 'read_only_deliverable_refs';
+    publicReason?: string;
+  };
   scratchUsed?: boolean;
   scratchPath?: string;
   cleanupPerformed?: boolean;

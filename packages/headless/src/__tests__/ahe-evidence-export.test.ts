@@ -267,9 +267,13 @@ describe('AHE evidence export', () => {
       assert.equal(failureDigest.schemaVersion, 'maka.ahe.failure_digest.v1');
       assert.equal(failureDigest.status, 'official_fail');
       assert.equal(failureDigest.selfCheck.divergence, 'self_check_pass_official_fail');
+      assert.equal(failureDigest.selfCheck.hygiene.sandboxStatus, 'present');
+      assert.equal(failureDigest.selfCheck.hygiene.sandboxRoot, '/tmp/maka-self-check/run-official');
+      assert.equal(failureDigest.selfCheck.hygiene.sandboxStrategy, 'scratch_dir');
       assert.equal(failureDigest.selfCheck.hygiene.scratchUsed, false);
       assert.equal(failureDigest.selfCheck.hygiene.workspaceGuardStatus, 'dirty');
       assert.equal(failureDigest.selfCheck.hygiene.strongPassEligible, false);
+      assert.match(failureDigest.selfCheck.hygiene.strongPassBlocker, /uncleaned workspace side effects/);
       assert.equal(failureDigest.selfCheck.hygiene.workspacePollutionSuspected, true);
       assert.deepEqual(failureDigest.selfCheck.hygiene.remainingSideEffectPaths, ['/app/polyglot/cmain']);
       assert.deepEqual(failureDigest.selfCheck.hygiene.addedPaths, ['/app/polyglot/cmain']);
@@ -364,6 +368,13 @@ function acceptedHeavySelfCheck(taskRunId: string, passed: boolean) {
     artifactEvidence: [],
     ...(passed ? {
       executionHygiene: {
+        sandbox: {
+          root: `/tmp/maka-self-check/${taskRunId}`,
+          strategy: 'scratch_dir' as const,
+          commandCwd: `/tmp/maka-self-check/${taskRunId}`,
+          outputPolicy: 'scratch_only' as const,
+          publicReason: 'intended public check sandbox root',
+        },
         scratchUsed: false,
         cleanupPerformed: false,
         workspaceSideEffects: 'present' as const,

@@ -59,6 +59,14 @@ export const heavyTaskArtifactEvidenceSchema = z.object({
 });
 
 export const heavyTaskSelfCheckExecutionHygieneSchema = z.object({
+  sandbox: z.object({
+    root: z.string().trim().min(1).max(MAX_PATH_CHARS),
+    strategy: z.enum(['scratch_dir', 'copied_inputs', 'read_only_deliverable_refs']).optional(),
+    inputPaths: z.array(z.string().trim().min(1).max(MAX_PATH_CHARS)).max(MAX_ARTIFACT_REFS).optional(),
+    commandCwd: z.string().trim().min(1).max(MAX_PATH_CHARS).optional(),
+    outputPolicy: z.enum(['scratch_only', 'read_only_deliverable_refs']).optional(),
+    publicReason: z.string().trim().min(1).max(MAX_REASON_CHARS).optional(),
+  }).strict().optional(),
   scratchUsed: z.boolean().optional(),
   scratchPath: z.string().trim().min(1).max(MAX_PATH_CHARS).optional(),
   cleanupPerformed: z.boolean().optional(),
@@ -210,6 +218,25 @@ export function hasBlockingHeavyTaskSelfCheckWorkspaceDelta(selfCheck: HeavyTask
   return false;
 }
 
+export function heavyTaskSelfCheckSandboxStatus(
+  selfCheck: HeavyTaskSemanticSelfCheckState,
+): 'present' | 'missing' {
+  return selfCheck.executionHygiene?.sandbox?.root ? 'present' : 'missing';
+}
+
+export function heavyTaskSelfCheckStrongPassBlocker(selfCheck: HeavyTaskSemanticSelfCheckState): string | undefined {
+  if (heavyTaskSelfCheckSandboxStatus(selfCheck) !== 'present') {
+    return 'latest self-check is missing sandbox execution evidence';
+  }
+  if (hasBlockingHeavyTaskSelfCheckWorkspaceDelta(selfCheck)) {
+    return 'latest self-check reports uncleaned workspace side effects';
+  }
+  if (selfCheck.executionHygiene?.workspaceGuard?.checked !== true) {
+    return 'latest self-check is missing public workspace hygiene guard evidence';
+  }
+  return undefined;
+}
+
 export function heavyTaskSelfCheckWorkspaceGuardStatus(
   selfCheck: HeavyTaskSemanticSelfCheckState,
 ): 'clean' | 'dirty' | 'unchecked' | 'unknown' {
@@ -240,6 +267,9 @@ export function renderHeavyTaskSelfCheckForPrompt(projection: {
   }
   if (selfCheck.executionHygiene) {
     const hygiene = selfCheck.executionHygiene;
+    if (hygiene.sandbox) {
+      lines.push(`- Self-check sandbox: root=${oneLine(hygiene.sandbox.root, 160)} strategy=${hygiene.sandbox.strategy ?? 'unknown'} outputPolicy=${hygiene.sandbox.outputPolicy ?? 'unknown'}`);
+    }
     lines.push(`- Self-check execution hygiene: scratchUsed=${hygiene.scratchUsed ?? 'unknown'} cleanupPerformed=${hygiene.cleanupPerformed ?? 'unknown'} workspaceSideEffects=${hygiene.workspaceSideEffects ?? 'unknown'}`);
     if (hygiene.scratchPath) lines.push(`  - scratch: ${oneLine(hygiene.scratchPath, 160)}`);
     if (hygiene.remainingSideEffectPaths?.length) {
@@ -272,6 +302,10 @@ function stringsFromSelfCheck(input: Pick<HeavyTaskSelfCheckSubmitInput, 'public
 
 function collectExecutionHygieneStrings(value: HeavyTaskSelfCheckExecutionHygiene | undefined, output: string[]): void {
   if (!value) return;
+  if (value.sandbox?.root) output.push(value.sandbox.root);
+  if (value.sandbox?.commandCwd) output.push(value.sandbox.commandCwd);
+  if (value.sandbox?.publicReason) output.push(value.sandbox.publicReason);
+  output.push(...(value.sandbox?.inputPaths ?? []));
   if (value.scratchPath) output.push(value.scratchPath);
   if (value.publicReason) output.push(value.publicReason);
   output.push(...(value.remainingSideEffectPaths ?? []));

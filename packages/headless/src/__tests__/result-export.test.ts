@@ -780,6 +780,25 @@ function heavyTaskCompletionEvents(todos: HeavyTaskTodoItem[] = [
         publicReason: 'npm test passed against public files.',
         commandEvidence: [{ command: 'npm test', exitCode: 0, outputExcerpt: 'public tests passed' }],
         artifactEvidence: [{ path: 'build-output.log', kind: 'log', exists: true }],
+        executionHygiene: {
+          sandbox: {
+            root: '/tmp/maka-self-check/run-heavy-complete',
+            strategy: 'scratch_dir',
+            commandCwd: '/tmp/maka-self-check/run-heavy-complete',
+            outputPolicy: 'scratch_only',
+          },
+          scratchUsed: true,
+          scratchPath: '/tmp/maka-self-check/run-heavy-complete',
+          cleanupPerformed: true,
+          workspaceSideEffects: 'none',
+          workspaceGuard: {
+            checked: true,
+            checkedPaths: ['/app'],
+            addedPaths: [],
+            modifiedPaths: [],
+            removedPaths: [],
+          },
+        },
         guard: {
           status: 'accepted',
           checkedAt: 4,

@@ -724,6 +724,25 @@ function acceptedSelfCheck(
     publicReason,
     commandEvidence: [{ command: 'npm test', exitCode: 0, outputExcerpt: 'public tests passed' }],
     artifactEvidence: [{ path: 'build-output.log', kind: 'log', exists: true }],
+    executionHygiene: {
+      sandbox: {
+        root: '/tmp/maka-self-check/run-1',
+        strategy: 'scratch_dir',
+        commandCwd: '/tmp/maka-self-check/run-1',
+        outputPolicy: 'scratch_only',
+      },
+      scratchUsed: true,
+      scratchPath: '/tmp/maka-self-check/run-1',
+      cleanupPerformed: true,
+      workspaceSideEffects: 'none',
+      workspaceGuard: {
+        checked: true,
+        checkedPaths: ['/app'],
+        addedPaths: [],
+        modifiedPaths: [],
+        removedPaths: [],
+      },
+    },
     guard: {
       status: 'accepted',
       checkedAt: 10,

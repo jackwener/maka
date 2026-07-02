@@ -27,7 +27,11 @@ import {
 } from './result-export.js';
 import { harborOfficialVerifierOutputFromArtifacts } from './harbor-official-artifacts.js';
 import type { BenchmarkVerifierOutput } from './benchmark-adapters.js';
-import { heavyTaskSelfCheckWorkspaceGuardStatus } from './heavy-task-self-check.js';
+import {
+  heavyTaskSelfCheckSandboxStatus,
+  heavyTaskSelfCheckStrongPassBlocker,
+  heavyTaskSelfCheckWorkspaceGuardStatus,
+} from './heavy-task-self-check.js';
 import type { AutonomousResultTaxonomy, HeavyTaskSelfCheckExecutionHygiene, ScoreResult, TaskRunArtifact, VerifierResult } from './task-contracts.js';
 import type { TaskRunProjection } from './task-run-store.js';
 
@@ -111,6 +115,10 @@ export interface MakaAheFailureDigest {
     hygiene: {
       scratchUsed: boolean | 'unknown';
       cleanupPerformed: boolean | 'unknown';
+      sandboxStatus: 'present' | 'missing';
+      sandboxRoot?: string;
+      sandboxStrategy?: string;
+      strongPassBlocker?: string;
       workspaceGuardStatus: 'clean' | 'dirty' | 'unchecked' | 'unknown';
       strongPassEligible: boolean;
       workspacePollutionSuspected: boolean;
@@ -621,8 +629,10 @@ function selfCheckHygieneSummary(projection: TaskRunProjection): MakaAheFailureD
     return {
       scratchUsed: 'unknown',
       cleanupPerformed: 'unknown',
+      sandboxStatus: 'missing',
       workspaceGuardStatus: 'unchecked',
       strongPassEligible: false,
+      strongPassBlocker: 'latest self-check is missing sandbox execution evidence',
       workspacePollutionSuspected: false,
       remainingSideEffectPaths: [],
       addedPaths: [],
@@ -641,7 +651,14 @@ function selfCheckHygieneSummary(projection: TaskRunProjection): MakaAheFailureD
   const workspaceGuardStatus = projection.latestHeavyTaskSelfCheck
     ? heavyTaskSelfCheckWorkspaceGuardStatus(projection.latestHeavyTaskSelfCheck)
     : 'unchecked';
+  const sandboxStatus = projection.latestHeavyTaskSelfCheck
+    ? heavyTaskSelfCheckSandboxStatus(projection.latestHeavyTaskSelfCheck)
+    : 'missing';
+  const strongPassBlocker = projection.latestHeavyTaskSelfCheck
+    ? heavyTaskSelfCheckStrongPassBlocker(projection.latestHeavyTaskSelfCheck)
+    : 'latest self-check is missing sandbox execution evidence';
   const riskFlags = [
+    ...(sandboxStatus === 'missing' ? ['sandbox_not_reported'] : []),
     ...(latest.scratchUsed === false ? ['scratch_not_used'] : []),
     ...(latest.scratchUsed === undefined ? ['scratch_unknown'] : []),
     ...(latest.cleanupPerformed === false ? ['cleanup_not_performed'] : []),
@@ -656,8 +673,12 @@ function selfCheckHygieneSummary(projection: TaskRunProjection): MakaAheFailureD
   return {
     scratchUsed: latest.scratchUsed ?? 'unknown',
     cleanupPerformed: latest.cleanupPerformed ?? 'unknown',
+    sandboxStatus,
+    ...(latest.sandbox?.root ? { sandboxRoot: latest.sandbox.root } : {}),
+    ...(latest.sandbox?.strategy ? { sandboxStrategy: latest.sandbox.strategy } : {}),
     workspaceGuardStatus,
-    strongPassEligible: workspaceGuardStatus === 'clean',
+    strongPassEligible: !strongPassBlocker,
+    ...(strongPassBlocker ? { strongPassBlocker } : {}),
     workspacePollutionSuspected: workspaceGuardStatus === 'dirty',
     remainingSideEffectPaths,
     addedPaths,

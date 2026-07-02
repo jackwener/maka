@@ -88,6 +88,12 @@ describe('heavy-task finalization status', () => {
       heavyTaskMode,
       latestHeavyTaskSelfCheck: selfCheck('pass', {
         executionHygiene: {
+          sandbox: {
+            root: '/tmp/maka-self-check/run-1',
+            strategy: 'scratch_dir',
+            commandCwd: '/tmp/maka-self-check/run-1',
+            outputPolicy: 'scratch_only',
+          },
           scratchUsed: false,
           cleanupPerformed: false,
           workspaceSideEffects: 'present',
@@ -106,6 +112,34 @@ describe('heavy-task finalization status', () => {
 
     assert.equal(status.semantic.status, 'incomplete');
     assert.match(status.semantic.reason ?? '', /uncleaned workspace side effects/);
+    assert.equal(status.finalization.eligible, false);
+  });
+
+  test('requires sandbox execution evidence for pass self-check semantic completion', () => {
+    const status = evaluateHeavyTaskCompletionStatus({
+      status: 'budget_exhausted',
+      taxonomy: 'budget_exhausted',
+      heavyTaskMode,
+      latestHeavyTaskSelfCheck: selfCheck('pass', {
+        executionHygiene: {
+          scratchUsed: true,
+          scratchPath: '/tmp/maka-self-check/run-1',
+          cleanupPerformed: true,
+          workspaceSideEffects: 'none',
+          workspaceGuard: {
+            checked: true,
+            checkedPaths: ['/app'],
+            addedPaths: [],
+            modifiedPaths: [],
+            removedPaths: [],
+          },
+        },
+      }),
+      latestHeavyTaskTodos: phaseGateTodos([{ id: 'edit', status: 'completed' }]),
+    });
+
+    assert.equal(status.semantic.status, 'incomplete');
+    assert.match(status.semantic.reason ?? '', /missing sandbox execution evidence/);
     assert.equal(status.finalization.eligible, false);
   });
 
@@ -244,7 +278,25 @@ function selfCheck(
     publicReason: options.publicReason ?? 'npm test passed against public files.',
     commandEvidence: [{ command: 'npm test', exitCode: 0, outputExcerpt: 'public tests passed' }],
     artifactEvidence: [{ path: 'build-output.log', kind: 'log', exists: true }],
-    ...(options.executionHygiene ? { executionHygiene: options.executionHygiene } : {}),
+    executionHygiene: options.executionHygiene ?? {
+      sandbox: {
+        root: '/tmp/maka-self-check/run-1',
+        strategy: 'scratch_dir',
+        commandCwd: '/tmp/maka-self-check/run-1',
+        outputPolicy: 'scratch_only',
+      },
+      scratchUsed: true,
+      scratchPath: '/tmp/maka-self-check/run-1',
+      cleanupPerformed: true,
+      workspaceSideEffects: 'none',
+      workspaceGuard: {
+        checked: true,
+        checkedPaths: ['/app'],
+        addedPaths: [],
+        modifiedPaths: [],
+        removedPaths: [],
+      },
+    },
     guard: {
       status: options.guardStatus ?? 'accepted',
       checkedAt: 2,
