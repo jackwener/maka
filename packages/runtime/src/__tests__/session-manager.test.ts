@@ -287,13 +287,12 @@ describe('SessionManager permission mode updates', () => {
     expect(result.events.map((event) => event.sessionId)).toEqual([session.id, session.id, session.id]);
     expect(result.events.map((event) => event.turnId)).toEqual(['turn-1', 'turn-1', 'turn-1']);
     expect(result.events.map((event) => event.role)).toEqual(['user', 'model', 'system']);
-    expect(result.events.map((event) => event.id)).toEqual(['id-7', 'turn-1-delta', 'turn-1-complete']);
     expect(result.events[0]?.content).toEqual({ kind: 'text', text: 'hello' });
     expect(result.events[1]?.content).toEqual({ kind: 'text', text: 'ok' });
     expect(result.events[2]?.status).toBe('completed');
 
     const runtimeEvents = await runtimeEventStore.readRuntimeEvents(session.id, run.runId);
-    expect(runtimeEvents.map((event) => event.id)).toEqual(['id-7', 'turn-1-delta', 'turn-1-complete']);
+    expect(runtimeEvents.map((event) => event.id)).toEqual(result.events.map((event) => event.id));
     expect(runtimeEvents.map((event) => event.runId)).toEqual([run.runId, run.runId, run.runId]);
     expect(runtimeEvents.map((event) => event.sessionId)).toEqual([session.id, session.id, session.id]);
     expect(runtimeEvents.map((event) => event.turnId)).toEqual(['turn-1', 'turn-1', 'turn-1']);
@@ -479,7 +478,9 @@ describe('SessionManager permission mode updates', () => {
 
     expect(['created', 'running', 'waiting_permission'].includes(run.status)).toBe(true);
     expect(run.completedAt).toBeUndefined();
-    expect(runtimeEvents.map((event) => event.id)).toEqual(['id-7', 'turn-1-delta']);
+    expect(runtimeEvents.map((event) => event.role)).toEqual(['user', 'model']);
+    expect(runtimeEvents[0]?.content).toEqual({ kind: 'text', text: 'hello' });
+    expect(runtimeEvents[1]?.id).toBe('turn-1-delta');
     expect(terminalEvents).toEqual([]);
 
     const view = await new RuntimeReadModel({
@@ -491,7 +492,7 @@ describe('SessionManager permission mode updates', () => {
     expect((await manager.getMessages(session.id)).some((message) => message.type === 'user')).toBe(true);
   });
 
-  test('backend errors before terminal do not persist a terminal header without a terminal RuntimeEvent', async () => {
+  test('backend errors before terminal synthesize a failed terminal RuntimeEvent before the failed header', async () => {
     const store = new MemorySessionStore();
     const runStore = new MemoryAgentRunStore();
     const backends = new BackendRegistry();
@@ -517,10 +518,15 @@ describe('SessionManager permission mode updates', () => {
     const runtimeEvents = await runStore.readRuntimeEvents(session.id, run.runId);
     const terminalEvents = runtimeEvents.filter(isTerminalRuntimeEvent);
 
-    expect(['created', 'running', 'waiting_permission'].includes(run.status)).toBe(true);
-    expect(run.completedAt).toBeUndefined();
-    expect(runtimeEvents.map((event) => event.id)).toEqual(['id-7', 'turn-1-delta']);
-    expect(terminalEvents).toEqual([]);
+    expect(run.status).toBe('failed');
+    expect(run.failureClass).toBe('missing_terminal_event');
+    expect(runtimeEvents.map((event) => event.role)).toEqual(['user', 'model', 'system']);
+    expect(runtimeEvents[0]?.content).toEqual({ kind: 'text', text: 'hello' });
+    expect(runtimeEvents[1]?.id).toBe('turn-1-delta');
+    expect(runtimeEvents[2]?.id).toBe(terminalEvents[0]?.id);
+    expect(terminalEvents).toHaveLength(1);
+    expect(terminalEvents[0]?.status).toBe('failed');
+    expect(terminalEvents[0]?.actions?.stateDelta?.failureClass).toBe('missing_terminal_event');
 
     const view = await new RuntimeReadModel({
       runStore,
@@ -578,7 +584,7 @@ describe('SessionManager permission mode updates', () => {
     expect((await manager.getMessages(session.id)).some((message) => message.type === 'user')).toBe(true);
   });
 
-  test('startup recovery preserves the terminal invariant after a pre-terminal backend error', async () => {
+  test('pre-terminal backend errors preserve the terminal invariant before startup recovery', async () => {
     const store = new MemorySessionStore();
     const runStore = new MemoryAgentRunStore();
     const backends = new BackendRegistry();
@@ -609,12 +615,12 @@ describe('SessionManager permission mode updates', () => {
     expect(!hasTerminalHeader || hasTerminalFact).toBe(true);
     const terminalEvents = runtimeEvents.filter(isTerminalRuntimeEvent);
     expect(run.status).toBe('failed');
-    expect(run.failureClass).toBe('app_restarted');
+    expect(run.failureClass).toBe('missing_terminal_event');
     expect(terminalEvents).toHaveLength(1);
     expect(terminalEvents[0]?.status).toBe('failed');
     expect(terminalEvents[0]?.actions?.stateDelta?.recovered).toBe(true);
-    expect(terminalEvents[0]?.actions?.stateDelta?.recoveryReason).toBe('run_interrupted');
-    expect(terminalEvents[0]?.actions?.stateDelta?.failureClass).toBe('app_restarted');
+    expect(terminalEvents[0]?.actions?.stateDelta?.recoveryReason).toBe('missing_terminal_event');
+    expect(terminalEvents[0]?.actions?.stateDelta?.failureClass).toBe('missing_terminal_event');
 
     const view = await new RuntimeReadModel({
       runStore,
@@ -3284,7 +3290,7 @@ describe('SessionManager permission mode updates', () => {
     await iterator.next();
   });
 
-  test('backend build failure after user append marks turn failed without a terminal run header', async () => {
+  test('backend build failure after user append writes a failed terminal run fact', async () => {
     const store = new MemorySessionStore();
     const runStore = new MemoryAgentRunStore();
     const backends = new BackendRegistry();
@@ -3308,9 +3314,12 @@ describe('SessionManager permission mode updates', () => {
     expect(turn?.status).toBe('failed');
     const [run] = await runStore.listSessionRuns(session.id);
     if (!run) throw new Error('AgentRunStore run was not created');
-    expect(['created', 'running', 'waiting_permission'].includes(run.status)).toBe(true);
-    expect(run.completedAt).toBeUndefined();
-    expect(await runStore.readRuntimeEvents(session.id, run.runId)).toEqual([]);
+    expect(run.status).toBe('failed');
+    expect(run.failureClass).toBe('missing_terminal_event');
+    const terminalEvents = (await runStore.readRuntimeEvents(session.id, run.runId)).filter(isTerminalRuntimeEvent);
+    expect(terminalEvents).toHaveLength(1);
+    expect(terminalEvents[0]?.status).toBe('failed');
+    expect(terminalEvents[0]?.actions?.stateDelta?.failureClass).toBe('missing_terminal_event');
     expect((await manager.getMessages(session.id)).some((message) => message.type === 'user')).toBe(true);
   });
 

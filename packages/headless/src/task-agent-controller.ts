@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import {
-  isTerminalRuntimeEvent,
   type AgentRunStore,
   type RuntimeEvent,
   type RuntimeEventStore,
@@ -860,19 +859,9 @@ async function runRuntimeAttempt(input: RunRuntimeAttemptInput): Promise<Invocat
     backend: begin.backend,
     drainAfterTerminal: true,
     onSessionEvent: async (sessionEvent, runtimeEvent) => {
-      if (isTerminalRuntimeEvent(runtimeEvent)) {
-        if (!isPermissionHandoffTerminal(runtimeEvent)) {
-          await input.run.recordRuntimeEvents([runtimeEvent], {
-            requireTerminalWrite: input.requireTerminalRuntimeEventWrite,
-          });
-        }
-        await input.run.recordSessionEvent(sessionEvent);
-        return;
-      }
-      await input.run.recordSessionEvent(sessionEvent);
-      if (!isNonTerminalErrorRuntimeEvent(runtimeEvent)) {
-        await input.run.recordRuntimeEvents([runtimeEvent]);
-      }
+      await input.run.acceptMappedEvent(sessionEvent, runtimeEvent, {
+        requireTerminalWrite: input.requireTerminalRuntimeEventWrite,
+      });
     },
     onError: async (error) => {
       await input.run.recordFailure(error);
@@ -884,7 +873,6 @@ async function runRuntimeAttempt(input: RunRuntimeAttemptInput): Promise<Invocat
   const runner = new RuntimeRunner({
     flow,
     providers: { newId: input.newId, now: input.now },
-    onInitialRuntimeEvent: (event) => input.run.recordRuntimeEvents([event]),
     stopOnTerminal: false,
   });
   const runtimeContext = [
@@ -894,12 +882,14 @@ async function runRuntimeAttempt(input: RunRuntimeAttemptInput): Promise<Invocat
 
   const invocation = await runner.run({
     sessionId: input.header.id,
+    invocationId: begin.initialRuntimeEvent.invocationId,
     runId: input.run.runId,
     turnId: input.run.turnId,
     text: input.instruction,
     context: begin.backendInput.context,
     ...(runtimeContext.length > 0 ? { runtimeContext } : {}),
     ...(begin.backendInput.attachments ? { attachments: begin.backendInput.attachments } : {}),
+    initialRuntimeEvent: begin.initialRuntimeEvent,
     source: 'test',
     lineage: input.run.lineage,
   });

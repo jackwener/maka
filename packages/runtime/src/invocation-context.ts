@@ -80,6 +80,8 @@ export interface InvocationRequest {
    * passes this through without adding the current turn's RuntimeEvents.
    */
   runtimeContext?: RuntimeEvent[];
+  /** Optional initial user RuntimeEvent already minted by an outer run owner. */
+  initialRuntimeEvent?: RuntimeEvent;
   source: InvocationSource;
   /** Optional branch/agent lane; forwarded onto every emitted event. */
   branch?: string;

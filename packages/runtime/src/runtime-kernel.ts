@@ -1,5 +1,4 @@
-import type { AgentRunStore, RuntimeEvent, RuntimeEventStore } from '@maka/core';
-import { isTerminalRuntimeEvent } from '@maka/core';
+import type { AgentRunStore, RuntimeEventStore } from '@maka/core';
 import type { SessionEvent } from '@maka/core/events';
 import type {
   SessionBlockedReason,
@@ -171,18 +170,9 @@ export class RuntimeKernel implements RuntimeKernelLike {
       backend: begin.backend,
       drainAfterTerminal: true,
       onSessionEvent: async (sessionEvent, runtimeEvent) => {
-        if (isTerminalRuntimeEvent(runtimeEvent)) {
-          if (!isPermissionHandoffTerminal(runtimeEvent)) {
-            await run.recordRuntimeEvents([runtimeEvent], { requireTerminalWrite: Boolean(this.deps.runtimeEventStore) });
-          }
-          await run.recordSessionEvent(sessionEvent);
-          await sessionEvents.push(sessionEvent);
-          return;
-        }
-        await run.recordSessionEvent(sessionEvent);
-        if (!isNonTerminalErrorRuntimeEvent(runtimeEvent)) {
-          await run.recordRuntimeEvents([runtimeEvent]);
-        }
+        await run.acceptMappedEvent(sessionEvent, runtimeEvent, {
+          requireTerminalWrite: Boolean(this.deps.runtimeEventStore),
+        });
         await sessionEvents.push(sessionEvent);
       },
       onError: async (error) => {
@@ -200,17 +190,18 @@ export class RuntimeKernel implements RuntimeKernelLike {
     const runner = new RuntimeRunner({
       flow: aiSdkFlow,
       providers: { newId: this.deps.newId, now: this.deps.now },
-      onInitialRuntimeEvent: (event) => run.recordRuntimeEvents([event]),
       stopOnTerminal: false,
     });
     const runnerResult = runner.run({
       sessionId,
+      invocationId: begin.initialRuntimeEvent.invocationId,
       runId: run.runId,
       turnId: run.turnId,
       text: input.text,
       ...(begin.backendInput.attachments ? { attachments: begin.backendInput.attachments } : {}),
       context: begin.backendInput.context,
       ...(begin.backendInput.runtimeContext !== undefined ? { runtimeContext: begin.backendInput.runtimeContext } : {}),
+      initialRuntimeEvent: begin.initialRuntimeEvent,
       source: this.deps.runtimeSource ?? 'desktop',
       lineage: run.lineage,
       abortSignal: abortController.signal,
@@ -470,14 +461,6 @@ export class RuntimeKernel implements RuntimeKernelLike {
 
 function childActiveKey(sessionId: string, turnId: string): string {
   return `${sessionId}:${turnId}`;
-}
-
-function isPermissionHandoffTerminal(event: { actions?: { stateDelta?: Record<string, unknown> } }): boolean {
-  return event.actions?.stateDelta?.stopReason === 'permission_handoff';
-}
-
-function isNonTerminalErrorRuntimeEvent(event: RuntimeEvent): boolean {
-  return event.content?.kind === 'error' && !isTerminalRuntimeEvent(event);
 }
 
 class AsyncEventQueueClosed extends Error {

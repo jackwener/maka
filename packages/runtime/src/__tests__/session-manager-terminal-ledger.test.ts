@@ -423,7 +423,97 @@ describe('SessionManager terminal ledger invariants', () => {
 
     expect(yielded.map((event) => event.type)).toEqual(['complete']);
     const runtimeEvents = await runStore.readRuntimeEvents(session.id, run.runId);
-    expect(runtimeEvents.map((event) => event.content?.kind === 'text' ? event.content.text : event.status)).toEqual(['completed']);
+    expect(runtimeEvents.map((event) => event.content?.kind === 'text' ? event.content.text : event.status)).toEqual(['hello', 'completed']);
+  });
+
+  test('direct AgentRun finalize synthesizes a failed terminal fact when no terminal event was recorded', async () => {
+    const store = new TinySessionStore();
+    const runStore = new TinyAgentRunStore();
+    const session = await store.create(makeInput());
+    const run = new AgentRun({
+      sessionId: session.id,
+      header: session,
+      userInput: { turnId: 'turn-1', text: 'hello' },
+      store,
+      runStore,
+      runtimeEventStore: runStore,
+      newId: nextId(),
+      now: nextNow(41_000),
+      hooks: {
+        ensureActive: async () => {
+          throw new Error('ensureActive should not be called');
+        },
+        registerRun: () => {},
+        unregisterRun: () => {},
+        updateHeader: (sessionId, patch) => store.updateHeader(sessionId, patch),
+        updateStatus: async () => {},
+        appendTurnState: async () => {},
+      },
+    });
+    await runStore.createRun(makeRunHeader({
+      sessionId: session.id,
+      runId: run.runId,
+      turnId: run.turnId,
+      status: 'running',
+    }));
+
+    await run.finalize();
+
+    const header = await runStore.readRun(session.id, run.runId);
+    expect(header.status).toBe('failed');
+    expect(header.failureClass).toBe('missing_terminal_event');
+    const terminalEvents = (await runStore.readRuntimeEvents(session.id, run.runId)).filter(isTerminalRuntimeEvent);
+    expect(terminalEvents).toHaveLength(1);
+    expect(terminalEvents[0]?.status).toBe('failed');
+    expect(terminalEvents[0]?.actions?.stateDelta?.failureClass).toBe('missing_terminal_event');
+    await new RuntimeReadModel({ runStore, runtimeEventStore: runStore }).getSessionView(session.id);
+  });
+
+  test('direct AgentRun error events still commit failed terminal facts when failed turn projection fails', async () => {
+    const store = new TinySessionStore();
+    const runStore = new TinyAgentRunStore();
+    const session = await store.create(makeInput());
+    const backend = new ScriptBackend({ sessionId: session.id } as BackendFactoryContext, [
+      { type: 'error', recoverable: false, reason: 'tool_failed', message: 'Tool failed' },
+    ]);
+    const activeRuns = new Map<string, AgentRun>();
+    const turnToRunId = new Map<string, string>();
+    const run = new AgentRun({
+      sessionId: session.id,
+      header: session,
+      userInput: { turnId: 'turn-1', text: 'hello' },
+      store,
+      runStore,
+      runtimeEventStore: runStore,
+      newId: nextId(),
+      now: nextNow(41_500),
+      hooks: {
+        ensureActive: async () => ({ sessionId: session.id, backend, cachedHeader: session, activeRuns, turnToRunId }),
+        registerRun: (_active, activeRun) => {
+          activeRuns.set(activeRun.runId, activeRun);
+          turnToRunId.set(activeRun.turnId, activeRun.runId);
+        },
+        unregisterRun: (_active, activeRun) => {
+          activeRuns.delete(activeRun.runId);
+          turnToRunId.delete(activeRun.turnId);
+        },
+        updateHeader: (sessionId, patch) => store.updateHeader(sessionId, patch),
+        updateStatus: async () => {},
+        appendTurnState: async (_sessionId, _turnId, status) => {
+          if (status === 'failed') throw new Error('turn state write failed');
+        },
+      },
+    });
+
+    await drain(run.execute());
+
+    const header = await runStore.readRun(session.id, run.runId);
+    expect(header.status).toBe('failed');
+    expect(header.failureClass).toBe('tool_failed');
+    const terminalEvents = (await runStore.readRuntimeEvents(session.id, run.runId)).filter(isTerminalRuntimeEvent);
+    expect(terminalEvents).toHaveLength(1);
+    expect(terminalEvents[0]?.status).toBe('failed');
+    expect(terminalEvents[0]?.actions?.stateDelta?.failureClass).toBe('tool_failed');
   });
 
   test('startup recovery reuses an incomplete existing terminal RuntimeEvent instead of appending another', async () => {

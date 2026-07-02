@@ -109,6 +109,18 @@ export interface RuntimeRunnerDeps {
   stopOnTerminal?: boolean;
 }
 
+export interface InitialUserRuntimeEventInput {
+  id: string;
+  invocationId: string;
+  runId: string;
+  sessionId: string;
+  turnId: string;
+  ts: number;
+  branch?: string;
+  text: string;
+  attachments?: InvocationRequest['attachments'];
+}
+
 // ============================================================================
 // RuntimeRunner
 // ============================================================================
@@ -138,8 +150,8 @@ export class RuntimeRunner {
    */
   async run(request: InvocationRequest): Promise<InvocationResult> {
     const startedAt = this.providers.now();
-    const invocationId = request.invocationId ?? this.providers.newId();
-    const runId = request.runId ?? this.providers.newId();
+    const invocationId = request.invocationId ?? request.initialRuntimeEvent?.invocationId ?? this.providers.newId();
+    const runId = request.runId ?? request.initialRuntimeEvent?.runId ?? this.providers.newId();
 
     // 1. Preflight (injectable gate). On failure we admit no invocation: no
     //    context, no user event, no flow dispatch.
@@ -194,11 +206,29 @@ export class RuntimeRunner {
       newId: this.providers.newId,
       now: this.providers.now,
     };
+    if (request.initialRuntimeEvent) {
+      assertInitialRuntimeEventMatchesRequest(request.initialRuntimeEvent, {
+        sessionId: request.sessionId,
+        invocationId,
+        runId,
+        turnId: request.turnId,
+      });
+    }
 
     const events: RuntimeEvent[] = [];
 
     // 4. Emit the initial user RuntimeEvent before any flow event.
-    const userEvent = buildUserEvent(ctx, request);
+    const userEvent = request.initialRuntimeEvent ?? buildInitialUserRuntimeEvent({
+      id: ctx.newId(),
+      invocationId: ctx.invocationId,
+      runId: ctx.runId,
+      sessionId: ctx.sessionId,
+      turnId: ctx.turnId,
+      ts: ctx.startedAt,
+      ...(ctx.branch ? { branch: ctx.branch } : {}),
+      text: request.text,
+      ...(request.attachments !== undefined ? { attachments: request.attachments } : {}),
+    });
     await this.onInitialRuntimeEvent?.(userEvent);
     events.push(userEvent);
     const flowInput = buildFlowInput(request);
@@ -275,26 +305,43 @@ export class RuntimeRunner {
 // Helpers
 // ============================================================================
 
-function buildUserEvent(ctx: InvocationContext, request: InvocationRequest): RuntimeEvent {
+export function buildInitialUserRuntimeEvent(input: InitialUserRuntimeEventInput): RuntimeEvent {
   return {
-    id: ctx.newId(),
-    invocationId: ctx.invocationId,
-    runId: ctx.runId,
-    sessionId: ctx.sessionId,
-    turnId: ctx.turnId,
-    ts: ctx.startedAt,
-    ...(ctx.branch ? { branch: ctx.branch } : {}),
+    id: input.id,
+    invocationId: input.invocationId,
+    runId: input.runId,
+    sessionId: input.sessionId,
+    turnId: input.turnId,
+    ts: input.ts,
+    ...(input.branch ? { branch: input.branch } : {}),
     partial: false,
     role: 'user',
     author: 'user',
     content: {
       kind: 'text',
-      text: request.text,
-      ...(request.attachments !== undefined && request.attachments.length > 0
-        ? { attachments: request.attachments }
+      text: input.text,
+      ...(input.attachments !== undefined && input.attachments.length > 0
+        ? { attachments: input.attachments }
         : {}),
     },
   };
+}
+
+function assertInitialRuntimeEventMatchesRequest(
+  event: RuntimeEvent,
+  request: Pick<InvocationRequest, 'sessionId' | 'turnId'> & { invocationId: string; runId: string },
+): void {
+  if (
+    event.sessionId !== request.sessionId ||
+    event.invocationId !== request.invocationId ||
+    event.runId !== request.runId ||
+    event.turnId !== request.turnId ||
+    event.role !== 'user' ||
+    event.author !== 'user' ||
+    event.content?.kind !== 'text'
+  ) {
+    throw new Error('initial RuntimeEvent does not match the invocation request');
+  }
 }
 
 function buildFlowInput(request: InvocationRequest): FlowInput {
